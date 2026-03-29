@@ -44,7 +44,7 @@ func splitGrid(boundary Rect, rows, cols int, spacing float64) []Rect {
 		for c := 0; c < cols; c++ {
 			y1 := boundary.Min.Y + float64(r)*(panelH+spacing)
 			x1 := boundary.Min.X + float64(c)*(panelW+spacing)
-			
+
 			panels = append(panels, Rect{
 				Min: Point{X: x1, Y: y1},
 				Max: Point{X: x1 + panelW, Y: y1 + panelH},
@@ -77,7 +77,7 @@ func splitWrap(boundary Rect, cols, count int, spacing float64) []Rect {
 			}
 			y1 := boundary.Min.Y + float64(r)*(panelH+spacing)
 			x1 := boundary.Min.X + float64(c)*(panelW+spacing)
-			
+
 			panels = append(panels, Rect{
 				Min: Point{X: x1, Y: y1},
 				Max: Point{X: x1 + panelW, Y: y1 + panelH},

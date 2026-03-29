@@ -86,14 +86,18 @@ func (p *Plot) Compile() (*RenderPlan, error) {
 		if l.Geom == nil {
 			return nil, fmt.Errorf("layer %d: missing geom", i)
 		}
-		
+
 		missing := []string{}
 		for _, req := range l.Geom.RequiredAesthetics() {
 			switch req {
 			case "x":
-				if merged.X == "" { missing = append(missing, "x") }
+				if merged.X == "" {
+					missing = append(missing, "x")
+				}
 			case "y":
-				if merged.Y == "" { missing = append(missing, "y") }
+				if merged.Y == "" {
+					missing = append(missing, "y")
+				}
 			}
 		}
 
@@ -109,7 +113,7 @@ func (p *Plot) Compile() (*RenderPlan, error) {
 					if colName == "" {
 						continue
 					}
-					
+
 					col, err := ds.Column(colName)
 					if err != nil {
 						continue

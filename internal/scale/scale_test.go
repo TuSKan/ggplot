@@ -13,16 +13,16 @@ type mockNumericCol struct {
 	max float64
 }
 
-func (m mockNumericCol) Len() int                    { return 10 }
-func (m mockNumericCol) Min() (float64, error)       { return m.min, nil }
-func (m mockNumericCol) Max() (float64, error)       { return m.max, nil }
+func (m mockNumericCol) Len() int              { return 10 }
+func (m mockNumericCol) Min() (float64, error) { return m.min, nil }
+func (m mockNumericCol) Max() (float64, error) { return m.max, nil }
 
 // Guarantee interface match
 var _ dataset.Aggregator = mockNumericCol{}
 
 func TestNumericContinuous(t *testing.T) {
 	s := scale.NewContinuous()
-	
+
 	col1 := mockNumericCol{min: 50.0, max: 100.0}
 	s.Train(col1)
 
@@ -79,19 +79,19 @@ func (m mockIterableCol) Strings() (dataset.StringIterator, error) {
 
 func TestCategoricalDiscrete(t *testing.T) {
 	d := scale.NewDiscrete()
-	
+
 	// Two overlapping datasets to test unique discrete unification
 	colA := mockIterableCol{items: []string{"Apple", "Banana", "Apple"}}
 	colB := mockIterableCol{items: []string{"Banana", "Cherry"}}
-	
+
 	d.Train(colA)
 	d.Train(colB)
-	
+
 	if len(d.Domain) != 3 {
 		t.Fatalf("expected unique domain set size of 3, got %d", len(d.Domain))
 	}
 
-	// Banana should be mapped centrally 
+	// Banana should be mapped centrally
 	// Apple (0), Banana (1), Cherry (2) expected based on occurrence order.
 	if v := d.Map("Banana"); v != 0.5 {
 		t.Errorf("expected Banana centrally mapped 0.5, got %f", v)

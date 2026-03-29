@@ -13,7 +13,7 @@ import (
 
 func ExampleNew() {
 	// A strictly mocked dataset representation
-	var d dataset.Dataset = nil 
+	var d dataset.Dataset = nil
 
 	p := plot.New(d).
 		AddLayer(
@@ -34,7 +34,7 @@ func ExampleNew() {
 		fmt.Printf("Successfully compiled %d layers", len(compiledPlan.Layers))
 	}
 
-	// Output: 
+	// Output:
 	// Successfully compiled 2 layers
 }
 
@@ -45,7 +45,7 @@ func TestValidation_MissingAesthetics(t *testing.T) {
 			geom.Point(geom.Opts{}),
 			aes.X("PhaseX"),
 		)
-		
+
 	_, err := p.Compile()
 	if err == nil {
 		t.Errorf("Expected compile plan validation to fail due to missing Y, passed instead")
@@ -54,17 +54,17 @@ func TestValidation_MissingAesthetics(t *testing.T) {
 
 func TestImmutability(t *testing.T) {
 	root := plot.New(dataset.Dataset(nil))
-	
+
 	p1 := root.AddLayer(geom.Point(), aes.X("a"), aes.Y("b"))
 	p2 := root.AddLayer(geom.Smooth(stat.MethodLoess), aes.X("a"), aes.Y("c"))
-	
+
 	_, err1 := p1.Compile()
 	_, err2 := p2.Compile()
-	
+
 	if err1 != nil || err2 != nil {
 		t.Fatalf("Failed cleanly compiling individual clones")
 	}
-	
+
 	// Ensure root remains unmutated
 	res, _ := root.Compile()
 	if len(res.Layers) != 0 {

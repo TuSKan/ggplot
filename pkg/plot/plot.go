@@ -42,7 +42,7 @@ func (p *Plot) clone() *Plot {
 func (p *Plot) AddLayer(builder LayerBuilder, opts ...func(*ast.AestheticMapping)) *Plot {
 	cloned := p.clone()
 	layer := builder.BuildLayer()
-	
+
 	for _, opt := range opts {
 		opt(&layer.Mapping)
 	}

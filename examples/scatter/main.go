@@ -11,7 +11,7 @@ import (
 func main() {
 	// A typical explicit pipeline establishing native layout limits.
 	p := plot.New(nil). // 'nil' simulates a bound dataset structurally mapped out.
-		AddLayer(
+				AddLayer(
 			geom.Point(geom.Opts{Radius: 2.0, Opacity: 0.8}),
 			aes.X("displacement"),
 			aes.Y("horsepower"),

@@ -42,14 +42,14 @@ func Viridis(v float64) color.Color {
 // OkabeIto resolves an 8-color cyclic colorblind-safe sequential discrete sequence mapping mapped indexes statically.
 func OkabeIto(idx int) color.Color {
 	palette := []color.RGBA{
-		{230, 159, 0, 255},  // Orange
-		{86, 180, 233, 255}, // Sky Blue
-		{0, 158, 115, 255},  // Green
-		{240, 228, 66, 255}, // Yellow
-		{0, 114, 178, 255},  // Blue
-		{213, 94, 0, 255},   // Vermillion
-		{204, 121, 167, 255},// Reddish Purple
-		{0, 0, 0, 255},      // Black
+		{230, 159, 0, 255},   // Orange
+		{86, 180, 233, 255},  // Sky Blue
+		{0, 158, 115, 255},   // Green
+		{240, 228, 66, 255},  // Yellow
+		{0, 114, 178, 255},   // Blue
+		{213, 94, 0, 255},    // Vermillion
+		{204, 121, 167, 255}, // Reddish Purple
+		{0, 0, 0, 255},       // Black
 	}
 	if idx < 0 {
 		return color.RGBA{150, 150, 150, 255} // Fallback Gray missing mappings visually.

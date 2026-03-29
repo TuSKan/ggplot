@@ -32,7 +32,7 @@ func TestFacetGrid(t *testing.T) {
 
 func TestFacetWrap(t *testing.T) {
 	bounds := Rect{Min: Point{X: 0, Y: 0}, Max: Point{X: 110, Y: 210}}
-	
+
 	// Request exactly 5 panels wrapped into 3 columns
 	// Expected matrix:
 	// P P P

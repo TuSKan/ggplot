@@ -25,7 +25,7 @@ type Backend interface {
 	DrawLine(x1, y1, x2, y2 float64, s Style)
 	DrawPolygon(points []Point, s Style)
 	DrawRect(r Rect, s Style)
-	
+
 	// DrawText positions explicitly evaluated anchors allowing multi-line string constraints cleanly.
 	DrawText(text string, x, y, size float64, alignH, alignV float64, s Style)
 

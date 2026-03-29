@@ -17,7 +17,7 @@ func FuzzASTValidation(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, x, y, color string) {
 		p := plot.New(nil). // Nil datasets perfectly legal inside testing validations cleanly securely
-			AddLayer(
+					AddLayer(
 				geom.Point(geom.Opts{}),
 				aes.X(x),
 				aes.Y(y),

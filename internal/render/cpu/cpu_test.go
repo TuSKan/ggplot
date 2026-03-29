@@ -17,7 +17,7 @@ func TestCPU_GoldenImage(t *testing.T) {
 	green := color.RGBA{0, 255, 0, 255}
 	halfBlue := color.RGBA{0, 0, 255, 128}
 
-	// 1. Polygon 
+	// 1. Polygon
 	poly := []render.Point{{X: 100, Y: 10}, {X: 150, Y: 10}, {X: 125, Y: 50}}
 	b.DrawPolygon(poly, render.Style{Fill: green})
 

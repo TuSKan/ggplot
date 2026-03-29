@@ -14,8 +14,8 @@ type Rect struct {
 }
 
 // Area constraints
-func (r Rect) Width() float64  { return math.Max(0, r.Max.X - r.Min.X) }
-func (r Rect) Height() float64 { return math.Max(0, r.Max.Y - r.Min.Y) }
+func (r Rect) Width() float64  { return math.Max(0, r.Max.X-r.Min.X) }
+func (r Rect) Height() float64 { return math.Max(0, r.Max.Y-r.Min.Y) }
 
 // SliceTop cuts precisely `h` units horizontally along the top shrinking the main bounds.
 func (r *Rect) SliceTop(h float64) Rect {

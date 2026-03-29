@@ -5,10 +5,10 @@ import (
 
 	"github.com/TuSKan/ggplot/internal/adapter/arrow"
 	"github.com/TuSKan/ggplot/internal/dataset"
-	
+
+	arrowtype "github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/memory"
-	arrowtype "github.com/apache/arrow-go/v18/arrow"
 )
 
 func TestDatasetSlice(t *testing.T) {
@@ -26,13 +26,13 @@ func TestDatasetSlice(t *testing.T) {
 	defer table.Release()
 
 	ds := arrow.NewTableDataset(table)
-	
+
 	// Test basic slicing delegation
 	sliced := dataset.Slice(ds, 1, 4)
 	if sliced.Len() != 3 {
 		t.Errorf("expected len 3, got %d", sliced.Len())
 	}
-	
+
 	col, err := sliced.Column("val")
 	if err != nil {
 		t.Fatal(err)
@@ -58,20 +58,20 @@ func TestDatasetFilter(t *testing.T) {
 	colChunk := arrowtype.NewChunked(schema.Field(0).Type, []arrowtype.Array{arr})
 	table := array.NewTable(schema, []arrowtype.Column{*arrowtype.NewColumn(schema.Field(0), colChunk)}, 4)
 	defer table.Release()
-	
+
 	ds := arrow.NewTableDataset(table)
 	mask := []bool{true, false, true, false}
-	
+
 	filtered := dataset.Filter(ds, mask)
 	if filtered.Len() != 2 {
 		t.Errorf("expected 2 elements, got %d", filtered.Len())
 	}
-	
+
 	col, err := filtered.Column("val")
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	// Assert native filtering has occurred
 	if col.Len() != 2 {
 		t.Errorf("expected 2 remaining rows in column, got %d", col.Len())
@@ -87,9 +87,9 @@ func TestMinMax_Nulls(t *testing.T) {
 	b.AppendValues([]float64{10, 5, 0, 100}, []bool{true, true, false, true})
 	arr := b.NewFloat64Array()
 	defer arr.Release()
-	
+
 	c := arrow.NewTableColumn(arrowtype.NewChunked(arrowtype.PrimitiveTypes.Float64, []arrowtype.Array{arr}))
-	
+
 	min, err := dataset.Min(c)
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestMinMax_Nulls(t *testing.T) {
 	if min != 5 {
 		t.Errorf("expected min 5 (0 is null), got %f", min)
 	}
-	
+
 	max, err := dataset.Max(c)
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestEmptyDataset(t *testing.T) {
 	arr := b.NewFloat64Array()
 	defer arr.Release()
 	c := arrow.NewTableColumn(arrowtype.NewChunked(arrowtype.PrimitiveTypes.Float64, []arrowtype.Array{arr}))
-	
+
 	_, err := dataset.Min(c)
 	if err == nil {
 		t.Errorf("expected error when getting min of empty dataset")

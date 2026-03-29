@@ -67,7 +67,7 @@ func Calculate(cfg Config, m TextMeasurer) LayoutPlan {
 			Max: Point{X: cfg.Width, Y: cfg.Height},
 		},
 	}
-	
+
 	// Create working boundary cutting outer margins.
 	boundary := plan.OuterRect
 	boundary.Min.X += cfg.Margin.Left
@@ -99,11 +99,13 @@ func Calculate(cfg Config, m TextMeasurer) LayoutPlan {
 			_, h := m.MeasureText(cfg.XAxisParams.Title, cfg.XAxisParams.TitleSize)
 			totalXTitleH += h
 		}
-		
+
 		maxTickH := 0.0
 		for _, label := range cfg.XAxisParams.TickLabels {
 			_, h := m.MeasureText(label, cfg.XAxisParams.TickLabelSize)
-			if h > maxTickH { maxTickH = h }
+			if h > maxTickH {
+				maxTickH = h
+			}
 		}
 
 		plan.XAxisRect = boundary.SliceBottom(totalXTitleH + maxTickH)
@@ -120,7 +122,9 @@ func Calculate(cfg Config, m TextMeasurer) LayoutPlan {
 		maxTickW := 0.0
 		for _, label := range cfg.YAxisParams.TickLabels {
 			w, _ := m.MeasureText(label, cfg.YAxisParams.TickLabelSize)
-			if w > maxTickW { maxTickW = w }
+			if w > maxTickW {
+				maxTickW = w
+			}
 		}
 
 		plan.YAxisRect = boundary.SliceLeft(totalYTitleW + maxTickW)

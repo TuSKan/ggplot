@@ -6,9 +6,9 @@ import (
 	"github.com/TuSKan/ggplot/internal/adapter/arrow"
 	"github.com/TuSKan/ggplot/internal/dataset"
 
+	arrowtype "github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/memory"
-	arrowtype "github.com/apache/arrow-go/v18/arrow"
 )
 
 func createBenchDataset(n int) dataset.Dataset {
@@ -21,7 +21,7 @@ func createBenchDataset(n int) dataset.Dataset {
 		b.Append(float64(i))
 	}
 	arr := b.NewFloat64Array()
-	
+
 	schema := arrowtype.NewSchema([]arrowtype.Field{
 		{Name: "val", Type: arrowtype.PrimitiveTypes.Float64},
 	}, nil)
@@ -38,7 +38,7 @@ func BenchmarkDatasetFilter(b *testing.B) {
 	for i := range mask {
 		mask[i] = i%2 == 0
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// Filter should be lazy and basically instantly return its proxy struct
@@ -49,7 +49,7 @@ func BenchmarkDatasetFilter(b *testing.B) {
 func BenchmarkDatasetMin(b *testing.B) {
 	ds := createBenchDataset(1_000_000)
 	col, _ := ds.Column("val")
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = dataset.Min(col)

@@ -15,7 +15,7 @@ func Min(col Column) (float64, error) {
 	if col.Len() == 0 {
 		return 0, fmt.Errorf("dataset: cannot calculate Min of empty column")
 	}
-	
+
 	if agg, ok := col.(Aggregator); ok {
 		return agg.Min()
 	}

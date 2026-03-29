@@ -1,9 +1,9 @@
 package sql_test
 
 import (
-	"testing"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/TuSKan/ggplot/internal/adapter/sql"
+	"testing"
 )
 
 func TestSQLPushdown_LenAndColumns(t *testing.T) {
@@ -84,7 +84,7 @@ func TestSQLPushdown_FallbackMaterialization(t *testing.T) {
 	if col.Len() != 3 {
 		t.Errorf("Expected mocked fallback natively buffering 3 elements properly, got %d", col.Len())
 	}
-	
+
 	// Ensure mocked tracking resolved explicitly zero-copy execution constraints smoothly!
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Mock bounds not explicitly satisfied cleanly: %v", err)

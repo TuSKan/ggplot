@@ -30,7 +30,7 @@ type PointGeom struct {
 	Opts Opts
 }
 
-func (p PointGeom) Name() string { return "Point" }
+func (p PointGeom) Name() string                 { return "Point" }
 func (p PointGeom) RequiredAesthetics() []string { return []string{"x", "y"} }
 
 // Point returns an unmapped Point geometry layer builder carrying default 'Identity' stats.
@@ -57,7 +57,7 @@ func (s *SmoothBuilder) BuildLayer() ast.Layer {
 
 type SmoothGeom struct{}
 
-func (s SmoothGeom) Name() string { return "Smooth" }
+func (s SmoothGeom) Name() string                 { return "Smooth" }
 func (s SmoothGeom) RequiredAesthetics() []string { return []string{"x", "y"} }
 
 // Smooth initializes a Smoothed geometry layer, defaulting the statistical pass provided.
