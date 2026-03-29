@@ -1,0 +1,35 @@
+name: ggplot CI Verify
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Verify Formatting naturally exactly mapping standard
+      run: if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then echo "Format issues found natively"; exit 1; fi
+
+    - name: Run golangci-lint natively parsing metrics securely
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: v1.60.0
+
+    - name: Execute Full Suite & Golden Comparisons natively
+      run: go test -v -cover ./...
+
+    - name: Assert Fuzz Stability cleanly isolating edge cases
+      run: go test -fuzz=FuzzASTValidation -fuzztime=10s ./internal/ast
+
+    - name: Evaluate Allocation Budgets & Benchmarks functionally
+      run: go test -bench=. -benchmem -run=^$ ./...
