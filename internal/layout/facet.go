@@ -9,7 +9,7 @@ const (
 	FacetWrap FacetType = "wrap"
 )
 
-// GeneratePanels explicitly divides a master constraint Rect deterministically into distinct mapped windows.
+// GeneratePanels divides a master constraint Rect deterministically into distinct mapped windows.
 // For FacetNone passing 1 for cols/rows produces a master bound frame.
 func GeneratePanels(fType FacetType, boundary Rect, rows, cols, count int, spacing float64) []Rect {
 	if fType == FacetNone {

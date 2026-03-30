@@ -3,19 +3,23 @@ package cpu
 import (
 	"image/color"
 
+	"github.com/TuSKan/ggplot/internal/fonts"
 	"github.com/TuSKan/ggplot/internal/render"
+	"github.com/TuSKan/ggplot/pkg/theme"
 	"github.com/gogpu/gg"
 )
 
-// Backend securely drives exact Software Buffer processing (CPU limits bounding verification).
+// Backend drives exact Software Buffer processing (CPU limits bounding verification).
 type Backend struct {
-	dc *gg.Context
+	dc       *gg.Context
+	resolver *fonts.Resolver
 }
 
-// New initializes an explicitly configured pixel constraint canvas resolving layout calls implicitly.
-func New(width, height int) *Backend {
+// New initializes an configured pixel constraint canvas resolving layout calls.
+func New(width, height int, res *fonts.Resolver) *Backend {
 	return &Backend{
-		dc: gg.NewContext(width, height),
+		dc:       gg.NewContext(width, height),
+		resolver: res,
 	}
 }
 
@@ -95,12 +99,21 @@ func (b *Backend) DrawRect(r render.Rect, s render.Style) {
 	}
 }
 
-func (b *Backend) DrawText(text string, x, y, size float64, ax, ay float64, s render.Style) {
+func (b *Backend) DrawText(text string, x, y float64, ax, ay float64, s render.Style, f theme.FontConfig) {
 	if s.Fill != nil {
 		b.dc.SetColor(s.Fill)
 	} else {
 		b.dc.SetColor(color.Black)
 	}
+
+	// intercept explicit structural layout metrics directly masking completely.
+	if b.resolver != nil {
+		handle, err := b.resolver.LoadFace(f.ToFaceRequest(96.0))
+		if err == nil && handle != nil {
+			b.dc.SetFont(handle.TextFace())
+		}
+	}
+
 	b.dc.DrawStringAnchored(text, x, y, ax, ay)
 }
 

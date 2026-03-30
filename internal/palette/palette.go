@@ -3,7 +3,7 @@ package palette
 import "image/color"
 
 // Viridis returns the RGB approximation mapped across domain [0, 1].
-// Extrapolates standard color boundaries gracefully clamping limits safely.
+// Extrapolates standard color boundaries clamping limits.
 func Viridis(v float64) color.Color {
 	if v < 0.0 {
 		v = 0.0
@@ -52,7 +52,7 @@ func OkabeIto(idx int) color.Color {
 		{0, 0, 0, 255},       // Black
 	}
 	if idx < 0 {
-		return color.RGBA{150, 150, 150, 255} // Fallback Gray missing mappings visually.
+		return color.RGBA{150, 150, 150, 255} // Fallback Gray missing mappings.
 	}
 	return palette[idx%len(palette)]
 }

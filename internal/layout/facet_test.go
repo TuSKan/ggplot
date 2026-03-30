@@ -9,15 +9,15 @@ func TestFacetGrid(t *testing.T) {
 	panels := GeneratePanels(FacetGrid, bounds, 2, 2, 4, 10.0)
 
 	if len(panels) != 4 {
-		t.Fatalf("expected 4 panels natively sliced from grid, got %d", len(panels))
+		t.Fatalf("expected 4 panels sliced from grid, got %d", len(panels))
 	}
 
-	// 2 rows, 2 cols, 1 space (10) explicitly means:
+	// 2 rows, 2 cols, 1 space (10) means:
 	// totalWidth = 100 - 10 = 90
 	// panelWidth = 45
 	first := panels[0]
 	if first.Width() != 45 {
-		t.Errorf("expected cell width 45.0 natively divided, got %f", first.Width())
+		t.Errorf("expected cell width 45.0 divided, got %f", first.Width())
 	}
 	if first.Height() != 45 {
 		t.Errorf("expected cell height 45.0, got %f", first.Height())
@@ -26,7 +26,7 @@ func TestFacetGrid(t *testing.T) {
 	// second rect (row 0, col 1) x starts at 45 + 10 = 55
 	second := panels[1]
 	if second.Min.X != 55.0 {
-		t.Errorf("expected second cell min.X spanning strictly at 55.0 properly capturing spacer, got %f", second.Min.X)
+		t.Errorf("expected second cell min.X spanning at 55.0 capturing spacer, got %f", second.Min.X)
 	}
 }
 
@@ -38,11 +38,11 @@ func TestFacetWrap(t *testing.T) {
 	// P P P
 	// P P -
 	// Rows = ceil(5/3) = 2.
-	// Spacing = 10 explicitly
+	// Spacing = 10
 	panels := GeneratePanels(FacetWrap, bounds, 0, 3, 5, 10.0)
 
 	if len(panels) != 5 {
-		t.Fatalf("expected precisely exactly 5 bounds cutting wrap short gracefully, got %d", len(panels))
+		t.Fatalf("expected precisely exactly 5 bounds cutting wrap short, got %d", len(panels))
 	}
 
 	// panelWidth: 3 cols -> 2 spaces = 20. (110 - 20) / 3 = 30 width
@@ -56,9 +56,9 @@ func TestFacetWrap(t *testing.T) {
 	p5 := panels[4]
 	// p5 is row 1 (y = 110), col 1 (x = 40)
 	if p5.Min.X != 40.0 {
-		t.Errorf("expected 5th wrapper bounds pushed iteratively onto second column natively starting at X=40.0, got %f", p5.Min.X)
+		t.Errorf("expected 5th wrapper bounds pushed iteratively onto second column starting at X=40.0, got %f", p5.Min.X)
 	}
 	if p5.Min.Y != 110.0 {
-		t.Errorf("expected 5th wrapper identically pushing down cleanly past space 110.0, got %f", p5.Min.Y)
+		t.Errorf("expected 5th wrapper identically pushing down past space 110.0, got %f", p5.Min.Y)
 	}
 }

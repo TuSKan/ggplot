@@ -29,4 +29,11 @@ go.work.sum
 
 # Editor/IDE
 # .idea/
-# .vscode/
+.vscode/
+
+*.txt
+*.png
+*.jpg
+*.log
+
+!assets/*

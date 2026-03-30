@@ -23,7 +23,7 @@ jobs:
     - name: Run golangci-lint natively parsing metrics securely
       uses: golangci/golangci-lint-action@v6
       with:
-        version: v1.60.0
+        version: latest
 
     - name: Execute Full Suite & Golden Comparisons natively
       run: go test -v -cover ./...

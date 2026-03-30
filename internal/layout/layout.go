@@ -1,17 +1,17 @@
 package layout
 
+import "github.com/TuSKan/ggplot/pkg/theme"
+
 // Config defines layout calculation properties.
 type Config struct {
 	Width, Height float64
-	Margin        Margin
+	Theme         theme.Theme
 
 	HasTitle  bool
 	TitleText string
-	TitleSize float64
 
 	HasSubtitle  bool
 	SubtitleText string
-	SubtitleSize float64
 
 	HasXAxis    bool
 	XAxisParams AxisParams
@@ -20,22 +20,18 @@ type Config struct {
 	YAxisParams AxisParams
 
 	HasLegend    bool
-	LegendWidth  float64 // Assumed pre-calculated or fixed width
+	LegendWidth  float64
 	LegendHeight float64
 
 	FacetType  FacetType
 	FacetRows  int
 	FacetCols  int
 	FacetCount int
-	Spacing    float64
 }
 
-// AxisParams specifies title and tick requirements logically.
 type AxisParams struct {
-	Title         string
-	TitleSize     float64
-	TickLabels    []string
-	TickLabelSize float64
+	Title      string
+	TickLabels []string
 }
 
 // LayoutPlan yields deterministic box coordinates.
@@ -52,7 +48,8 @@ type LayoutPlan struct {
 
 // PanelLayout encapsulates single facet geometry mapping space.
 type PanelLayout struct {
-	DataRect Rect
+	PanelRect Rect // Outer panel padding including strips.
+	DataRect  Rect // dataset projection!
 }
 
 // Calculate applies Guillotine division deriving exact box coordinates.
@@ -68,22 +65,22 @@ func Calculate(cfg Config, m TextMeasurer) LayoutPlan {
 		},
 	}
 
-	// Create working boundary cutting outer margins.
+	// Create working boundary cutting outer margins functionally.
 	boundary := plan.OuterRect
-	boundary.Min.X += cfg.Margin.Left
-	boundary.Min.Y += cfg.Margin.Top
-	boundary.Max.X -= cfg.Margin.Right
-	boundary.Max.Y -= cfg.Margin.Bottom
+	boundary.Min.X += cfg.Theme.Spacing.MarginLeft
+	boundary.Min.Y += cfg.Theme.Spacing.MarginTop
+	boundary.Max.X -= cfg.Theme.Spacing.MarginRight
+	boundary.Max.Y -= cfg.Theme.Spacing.MarginBottom
 
 	// Slice Title (Top)
 	if cfg.HasTitle && cfg.TitleText != "" {
-		_, h := m.MeasureText(cfg.TitleText, cfg.TitleSize)
+		_, h := m.MeasureText(cfg.TitleText, cfg.Theme.Typography.Title)
 		plan.TitleRect = boundary.SliceTop(h)
 	}
 
 	// Slice Subtitle (Top - below title)
 	if cfg.HasSubtitle && cfg.SubtitleText != "" {
-		_, h := m.MeasureText(cfg.SubtitleText, cfg.SubtitleSize)
+		_, h := m.MeasureText(cfg.SubtitleText, cfg.Theme.Typography.Subtitle)
 		plan.SubtitleRect = boundary.SliceTop(h)
 	}
 
@@ -96,38 +93,38 @@ func Calculate(cfg Config, m TextMeasurer) LayoutPlan {
 	if cfg.HasXAxis {
 		totalXTitleH := 0.0
 		if cfg.XAxisParams.Title != "" {
-			_, h := m.MeasureText(cfg.XAxisParams.Title, cfg.XAxisParams.TitleSize)
+			_, h := m.MeasureText(cfg.XAxisParams.Title, cfg.Theme.Typography.AxisTitle)
 			totalXTitleH += h
 		}
 
 		maxTickH := 0.0
 		for _, label := range cfg.XAxisParams.TickLabels {
-			_, h := m.MeasureText(label, cfg.XAxisParams.TickLabelSize)
+			_, h := m.MeasureText(label, cfg.Theme.Typography.TickLabel)
 			if h > maxTickH {
 				maxTickH = h
 			}
 		}
 
-		plan.XAxisRect = boundary.SliceBottom(totalXTitleH + maxTickH)
+		plan.XAxisRect = boundary.SliceBottom(totalXTitleH + maxTickH + cfg.Theme.Ticks.Length)
 	}
 
 	// Slice Y-Axis (Left)
 	if cfg.HasYAxis {
 		totalYTitleW := 0.0
 		if cfg.YAxisParams.Title != "" {
-			w, _ := m.MeasureText(cfg.YAxisParams.Title, cfg.YAxisParams.TitleSize)
+			w, _ := m.MeasureText(cfg.YAxisParams.Title, cfg.Theme.Typography.AxisTitle)
 			totalYTitleW += w
 		}
 
 		maxTickW := 0.0
 		for _, label := range cfg.YAxisParams.TickLabels {
-			w, _ := m.MeasureText(label, cfg.YAxisParams.TickLabelSize)
+			w, _ := m.MeasureText(label, cfg.Theme.Typography.TickLabel)
 			if w > maxTickW {
 				maxTickW = w
 			}
 		}
 
-		plan.YAxisRect = boundary.SliceLeft(totalYTitleW + maxTickW)
+		plan.YAxisRect = boundary.SliceLeft(totalYTitleW + maxTickW + cfg.Theme.Ticks.Length)
 	}
 
 	// Remaining Boundary allocated to Facet generation
@@ -137,11 +134,21 @@ func Calculate(cfg Config, m TextMeasurer) LayoutPlan {
 		cfg.FacetRows,
 		cfg.FacetCols,
 		cfg.FacetCount,
-		cfg.Spacing,
+		cfg.Theme.Spacing.PanelSpacing,
 	)
 
+	// Panel Rect padding deduction.
+	padding := 5.0
 	for _, rect := range panelRects {
-		plan.Panels = append(plan.Panels, PanelLayout{DataRect: rect})
+		dataBound := rect
+		dataBound.Min.X += padding
+		dataBound.Min.Y += padding
+		dataBound.Max.X -= padding
+		dataBound.Max.Y -= padding
+		plan.Panels = append(plan.Panels, PanelLayout{
+			PanelRect: rect,
+			DataRect:  dataBound,
+		})
 	}
 
 	return plan

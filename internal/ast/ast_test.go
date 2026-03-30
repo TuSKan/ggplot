@@ -5,5 +5,5 @@ import (
 )
 
 func TestASTStructs(t *testing.T) {
-	_ = AestheticMapping{}
+	_ = Aes{}
 }
