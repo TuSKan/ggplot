@@ -2,45 +2,37 @@ package main
 
 import (
 	"log"
+	"path/filepath"
+	"runtime"
 
-	"github.com/TuSKan/ggplot/pkg/aes"
-	"github.com/TuSKan/ggplot/pkg/dataset/arrow"
-	"github.com/TuSKan/ggplot/pkg/geom"
-	"github.com/TuSKan/ggplot/pkg/output/ui"
-	"github.com/TuSKan/ggplot/pkg/plot"
+	"github.com/TuSKan/ggplot"
+	"github.com/TuSKan/ggplot/aes"
+	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/geom"
 )
 
 func main() {
-	regions := []string{"North", "South", "East", "West", "North", "North", "South", "East", "North", "West", "North", "North", "South", "East"}
-
-	buf := arrow.NewBuffer(len(regions))
-	region := buf.String("region")
-
-	copy(region, regions)
-
-	ds, err := buf.Build()
+	ds, err := dataset.NewDataFrame(map[string][]float64{
+		"x":     {1, 2, 3, 4, 5},
+		"count": {10, 25, 15, 30, 20},
+	})
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	// Declarative pipeline mapping
-	p := plot.New(ds).
-		AddLayer(
-			geom.Bar(geom.Opts{
-				Color: "#000000",
-				Fill:  "#4C72B0",
-				Width: 0.8,
-			}),
-			aes.X(aes.Col("region")),
+	p := ggplot.New(ds, aes.X("x"), aes.Y("count")).
+		Layer(geom.Col(
+			geom.WithFill("#9B59B6"),
+			geom.WithAlpha(0.85),
+		)).
+		Labs(
+			ggplot.Title("Sales by Category"),
+			ggplot.XLab("Category"),
+			ggplot.YLab("Count"),
 		)
 
-	out, err := p.Render(800, 600)
-	if err != nil {
+	_, filename, _, _ := runtime.Caller(0)
+	if err := p.Save(filepath.Join(filepath.Dir(filename), "bar.png"), 800, 600); err != nil {
 		log.Fatalln(err)
-	}
-
-	// Output
-	if err := ui.NewGPUWindowPresenter().Show(out); err != nil {
-		log.Fatalln("Presenter :", err)
 	}
 }

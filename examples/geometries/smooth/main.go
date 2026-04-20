@@ -6,49 +6,33 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/TuSKan/ggplot/pkg/aes"
-	"github.com/TuSKan/ggplot/pkg/dataset/arrow"
-	"github.com/TuSKan/ggplot/pkg/geom"
-	"github.com/TuSKan/ggplot/pkg/output/file"
-	"github.com/TuSKan/ggplot/pkg/plot"
-	"github.com/TuSKan/ggplot/pkg/stat"
+	"github.com/TuSKan/ggplot"
+	"github.com/TuSKan/ggplot/aes"
+	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/geom"
 )
 
 func main() {
-	buf := arrow.NewBuffer(150)
-	xCol := buf.Float64("x_data")
-	yCol := buf.Float64("y_data")
-
-	for i := 0; i < 150; i++ {
-		xCol[i] = float64(i)
-		yCol[i] = xCol[i]*0.5 + rand.NormFloat64()*10.0 // Noisy data
+	n := 100
+	xs := make([]float64, n)
+	ys := make([]float64, n)
+	for i := range xs {
+		xs[i] = rand.Float64() * 10
+		ys[i] = xs[i]*0.5 + rand.NormFloat64()*1.5
 	}
 
-	ds, err := buf.Build()
+	ds, err := dataset.NewDataFrame(map[string][]float64{"x": xs, "y": ys})
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	p := plot.New(ds).
-		Aes(
-			aes.X(aes.Col("x_data")),
-			aes.Y(aes.Col("y_data")),
-		).
-		AddLayer(
-			geom.Point(geom.Opts{Radius: 2.0, Opacity: 0.8}),
-		).
-		AddLayer(
-			geom.Smooth(stat.MethodLoess),
-		)
-
-	out, err := p.Render(800, 600)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point(geom.WithSize(2), geom.WithColor("#95A5A6"))).
+		Layer(geom.Smooth(geom.WithColor("#E74C3C"), geom.WithLineWidth(3))).
+		Labs(ggplot.Title("Scatter + OLS Smooth"))
 
 	_, filename, _, _ := runtime.Caller(0)
-	err = file.NewFileExporter().Export(out, filepath.Join(filepath.Dir(filename), "smooth.png"))
-	if err != nil {
+	if err := p.Save(filepath.Join(filepath.Dir(filename), "smooth.png"), 800, 600); err != nil {
 		log.Fatalln(err)
 	}
 }

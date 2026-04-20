@@ -32,7 +32,7 @@ func DiscoverFonts(dirs []string) ([]Font, error) {
 	var available []Font
 
 	for _, dir := range dirs {
-		filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 			if err != nil || d == nil {
 				return nil
 			}

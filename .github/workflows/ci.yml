@@ -1,4 +1,4 @@
-name: ggplot CI Verify
+name: ggplot CI
 
 on:
   push:
@@ -8,6 +8,48 @@ on:
 
 jobs:
   test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        go-version: ['1.22', '1.23', '1.24']
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go ${{ matrix.go-version }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Verify formatting
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "Files with formatting issues:"
+          gofmt -s -l .
+          exit 1
+        fi
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Build all packages
+      run: go build ./...
+
+    - name: Run tests with coverage
+      run: go test -v -race -coverprofile=coverage.out -covermode=atomic -timeout 120s ./...
+
+    - name: Upload coverage
+      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.24'
+      uses: codecov/codecov-action@v4
+      with:
+        files: coverage.out
+      continue-on-error: true
+
+  lint:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -17,19 +59,48 @@ jobs:
       with:
         go-version: '1.24'
 
-    - name: Verify Formatting naturally exactly mapping standard
-      run: if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then echo "Format issues found natively"; exit 1; fi
-
-    - name: Run golangci-lint natively parsing metrics securely
+    - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v6
       with:
         version: latest
 
-    - name: Execute Full Suite & Golden Comparisons natively
-      run: go test -v -cover ./...
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
 
-    - name: Assert Fuzz Stability cleanly isolating edge cases
-      run: go test -fuzz=FuzzASTValidation -fuzztime=10s ./internal/ast
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
 
-    - name: Evaluate Allocation Budgets & Benchmarks functionally
-      run: go test -bench=. -benchmem -run=^$ ./...
+    - name: Build all examples
+      run: |
+        go build ./examples/geometries/point/
+        go build ./examples/geometries/line/
+        go build ./examples/geometries/bar/
+        go build ./examples/geometries/histogram/
+        go build ./examples/geometries/area/
+        go build ./examples/geometries/smooth/
+
+    - name: Run examples (generate outputs)
+      run: |
+        go run ./examples/geometries/point/
+        go run ./examples/geometries/line/
+        go run ./examples/geometries/bar/
+        go run ./examples/geometries/histogram/
+        go run ./examples/geometries/area/
+        go run ./examples/geometries/smooth/
+
+  benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Run benchmarks
+      run: go test -bench=. -benchmem -run=^$ -timeout 120s ./...

@@ -1,0 +1,554 @@
+// Package geom provides geometry specifications for the Grammar of Graphics.
+// Geometries define how data is visually represented — as points, lines, bars,
+// areas, etc. Each geom is a pure declarative specification; it holds no
+// rendering logic. The rendering pipeline reads the spec and dispatches
+// drawing operations to the [canvas.Canvas] backend.
+//
+// Every geom constructor returns a [Layer] that can be added to a plot:
+//
+//	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+//	    Layer(geom.Point()).
+//	    Layer(geom.Line())
+package geom
+
+import (
+	"fmt"
+	"log"
+	"strings"
+
+	"github.com/TuSKan/ggplot/position"
+)
+
+// Layer represents a declarative layer specification produced by a geom
+// constructor. It carries the geometry type, optional stat/position overrides,
+// per-layer aesthetic mappings, and visual parameters.
+type Layer struct {
+	Geom     Type              // geometry type (point, line, bar, etc.)
+	StatName string            // stat name ("identity", "bin", "count", "density", "smooth", "summary")
+	Position position.Pos      // position adjustment
+	Params   Params            // visual parameters specific to this geometry
+	Mapping  map[string]string // per-layer aesthetic overrides (channel → column)
+
+	// setFlags tracks which options were explicitly set by the user.
+	// Used by Validate() to emit warnings for irrelevant options.
+	setFlags optFlag
+}
+
+// Type identifies the kind of geometry.
+type Type string
+
+const (
+	TypePoint     Type = "point"
+	TypeLine      Type = "line"
+	TypeBar       Type = "bar"
+	TypeHistogram Type = "histogram"
+	TypeArea      Type = "area"
+	TypePolygon   Type = "polygon"
+	TypeSmooth    Type = "smooth"
+	TypeText      Type = "text"
+	TypeBoxPlot   Type = "boxplot"
+	TypeErrorBar  Type = "errorbar"
+	TypeDensity   Type = "density"
+	TypeTile      Type = "tile"
+	TypeRug       Type = "rug"
+	TypeSegment   Type = "segment"
+	TypeStep      Type = "step"
+	TypeHLine     Type = "hline"
+	TypeVLine     Type = "vline"
+)
+
+// Params holds visual parameters for geometries. Not all fields apply to
+// every geometry type; unused fields are ignored during rendering but
+// [Layer.Validate] will emit warnings for irrelevant options.
+type Params struct {
+	// Common
+	Color     string  // hex color override (e.g., "#4C72B0")
+	Fill      string  // hex fill color override
+	Alpha     float64 // opacity [0, 1]
+	LineWidth float64 // stroke width in pixels
+
+	// Point-specific
+	Size  float64 // point radius in pixels (default = 3)
+	Shape string  // "circle", "square", "triangle", "diamond" (default = "circle")
+
+	// Bar/Histogram-specific
+	Width float64 // relative bar width [0, 1] (default = 0.8)
+	Gap   float64 // gap between bars [0, 1] (0 = touching, 1 = invisible; default = 0.2)
+	Bins  int     // number of bins (histogram, default = 30)
+
+	// Text-specific
+	FontSize   float64 // text font size in points
+	FontFamily string  // font family name
+	Angle      float64 // rotation angle in degrees
+
+	// Smooth-specific
+	Method string  // "lm", "loess"
+	Span   float64 // loess span
+	Points int     // number of interpolation points
+
+	// Legend
+	Label string // legend label for this layer (used with manual colors)
+
+	// Reference lines
+	Intercept float64 // y-intercept (hline) or x-intercept (vline)
+}
+
+// --- Option tracking for validation ---
+
+// optFlag tracks which parameters were explicitly set by the user.
+type optFlag uint32
+
+const (
+	optColor      optFlag = 1 << iota // common
+	optFill                           // common
+	optAlpha                          // common
+	optLineWidth                      // common
+	optSize                           // point, (also sets LineWidth)
+	optShape                          // point
+	optWidth                          // bar, histogram
+	optBins                           // histogram
+	optFontSize                       // text
+	optFontFamily                     // text
+	optAngle                          // text
+	optMethod                         // smooth
+	optSpan                           // smooth
+	optPoints                         // smooth, density
+)
+
+// paramRelevance maps geometry types to what parameters are meaningful for them.
+var paramRelevance = map[Type]optFlag{
+	TypePoint:     optColor | optFill | optAlpha | optSize | optShape,
+	TypeLine:      optColor | optAlpha | optLineWidth | optSize, // Size → LineWidth
+	TypeBar:       optColor | optFill | optAlpha | optWidth | optLineWidth,
+	TypeHistogram: optColor | optFill | optAlpha | optWidth | optBins | optLineWidth,
+	TypeArea:      optColor | optFill | optAlpha | optLineWidth,
+	TypePolygon:   optColor | optFill | optAlpha | optLineWidth,
+	TypeSmooth:    optColor | optAlpha | optLineWidth | optSize | optMethod | optSpan | optPoints,
+	TypeDensity:   optColor | optFill | optAlpha | optLineWidth | optPoints,
+	TypeText:      optColor | optAlpha | optFontSize | optFontFamily | optAngle,
+	TypeStep:      optColor | optAlpha | optLineWidth | optSize,
+	TypeRug:       optColor | optAlpha | optLineWidth,
+	TypeBoxPlot:   optColor | optFill | optAlpha | optWidth | optLineWidth,
+	TypeErrorBar:  optColor | optAlpha | optLineWidth | optWidth,
+	TypeSegment:   optColor | optAlpha | optLineWidth,
+	TypeTile:      optColor | optFill | optAlpha,
+	TypeHLine:     optColor | optAlpha | optLineWidth,
+	TypeVLine:     optColor | optAlpha | optLineWidth,
+}
+
+// optName maps flags to human-readable names.
+var optName = map[optFlag]string{
+	optColor:      "WithColor",
+	optFill:       "WithFill",
+	optAlpha:      "WithAlpha",
+	optLineWidth:  "WithLineWidth",
+	optSize:       "WithSize",
+	optShape:      "WithShape",
+	optWidth:      "WithWidth",
+	optBins:       "WithBins",
+	optFontSize:   "WithFontSize",
+	optFontFamily: "WithFontFamily",
+	optAngle:      "WithAngle",
+	optMethod:     "WithMethod",
+	optSpan:       "WithSpan",
+	optPoints:     "WithPoints",
+}
+
+// Validate checks if the configured params are meaningful for this geometry
+// type and returns a list of warning messages for irrelevant options.
+//
+// Example:
+//
+//	layer := geom.Point(geom.WithBins(30))  // bins are for histograms, not points
+//	warnings := layer.Validate()
+//	// warnings = ["geom_point: WithBins has no effect (relevant for: histogram)"]
+func (l *Layer) Validate() []string {
+	if l.setFlags == 0 {
+		return nil
+	}
+	relevant, ok := paramRelevance[l.Geom]
+	if !ok {
+		return nil // unknown geom type, skip validation
+	}
+
+	irrelevant := l.setFlags &^ relevant
+	if irrelevant == 0 {
+		return nil
+	}
+
+	var warnings []string
+	for flag := optFlag(1); flag <= optPoints; flag <<= 1 {
+		if irrelevant&flag == 0 {
+			continue
+		}
+		name := optName[flag]
+		var relevantGeoms []string
+		for geomType, mask := range paramRelevance {
+			if mask&flag != 0 {
+				relevantGeoms = append(relevantGeoms, string(geomType))
+			}
+		}
+		warnings = append(warnings, fmt.Sprintf(
+			"geom_%s: %s has no effect (relevant for: %s)",
+			l.Geom, name, strings.Join(relevantGeoms, ", "),
+		))
+	}
+	return warnings
+}
+
+// --- Geometry constructors ---
+
+// Opt is a functional option for configuring geometry layers.
+type Opt func(*Layer)
+
+// WithStat sets the statistical transform for this layer.
+func WithStat(name string) Opt { return func(l *Layer) { l.StatName = name } }
+
+// WithPosition sets the position adjustment for this layer.
+func WithPosition(p position.Pos) Opt { return func(l *Layer) { l.Position = p } }
+
+// WithColor sets a fixed color override.
+func WithColor(hex string) Opt {
+	return func(l *Layer) { l.Params.Color = hex; l.setFlags |= optColor }
+}
+
+// WithFill sets a fixed fill color override.
+func WithFill(hex string) Opt {
+	return func(l *Layer) { l.Params.Fill = hex; l.setFlags |= optFill }
+}
+
+// WithAlpha sets the opacity.
+func WithAlpha(a float64) Opt {
+	return func(l *Layer) { l.Params.Alpha = a; l.setFlags |= optAlpha }
+}
+
+// WithSize sets the geometry size. For points this is the radius; for
+// lines/smooth this also sets the line width so the option is portable
+// across geometry types.
+func WithSize(s float64) Opt {
+	return func(l *Layer) {
+		l.Params.Size = s
+		l.Params.LineWidth = s
+		l.setFlags |= optSize
+	}
+}
+
+// WithLineWidth sets the stroke width.
+func WithLineWidth(w float64) Opt {
+	return func(l *Layer) { l.Params.LineWidth = w; l.setFlags |= optLineWidth }
+}
+
+// WithShape sets the point shape.
+func WithShape(shape string) Opt {
+	return func(l *Layer) { l.Params.Shape = shape; l.setFlags |= optShape }
+}
+
+// WithWidth sets the relative bar width [0, 1].
+func WithWidth(w float64) Opt {
+	return func(l *Layer) { l.Params.Width = w; l.setFlags |= optWidth }
+}
+
+// WithGap sets the gap between bars as a fraction [0, 1].
+// 0 means bars touch (no gap), 1 means 100% gap (bars invisible).
+// The bar width is derived as 1 - gap. Default gap is 0.2.
+func WithGap(g float64) Opt {
+	return func(l *Layer) {
+		if g < 0 {
+			g = 0
+		}
+		if g > 1 {
+			g = 1
+		}
+		l.Params.Gap = g
+		l.Params.Width = 1 - g
+		l.setFlags |= optWidth
+	}
+}
+
+// WithBins sets the number of bins for histograms.
+func WithBins(n int) Opt {
+	return func(l *Layer) { l.Params.Bins = n; l.setFlags |= optBins }
+}
+
+// WithMethod sets the smoothing method.
+func WithMethod(m string) Opt {
+	return func(l *Layer) { l.Params.Method = m; l.setFlags |= optMethod }
+}
+
+// WithSpan sets the loess smoothing span.
+func WithSpan(s float64) Opt {
+	return func(l *Layer) { l.Params.Span = s; l.setFlags |= optSpan }
+}
+
+// WithPoints sets the interpolation point count.
+func WithPoints(n int) Opt {
+	return func(l *Layer) { l.Params.Points = n; l.setFlags |= optPoints }
+}
+
+// WithFontSize sets the text font size.
+func WithFontSize(size float64) Opt {
+	return func(l *Layer) { l.Params.FontSize = size; l.setFlags |= optFontSize }
+}
+
+// WithFontFamily sets the text font family.
+func WithFontFamily(family string) Opt {
+	return func(l *Layer) { l.Params.FontFamily = family; l.setFlags |= optFontFamily }
+}
+
+// WithAngle sets the text rotation angle in degrees.
+func WithAngle(deg float64) Opt {
+	return func(l *Layer) { l.Params.Angle = deg; l.setFlags |= optAngle }
+}
+
+// WithLabel sets a legend label for this layer. When used together with
+// [WithColor], a legend entry is generated even without aes.Color grouping.
+// This is the idiomatic way to add legends in wide-format multi-layer plots.
+func WithLabel(name string) Opt {
+	return func(l *Layer) { l.Params.Label = name }
+}
+
+// WithIntercept sets the intercept value for reference lines.
+// For [HLine], this is the Y value. For [VLine], this is the X value.
+func WithIntercept(v float64) Opt {
+	return func(l *Layer) { l.Params.Intercept = v }
+}
+
+// applyOpts applies options and emits runtime warnings for misused parameters.
+func applyOpts(l *Layer, opts []Opt) {
+	for _, o := range opts {
+		o(l)
+	}
+	if warnings := l.Validate(); len(warnings) > 0 {
+		for _, w := range warnings {
+			log.Printf("ggplot warning: %s", w)
+		}
+	}
+}
+
+// Point creates a scatter point geometry layer.
+// Default stat: identity. Default position: identity.
+//
+// Relevant options: WithColor, WithFill, WithAlpha, WithSize, WithShape.
+func Point(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypePoint,
+		StatName: "identity",
+		Position: position.Identity(),
+		Params:   Params{Size: 3, Alpha: 1.0, Shape: "circle"},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Line creates a connected line geometry layer.
+//
+// Relevant options: WithColor, WithAlpha, WithLineWidth, WithSize.
+func Line(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeLine,
+		StatName: "identity",
+		Position: position.Identity(),
+		Params:   Params{LineWidth: 2, Alpha: 1.0},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Bar creates a bar chart geometry layer.
+// Default stat: count. Default position: stack.
+//
+// Relevant options: WithColor, WithFill, WithAlpha, WithWidth, WithLineWidth.
+func Bar(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeBar,
+		StatName: "count",
+		Position: position.Stack(),
+		Params:   Params{Width: 0.8, Alpha: 0.8},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Col creates a column geometry layer that uses raw Y values (stat: identity).
+// This is equivalent to ggplot2's geom_col(). Use [Bar] when you want automatic
+// counting/aggregation, and Col when you have pre-computed values.
+//
+// Default stat: identity. Default position: stack.
+//
+// Relevant options: WithColor, WithFill, WithAlpha, WithWidth, WithLineWidth.
+func Col(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeBar,
+		StatName: "identity",
+		Position: position.Stack(),
+		Params:   Params{Width: 0.7},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Histogram creates a binned histogram geometry layer.
+// Default stat: bin. Default position: stack.
+//
+// Relevant options: WithColor, WithFill, WithAlpha, WithWidth, WithBins, WithLineWidth.
+func Histogram(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeHistogram,
+		StatName: "bin",
+		Position: position.Stack(),
+		Params:   Params{Bins: 30, Alpha: 1.0},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Area creates a filled area geometry layer.
+//
+// Relevant options: WithColor, WithFill, WithAlpha, WithLineWidth.
+func Area(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeArea,
+		StatName: "identity",
+		Position: position.Identity(),
+		Params:   Params{Alpha: 0.6},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Polygon creates a closed polygon geometry layer.
+//
+// Relevant options: WithColor, WithFill, WithAlpha, WithLineWidth.
+func Polygon(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypePolygon,
+		StatName: "identity",
+		Position: position.Identity(),
+		Params:   Params{Alpha: 0.6, LineWidth: 2},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Smooth creates a smoothed trendline geometry layer.
+// Default stat: smooth. Default method: lm.
+//
+// Relevant options: WithColor, WithAlpha, WithLineWidth, WithSize, WithMethod, WithSpan, WithPoints.
+func Smooth(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeSmooth,
+		StatName: "smooth",
+		Position: position.Identity(),
+		Params:   Params{LineWidth: 3, Alpha: 1.0, Method: "lm", Points: 80},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Density creates a kernel density estimation geometry layer.
+//
+// Relevant options: WithColor, WithFill, WithAlpha, WithLineWidth, WithPoints.
+func Density(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeDensity,
+		StatName: "density",
+		Position: position.Identity(),
+		Params:   Params{Alpha: 0.6, Points: 512},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Text creates a text label geometry layer.
+//
+// Relevant options: WithColor, WithAlpha, WithFontSize, WithFontFamily, WithAngle.
+func Text(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeText,
+		StatName: "identity",
+		Position: position.Identity(),
+		Params:   Params{FontSize: 10, Alpha: 1.0},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Step creates a step-function line geometry layer.
+//
+// Relevant options: WithColor, WithAlpha, WithLineWidth, WithSize.
+func Step(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeStep,
+		StatName: "identity",
+		Position: position.Identity(),
+		Params:   Params{LineWidth: 2, Alpha: 1.0},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Boxplot creates a box-and-whisker geometry layer.
+// It uses stat "boxplot" which computes the five-number summary
+// (min, Q1, median, Q3, max) for each unique X group.
+//
+// Relevant options: WithColor, WithFill, WithAlpha, WithWidth, WithLineWidth.
+func Boxplot(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeBoxPlot,
+		StatName: "boxplot",
+		Position: position.Identity(),
+		Params:   Params{Width: 0.5, Alpha: 0.8, LineWidth: 1.5},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// Rug creates a rug (marginal tick) geometry layer.
+//
+// Relevant options: WithColor, WithAlpha, WithLineWidth.
+func Rug(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeRug,
+		StatName: "identity",
+		Position: position.Identity(),
+		Params:   Params{LineWidth: 1, Alpha: 0.5},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// HLine creates a horizontal reference line at the given Y intercept.
+//
+// Example:
+//
+//	geom.HLine(geom.WithIntercept(0), geom.WithColor("#CC0000"))
+//
+// Relevant options: WithIntercept, WithColor, WithAlpha, WithLineWidth, WithLabel.
+func HLine(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeHLine,
+		StatName: "identity",
+		Position: position.Identity(),
+		Params:   Params{LineWidth: 1, Alpha: 0.8},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// VLine creates a vertical reference line at the given X intercept.
+//
+// Example:
+//
+//	geom.VLine(geom.WithIntercept(5), geom.WithColor("#006600"))
+//
+// Relevant options: WithIntercept, WithColor, WithAlpha, WithLineWidth, WithLabel.
+func VLine(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeVLine,
+		StatName: "identity",
+		Position: position.Identity(),
+		Params:   Params{LineWidth: 1, Alpha: 0.8},
+	}
+	applyOpts(&l, opts)
+	return l
+}
