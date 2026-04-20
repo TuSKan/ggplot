@@ -126,7 +126,7 @@ func areaExample(dir string) {
 	for i := range xs {
 		t := float64(i) * 0.1
 		xs[i] = t
-		ys[i] = math.Sin(t)*math.Sin(t) * 3
+		ys[i] = math.Sin(t) * math.Sin(t) * 3
 	}
 	ds, _ := dataset.NewDataFrame(map[string][]float64{"x": xs, "y": ys})
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
