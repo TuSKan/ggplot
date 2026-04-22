@@ -374,8 +374,8 @@ func TestFrame_Filter(t *testing.T) {
 	ds := testDataset(t)
 	f := dataset.From(ds).Filter(dataset.Gt("x", 5))
 
-	if f.Dataset.Len() != 5 {
-		t.Errorf("Filter: expected 5 rows, got %d", f.Dataset.Len())
+	if f.Dataset.NumRows() != 5 {
+		t.Errorf("Filter: expected 5 rows, got %d", f.Dataset.NumRows())
 	}
 }
 
@@ -383,8 +383,8 @@ func TestFrame_Head(t *testing.T) {
 	ds := testDataset(t)
 	f := dataset.From(ds).Head(3)
 
-	if f.Dataset.Len() != 3 {
-		t.Errorf("Head: expected 3 rows, got %d", f.Dataset.Len())
+	if f.Dataset.NumRows() != 3 {
+		t.Errorf("Head: expected 3 rows, got %d", f.Dataset.NumRows())
 	}
 }
 
@@ -427,7 +427,7 @@ func TestFrame_Collect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
-	if collected.Dataset.Len() == 0 {
+	if collected.Dataset.NumRows() == 0 {
 		t.Error("Collect: empty dataset")
 	}
 }

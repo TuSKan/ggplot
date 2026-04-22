@@ -536,7 +536,7 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 			}
 			if hasBars {
 				for _, rl := range resolved {
-					n := rl.ds.Len()
+					n := rl.ds.NumRows()
 					if n > 1 {
 						halfBin := (xMax - xMin) / float64(n-1) / 2.0
 						if halfBin > xPad {

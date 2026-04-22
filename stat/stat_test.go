@@ -106,7 +106,7 @@ func TestDensityStat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if result.Len() == 0 {
+	if result.NumRows() == 0 {
 		t.Fatal("density stat produced empty dataset")
 	}
 
@@ -134,8 +134,8 @@ func TestSmoothStat(t *testing.T) {
 	}
 
 	// Smooth should produce 80 points.
-	if result.Len() < 2 {
-		t.Errorf("smooth stat produced too few points: %d", result.Len())
+	if result.NumRows() < 2 {
+		t.Errorf("smooth stat produced too few points: %d", result.NumRows())
 	}
 
 	// For perfect linear data y=2x, smooth should be close.
@@ -166,8 +166,8 @@ func TestSummaryStat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if result.Len() != 2 {
-		t.Fatalf("summary: expected 2 groups, got %d", result.Len())
+	if result.NumRows() != 2 {
+		t.Fatalf("summary: expected 2 groups, got %d", result.NumRows())
 	}
 
 	yCol, _ := result.Column("y")

@@ -137,7 +137,7 @@ func (binStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.D
 		counts[idx]++
 	}
 
-	return dataset.NewDataFrame(map[string][]float64{
+	return dataset.NewDataFrameFrom(ds, map[string][]float64{
 		"x":     centers,
 		"count": counts,
 	})
@@ -184,7 +184,7 @@ func (countStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset
 		counts[i] = float64(unique[v])
 	}
 
-	return dataset.NewDataFrame(map[string][]float64{
+	return dataset.NewDataFrameFrom(ds, map[string][]float64{
 		"x":     xs,
 		"count": counts,
 	})
@@ -216,7 +216,7 @@ func (densityStat) Compute(ds dataset.Dataset, mapping map[string]string) (datas
 
 	n := len(vals)
 	if n == 0 {
-		return dataset.NewDataFrame(map[string][]float64{"x": {}, "density": {}})
+		return dataset.NewDataFrameFrom(ds, map[string][]float64{"x": {}, "density": {}})
 	}
 
 	// Silverman's rule-of-thumb bandwidth.
@@ -257,7 +257,7 @@ func (densityStat) Compute(ds dataset.Dataset, mapping map[string]string) (datas
 		ys[i] = density / float64(n)
 	}
 
-	return dataset.NewDataFrame(map[string][]float64{"x": xs, "density": ys})
+	return dataset.NewDataFrameFrom(ds, map[string][]float64{"x": xs, "density": ys})
 }
 
 // --- Smooth ---
@@ -288,7 +288,7 @@ func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (datase
 
 	n := len(xData)
 	if n < 2 {
-		return dataset.NewDataFrame(map[string][]float64{"x": xData, "y": yData})
+		return dataset.NewDataFrameFrom(ds, map[string][]float64{"x": xData, "y": yData})
 	}
 
 	// Sort by X for consistent ordering.
@@ -377,7 +377,7 @@ func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (datase
 		}
 	}
 
-	return dataset.NewDataFrame(map[string][]float64{"x": xs, "y": ys})
+	return dataset.NewDataFrameFrom(ds, map[string][]float64{"x": xs, "y": ys})
 }
 
 // --- Summary ---
@@ -425,7 +425,7 @@ func (summaryStat) Compute(ds dataset.Dataset, mapping map[string]string) (datas
 		means[i] = sum / float64(len(groups[x]))
 	}
 
-	return dataset.NewDataFrame(map[string][]float64{"x": xs, "y": means})
+	return dataset.NewDataFrameFrom(ds, map[string][]float64{"x": xs, "y": means})
 }
 
 // --- Helpers ---
@@ -553,7 +553,7 @@ func (boxplotStat) Compute(ds dataset.Dataset, mapping map[string]string) (datas
 		}
 	}
 
-	return dataset.NewDataFrame(map[string][]float64{
+	return dataset.NewDataFrameFrom(ds, map[string][]float64{
 		"x":      xs,
 		"lower":  lower,
 		"q1":     q1,

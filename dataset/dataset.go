@@ -1,21 +1,21 @@
 // Package dataset provides zero-copy, lazy-evaluating columnar data abstractions
 // for the Grammar of Graphics pipeline.
 //
-// The core [Dataset] interface represents an immutable columnar data source.
-// All ETL operations (Select, Filter, Mutate, etc.) are available through [Frame],
-// a dplyr-inspired fluent wrapper that chains lazy transformations.
+// # Engine-First Architecture
 //
-// # Materialization Policy
+// Every data operation is delegated to an [Engine] backend. The dataset package
+// defines only interfaces and contracts — no concrete column types, no fallbacks.
+// Engines (Arrow, memory, SQL) implement sub-interfaces ([Aggregator], [Windower],
+// [Joiner], etc.) for the operations they support.
 //
-// Lazy transformations (Filter, Mutate, Select, GroupBy) produce new Dataset
-// wrappers that delay physical computation until data is accessed. This allows
-// Arrow-backed datasets to leverage zero-copy slicing, and SQL-backed datasets
-// to push predicates down to the server.
+// # Type System
 //
-// Materialization is triggered only when:
-//   - A rendering backend consumes column data for drawing.
-//   - A statistical transform requires contiguous arrays (e.g., KDE, loess).
-//   - The user explicitly calls [Frame.Collect].
+// The type system is aligned with Apache Arrow:
+//   - [Field] maps to arrow.Field (name, type, nullable, metadata)
+//   - [Schema] maps to arrow.Schema (ordered collection of fields)
+//   - [AnyColumn] is the type-erased column interface (engine-native storage)
+//   - [Column] is the generic typed access layer
+//   - [GetColumn] bridges untyped to typed via a single type assertion
 package dataset
 
 import "fmt"
@@ -25,14 +25,29 @@ import "fmt"
 // Implementations include in-memory frames, Arrow tables, and SQL-backed
 // remote tables. All ETL operations are available via [Frame].
 type Dataset interface {
-	// Columns returns the available column names.
-	Columns() []string
+	// Schema returns the dataset's schema.
+	Schema() *Schema
 
 	// Column retrieves a named column. Returns [ErrColumnNotFound] if absent.
-	Column(name string) (Column, error)
+	// The returned [AnyColumn] can be type-asserted to [Column[T]] for typed
+	// access, or use [GetColumn] for a safe generic retrieval.
+	Column(name string) (AnyColumn, error)
 
-	// Len returns the logical number of rows.
-	Len() int
+	// NumRows returns the logical number of rows.
+	NumRows() int64
+
+	// NumCols returns the number of columns.
+	NumCols() int64
+}
+
+// Names returns the column names from a dataset's schema.
+func Names(ds Dataset) []string {
+	fields := ds.Schema().Fields()
+	names := make([]string, len(fields))
+	for i, f := range fields {
+		names[i] = f.Name
+	}
+	return names
 }
 
 // Closer is optionally implemented by datasets that hold resources
@@ -42,7 +57,7 @@ type Closer interface {
 }
 
 // Close releases resources if the dataset implements [Closer]. Safe to call
-// on any Dataset; non-closable datasets are silently ignored.
+// on any Dataset — returns nil for datasets without resources.
 func Close(ds Dataset) error {
 	if c, ok := ds.(Closer); ok {
 		return c.Close()

@@ -4,8 +4,7 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
 A pure-Go implementation of the **Grammar of Graphics** for declarative, composable
-data visualization. Inspired by R's [ggplot2](https://ggplot2-book.org/) and the
-[ggplot2 book (3e)](https://ggplot2-book.org/) by Hadley Wickham.
+data visualization. Inspired by R's [ggplot2](https://ggplot2-book.org/) by Hadley Wickham.
 
 ```go
 ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).

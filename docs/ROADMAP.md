@@ -1,7 +1,7 @@
 # ggplot Roadmap
 
 > Go implementation of the Grammar of Graphics for declarative, composable data visualization.
-> [https://ggplot2-book.org/](https://ggplot2-book.org/)
+> inspired by [ggplot2](https://ggplot2-book.org/) (R package)
 
 ---
 

@@ -84,7 +84,7 @@ func (f *wrapFacet) Split(ds dataset.Dataset) ([]Panel, error) {
 	}
 
 	// Collect group memberships.
-	n := ds.Len()
+	n := int(ds.NumRows())
 	groupMasks := make(map[string][]bool)
 	var order []string
 
@@ -161,7 +161,7 @@ func (g *gridFacet) Split(ds dataset.Dataset) ([]Panel, error) {
 		return nil, err
 	}
 
-	n := ds.Len()
+	n := int(ds.NumRows())
 	panels := make([]Panel, 0, len(rowVals)*len(colVals))
 
 	for _, rv := range rowVals {
