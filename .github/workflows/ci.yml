@@ -1,5 +1,8 @@
 name: ggplot CI
 
+env:
+  GOEXPERIMENT: simd
+
 on:
   push:
     branches: [ "main" ]
