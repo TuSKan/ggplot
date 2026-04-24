@@ -43,7 +43,7 @@ jobs:
       run: go build ./...
 
     - name: Run tests with coverage
-      run: go test -v -race -coverprofile=coverage.out -covermode=atomic -timeout 120s ./...
+      run: go test -v -race -coverprofile coverage.out -covermode atomic -timeout 120s ./...
 
     - name: Upload coverage reports to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
@@ -66,7 +66,7 @@ jobs:
     - name: Run golangci-lint
       run: |
         go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-        $(go env GOPATH)/bin/golangci-lint run
+        $(go env GOPATH)/bin/golangci-lint run --timeout 10m
 
   examples:
     runs-on: ubuntu-latest
