@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        go-version: ['1.22', '1.23', '1.24']
+        go-version: ['1.26']
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
@@ -43,7 +43,7 @@ jobs:
       run: go test -v -race -coverprofile=coverage.out -covermode=atomic -timeout 120s ./...
 
     - name: Upload coverage
-      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.24'
+      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
       uses: codecov/codecov-action@v4
       with:
         files: coverage.out
@@ -57,12 +57,12 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24'
+        go-version: '1.26'
 
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v6
-      with:
-        version: latest
+      run: |
+        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        $(go env GOPATH)/bin/golangci-lint run
 
   examples:
     runs-on: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24'
+        go-version: '1.26'
 
     - name: Build all examples
       run: |
@@ -100,7 +100,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24'
+        go-version: '1.26'
 
     - name: Run benchmarks
       run: go test -bench=. -benchmem -run=^$ -timeout 120s ./...
