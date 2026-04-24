@@ -84,7 +84,7 @@ func (e *Engine) NewTimestampColumn(name string, data []int64) dataset.AnyColumn
 	return &arrowInt64Column{name: name, arr: b.NewInt64Array(), dtype: dataset.DTypeTimestamp}
 }
 
-func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) (dataset.Dataset, error) {
+func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) (dataset.Table, error) {
 	if len(cols) == 0 {
 		return nil, fmt.Errorf("arrow: FromColumns requires at least one column")
 	}
@@ -354,7 +354,7 @@ type arrowFloat64Column struct {
 }
 
 func (c *arrowFloat64Column) Name() string         { return c.name }
-func (c *arrowFloat64Column) Len() int             { return c.arr.Len() }
+func (c *arrowFloat64Column) Len() int64           { return int64(c.arr.Len()) }
 func (c *arrowFloat64Column) DType() dataset.DType { return dataset.DTypeFloat64 }
 func (c *arrowFloat64Column) Values() []float64    { return c.arr.Float64Values() }
 func (c *arrowFloat64Column) IsNull() []bool {
@@ -375,7 +375,7 @@ type arrowInt64Column struct {
 }
 
 func (c *arrowInt64Column) Name() string { return c.name }
-func (c *arrowInt64Column) Len() int     { return c.arr.Len() }
+func (c *arrowInt64Column) Len() int64   { return int64(c.arr.Len()) }
 func (c *arrowInt64Column) DType() dataset.DType {
 	if c.dtype != 0 {
 		return c.dtype
@@ -400,7 +400,7 @@ type arrowStringColumn struct {
 }
 
 func (c *arrowStringColumn) Name() string         { return c.name }
-func (c *arrowStringColumn) Len() int             { return c.arr.Len() }
+func (c *arrowStringColumn) Len() int64           { return int64(c.arr.Len()) }
 func (c *arrowStringColumn) DType() dataset.DType { return dataset.DTypeString }
 func (c *arrowStringColumn) Values() []string {
 	vals := make([]string, c.arr.Len())
@@ -426,7 +426,7 @@ type arrowBoolColumn struct {
 }
 
 func (c *arrowBoolColumn) Name() string         { return c.name }
-func (c *arrowBoolColumn) Len() int             { return c.arr.Len() }
+func (c *arrowBoolColumn) Len() int64           { return int64(c.arr.Len()) }
 func (c *arrowBoolColumn) DType() dataset.DType { return dataset.DTypeBool }
 func (c *arrowBoolColumn) Values() []bool {
 	vals := make([]bool, c.arr.Len())
@@ -451,13 +451,13 @@ func (c *arrowBoolColumn) IsNull() []bool {
 type arrowDataset struct {
 	schema  *dataset.Schema
 	columns map[string]dataset.AnyColumn
-	length  int
+	length  int64
 	engine  *Engine
 }
 
 func (d *arrowDataset) Schema() *dataset.Schema { return d.schema }
-func (d *arrowDataset) NumRows() int64           { return int64(d.length) }
-func (d *arrowDataset) NumCols() int64           { return int64(d.schema.NumFields()) }
+func (d *arrowDataset) NumRows() int64          { return d.length }
+func (d *arrowDataset) NumCols() int64          { return int64(d.schema.NumFields()) }
 func (d *arrowDataset) Engine() dataset.Engine  { return d.engine }
 func (d *arrowDataset) Column(name string) (dataset.AnyColumn, error) {
 	col, ok := d.columns[name]
@@ -488,7 +488,7 @@ func (b *arrowBuilder) Bool(col string) dataset.BoolAppender {
 	return b.builders[col].(*arrowBoolAppender)
 }
 
-func (b *arrowBuilder) Build() (dataset.Dataset, error) {
+func (b *arrowBuilder) Build() (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, b.schema.NumFields())
 	for i := 0; i < b.schema.NumFields(); i++ {
 		f := b.schema.Field(i)
@@ -669,7 +669,7 @@ func (e *Engine) FilterIndices(mask []bool) []int {
 
 // --- Filterer ---
 
-func (e *Engine) Filter(ds dataset.Dataset, mask dataset.Masker) (dataset.Dataset, error) {
+func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, error) {
 	bools, err := mask.Mask(ds)
 	if err != nil {
 		return nil, err
@@ -918,7 +918,7 @@ func fillUpString(e *Engine, c *arrowStringColumn, n int) (dataset.AnyColumn, er
 	ob.Release()
 	return &arrowStringColumn{name: c.name, arr: arr}, nil
 }
-func (e *Engine) DropNA(ds dataset.Dataset, cols ...string) (dataset.Dataset, error) {
+func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error) {
 	n := int(ds.NumRows())
 	if n == 0 {
 		return ds, nil
@@ -1022,7 +1022,7 @@ func (e *Engine) ReplaceNA(col dataset.AnyColumn, defaultVal float64) (dataset.A
 
 // --- Composer ---
 
-func (e *Engine) Stack(datasets ...dataset.Dataset) (dataset.Dataset, error) {
+func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
 		return nil, fmt.Errorf("arrow: Stack requires at least one dataset")
 	}
@@ -1090,7 +1090,7 @@ func (e *Engine) Stack(datasets ...dataset.Dataset) (dataset.Dataset, error) {
 	return e.FromColumns(schema, cols...)
 }
 
-func (e *Engine) Combine(datasets ...dataset.Dataset) (dataset.Dataset, error) {
+func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
 		return nil, fmt.Errorf("arrow: Combine requires at least one dataset")
 	}
@@ -1118,7 +1118,7 @@ func (e *Engine) Combine(datasets ...dataset.Dataset) (dataset.Dataset, error) {
 // --- Windower ---
 
 func (e *Engine) Lag(col dataset.AnyColumn, offset int) (dataset.AnyColumn, error) {
-	length := col.Len()
+	length := int(col.Len())
 	switch c := col.(type) {
 	case *arrowFloat64Column:
 		b := array.NewFloat64Builder(e.alloc)
@@ -1152,7 +1152,7 @@ func (e *Engine) Lag(col dataset.AnyColumn, offset int) (dataset.AnyColumn, erro
 }
 
 func (e *Engine) Lead(col dataset.AnyColumn, offset int) (dataset.AnyColumn, error) {
-	length := col.Len()
+	length := int(col.Len())
 	switch c := col.(type) {
 	case *arrowFloat64Column:
 		b := array.NewFloat64Builder(e.alloc)
@@ -1186,7 +1186,7 @@ func (e *Engine) Lead(col dataset.AnyColumn, offset int) (dataset.AnyColumn, err
 }
 
 func (e *Engine) CumSum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	length := col.Len()
+	length := int(col.Len())
 	switch c := col.(type) {
 	case *arrowFloat64Column:
 		b := array.NewFloat64Builder(e.alloc)
@@ -1216,7 +1216,7 @@ func (e *Engine) CumSum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 }
 
 func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	length := col.Len()
+	length := int(col.Len())
 	switch c := col.(type) {
 	case *arrowFloat64Column:
 		b := array.NewFloat64Builder(e.alloc)
@@ -1258,7 +1258,7 @@ func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 }
 
 func (e *Engine) CumMin(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	length := col.Len()
+	length := int(col.Len())
 	switch c := col.(type) {
 	case *arrowFloat64Column:
 		b := array.NewFloat64Builder(e.alloc)
@@ -1300,7 +1300,7 @@ func (e *Engine) CumMin(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 }
 
 func (e *Engine) Rank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	n := col.Len()
+	n := int(col.Len())
 	sorted, err := e.SortIndices(col)
 	if err != nil {
 		return nil, err
@@ -1345,7 +1345,7 @@ func (e *Engine) Rank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 }
 
 func (e *Engine) DenseRank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	n := col.Len()
+	n := int(col.Len())
 	sorted, err := e.SortIndices(col)
 	if err != nil {
 		return nil, err

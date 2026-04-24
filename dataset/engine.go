@@ -1,6 +1,9 @@
 package dataset
 
-import "io"
+import (
+	"context"
+	"io"
+)
 
 // Engine-First Architecture
 //
@@ -38,13 +41,13 @@ type Engine interface {
 // and ggplot internals can produce new datasets using the same engine
 // without importing engine-specific packages.
 type HasEngine interface {
-	Dataset
+	Table
 	Engine() Engine
 }
 
 // GetEngine extracts the engine from a dataset.
 // Returns nil if the dataset does not carry an engine.
-func GetEngine(ds Dataset) Engine {
+func GetEngine(ds Table) Engine {
 	if ed, ok := ds.(HasEngine); ok {
 		return ed.Engine()
 	}
@@ -65,7 +68,7 @@ type ColumnFactory interface {
 
 	// FromColumns assembles columns into a Dataset with the given schema.
 	// All columns must have the same length.
-	FromColumns(schema *Schema, cols ...AnyColumn) (Dataset, error)
+	FromColumns(schema *Schema, cols ...AnyColumn) (Table, error)
 }
 
 // BuilderFactory creates schema-aware builders for streaming construction.
@@ -82,7 +85,7 @@ type Builder interface {
 	String(col string) StringAppender
 	Bool(col string) BoolAppender
 
-	Build() (Dataset, error)
+	Build() (Table, error)
 }
 
 // Float64Appender streams float64 values into a column.
@@ -191,25 +194,25 @@ type Windower interface {
 // For Arrow: hash-join with lazy indexed column views.
 // For SQL: generates JOIN ... ON ... clauses.
 type Joiner interface {
-	Join(left, right Dataset, spec JoinSpec) (Dataset, error)
+	Join(left, right Table, spec JoinSpec) (Table, error)
 }
 
 // Reshaper provides reshape/pivot operations.
 // For Arrow: lazy column views (repeatedView, interleavedView).
 // For SQL: generates CASE WHEN / UNPIVOT / CROSSTAB.
 type Reshaper interface {
-	PivotLonger(ds Dataset, spec PivotLongerSpec) (Dataset, error)
-	PivotWider(ds Dataset, spec PivotWiderSpec) (Dataset, error)
-	Separate(ds Dataset, col string, into []string, sep string) (Dataset, error)
-	Concatenate(ds Dataset, col string, from []string, sep string) (Dataset, error)
-	Complete(ds Dataset, cols ...string) (Dataset, error)
+	PivotLonger(ds Table, spec PivotLongerSpec) (Table, error)
+	PivotWider(ds Table, spec PivotWiderSpec) (Table, error)
+	Separate(ds Table, col string, into []string, sep string) (Table, error)
+	Concatenate(ds Table, col string, from []string, sep string) (Table, error)
+	Complete(ds Table, cols ...string) (Table, error)
 }
 
 // Filterer provides mask-based row filtering.
 // For Arrow: boolean mask filtering with zero-copy.
 // For SQL: generates WHERE clauses.
 type Filterer interface {
-	Filter(ds Dataset, mask Masker) (Dataset, error)
+	Filter(ds Table, mask Masker) (Table, error)
 }
 
 // Filler provides missing-value handling operations.
@@ -217,7 +220,7 @@ type Filterer interface {
 // For SQL: generates COALESCE / window-based fill.
 type Filler interface {
 	Fill(col AnyColumn, dir FillDirection) (AnyColumn, error)
-	DropNA(ds Dataset, cols ...string) (Dataset, error)
+	DropNA(ds Table, cols ...string) (Table, error)
 	ReplaceNA(col AnyColumn, defaultVal float64) (AnyColumn, error)
 }
 
@@ -225,8 +228,8 @@ type Filler interface {
 // For Arrow: zero-copy concatenation of Arrow arrays.
 // For SQL: UNION ALL / lateral join.
 type Composer interface {
-	Stack(datasets ...Dataset) (Dataset, error)
-	Combine(datasets ...Dataset) (Dataset, error)
+	Stack(datasets ...Table) (Table, error)
+	Combine(datasets ...Table) (Table, error)
 }
 
 // MathKernel provides element-wise mathematical transforms on numeric columns.
@@ -307,14 +310,14 @@ type CSVConfig struct {
 // Memory engine: uses go-simdcsv + schema inference.
 // Arrow engine: uses arrow/csv.NewInferringReader for zero-copy ingest.
 type CSVReader interface {
-	ReadCSV(r io.Reader, cfg CSVConfig) (Dataset, error)
+	ReadCSV(ctx context.Context, r io.Reader, cfg CSVConfig) (Table, error)
 }
 
 // CSVWriter writes a Dataset to CSV.
 // Memory engine: uses go-simdcsv Writer.
 // Arrow engine: uses go-simdcsv Writer (generic — CSV output is string-based).
 type CSVWriter interface {
-	WriteCSV(w io.Writer, ds Dataset, cfg CSVConfig) error
+	WriteCSV(ctx context.Context, w io.Writer, ds Table, cfg CSVConfig) error
 }
 
 // ParquetConfig holds engine-agnostic Parquet configuration.
@@ -327,12 +330,12 @@ type ParquetConfig struct {
 // Memory engine: uses parquet-go for struct-based row reading.
 // Arrow engine: uses pqarrow.ReadTable for zero-copy columnar ingest.
 type ParquetReader interface {
-	ReadParquet(r io.ReaderAt, size int64, cfg ParquetConfig) (Dataset, error)
+	ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg ParquetConfig) (Table, error)
 }
 
 // ParquetWriter writes a Dataset to Parquet format.
 // Memory engine: uses parquet-go GenericWriter.
 // Arrow engine: uses pqarrow.WriteTable.
 type ParquetWriter interface {
-	WriteParquet(w io.Writer, ds Dataset, cfg ParquetConfig) error
+	WriteParquet(ctx context.Context, w io.Writer, ds Table, cfg ParquetConfig) error
 }

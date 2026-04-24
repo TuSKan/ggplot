@@ -12,7 +12,7 @@ import (
 // Columns listed in spec.Cols are "gathered" into two new columns:
 // spec.NamesTo (holds original column names) and spec.ValuesTo (holds values).
 // All other columns are repeated for each gathered column.
-func (e *Engine) PivotLonger(ds dataset.Dataset, spec dataset.PivotLongerSpec) (dataset.Dataset, error) {
+func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (dataset.Table, error) {
 	if len(spec.Cols) == 0 {
 		return nil, fmt.Errorf("memory: PivotLonger requires at least one column to pivot")
 	}
@@ -124,7 +124,7 @@ func repeatColumn(col dataset.AnyColumn, times, outLen int, name string) dataset
 }
 
 // gatherPivotValues collects values from multiple pivot columns into one.
-func gatherPivotValues(ds dataset.Dataset, cols []string, dtype dataset.DType, nRows, nPivot, outLen int, name string) dataset.AnyColumn {
+func gatherPivotValues(ds dataset.Table, cols []string, dtype dataset.DType, nRows, nPivot, outLen int, name string) dataset.AnyColumn {
 	switch dtype {
 	case dataset.DTypeFloat64:
 		out := make([]float64, outLen)
@@ -165,7 +165,7 @@ func gatherPivotValues(ds dataset.Dataset, cols []string, dtype dataset.DType, n
 // spec.NamesFrom identifies the column whose unique values become new column names.
 // spec.ValuesFrom identifies the column whose values fill the new columns.
 // All other columns are the "id" columns that define unique rows.
-func (e *Engine) PivotWider(ds dataset.Dataset, spec dataset.PivotWiderSpec) (dataset.Dataset, error) {
+func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (dataset.Table, error) {
 	if spec.NamesFrom == "" || spec.ValuesFrom == "" {
 		return nil, fmt.Errorf("memory: PivotWider requires NamesFrom and ValuesFrom")
 	}
@@ -337,7 +337,7 @@ func idKey(cols []dataset.AnyColumn, row int) string {
 }
 
 // Separate splits a string column by a delimiter into multiple columns.
-func (e *Engine) Separate(ds dataset.Dataset, col string, into []string, sep string) (dataset.Dataset, error) {
+func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep string) (dataset.Table, error) {
 	srcCol, err := ds.Column(col)
 	if err != nil {
 		return nil, err
@@ -388,7 +388,7 @@ func (e *Engine) Separate(ds dataset.Dataset, col string, into []string, sep str
 }
 
 // Concatenate joins multiple string columns into one with a separator.
-func (e *Engine) Concatenate(ds dataset.Dataset, col string, from []string, sep string) (dataset.Dataset, error) {
+func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep string) (dataset.Table, error) {
 	n := int(ds.NumRows())
 	schema := ds.Schema()
 
@@ -451,7 +451,7 @@ func (e *Engine) Concatenate(ds dataset.Dataset, col string, from []string, sep 
 
 // Complete generates all combinations of the specified columns' unique values,
 // filling missing rows with null values.
-func (e *Engine) Complete(ds dataset.Dataset, cols ...string) (dataset.Dataset, error) {
+func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, error) {
 	if len(cols) == 0 {
 		return ds, nil
 	}

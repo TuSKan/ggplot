@@ -10,7 +10,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/memory"
 )
 
-func makeBenchDS(b *testing.B, n int) dataset.Dataset {
+func makeBenchDS(b *testing.B, n int) dataset.Table {
 	b.Helper()
 	eng := arroweng.NewEngine(memory.DefaultAllocator)
 
@@ -42,7 +42,7 @@ func makeBenchDS(b *testing.B, n int) dataset.Dataset {
 }
 
 // makeBenchDSWithNulls creates a dataset where ~10% of float values are null.
-func makeBenchDSWithNulls(b *testing.B, n int) (dataset.Dataset, dataset.AnyColumn) {
+func makeBenchDSWithNulls(b *testing.B, n int) (dataset.Table, dataset.AnyColumn) {
 	b.Helper()
 	eng := arroweng.NewEngine(memory.DefaultAllocator)
 
@@ -202,11 +202,11 @@ func BenchmarkArrowFilter(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			mask := gtMask{col: "x", val: 500.0}
+			pred := dataset.Gt("x", 500.0)
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				_, _ = dataset.From(ds).Filter(mask).Collect()
+				_, _ = dataset.From(ds).Filter(pred).Collect()
 			}
 		})
 	}

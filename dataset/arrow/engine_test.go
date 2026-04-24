@@ -148,7 +148,7 @@ func TestBuilder(t *testing.T) {
 
 // --- Helpers ---
 
-func makeGroupDS(t testing.TB) dataset.Dataset {
+func makeGroupDS(t testing.TB) dataset.Table {
 	t.Helper()
 	eng := newEng()
 	schema := dataset.NewSchema(
@@ -167,7 +167,7 @@ func makeGroupDS(t testing.TB) dataset.Dataset {
 	return ds
 }
 
-func makeTestDS(t *testing.T) dataset.Dataset {
+func makeTestDS(t *testing.T) dataset.Table {
 	t.Helper()
 	eng := newEng()
 	schema := dataset.NewSchema(
@@ -227,7 +227,7 @@ func TestGroupBySummarize(t *testing.T) {
 
 type doubleX struct{}
 
-func (doubleX) Apply(ds dataset.Dataset) (dataset.AnyColumn, error) {
+func (doubleX) Apply(ds dataset.Table) (dataset.AnyColumn, error) {
 	eng := dataset.GetEngine(ds)
 	factory := eng.(dataset.ColumnFactory)
 	col, err := dataset.GetColumn[float64](ds, "x")
@@ -370,27 +370,10 @@ func TestFullPipeline(t *testing.T) {
 
 // --- Filterer ---
 
-type gtMask struct {
-	col string
-	val float64
-}
-
-func (m gtMask) Mask(ds dataset.Dataset) ([]bool, error) {
-	col, err := dataset.GetColumn[float64](ds, m.col)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]bool, col.Len())
-	for i, v := range col.Values() {
-		out[i] = v > m.val
-	}
-	return out, nil
-}
-
 func TestFilter(t *testing.T) {
 	ds := makeTestDS(t)
 	result, err := dataset.From(ds).
-		Filter(gtMask{col: "x", val: 3}).
+		Filter(dataset.Gt("x", 3.0)).
 		Collect()
 	if err != nil {
 		t.Fatal(err)
@@ -408,7 +391,7 @@ func TestFilter(t *testing.T) {
 func TestFilterEmpty(t *testing.T) {
 	ds := makeTestDS(t)
 	result, err := dataset.From(ds).
-		Filter(gtMask{col: "x", val: 100}).
+		Filter(dataset.Gt("x", 100.0)).
 		Collect()
 	if err != nil {
 		t.Fatal(err)

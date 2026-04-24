@@ -74,17 +74,12 @@ func (binStat) RequiredAes() []string { return []string{"x"} }
 func (binStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
-		return nil, fmt.Errorf("stat_bin: missing 'x' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_bin: missing 'x' aesthetic")
 	}
 
-	col, err := ds.Column(xCol)
+	vals, err := collectFloat64Column(ds, xCol)
 	if err != nil {
-		return nil, err
-	}
-
-	vals, err := collectFloat64(col)
-	if err != nil {
-		return nil, err
+		return dataset.Dataset{}, err
 	}
 
 	// Determine number of bins: explicit __bins param > Sturges' rule.
@@ -137,7 +132,7 @@ func (binStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.D
 		counts[idx]++
 	}
 
-	return dataset.NewDataFrameFrom(ds, map[string][]float64{
+	return newFloat64Dataset(ds, map[string][]float64{
 		"x":     centers,
 		"count": counts,
 	})
@@ -153,17 +148,12 @@ func (countStat) RequiredAes() []string { return []string{"x"} }
 func (countStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
-		return nil, fmt.Errorf("stat_count: missing 'x' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_count: missing 'x' aesthetic")
 	}
 
-	col, err := ds.Column(xCol)
+	vals, err := collectFloat64Column(ds, xCol)
 	if err != nil {
-		return nil, err
-	}
-
-	vals, err := collectFloat64(col)
-	if err != nil {
-		return nil, err
+		return dataset.Dataset{}, err
 	}
 
 	// Count unique values.
@@ -184,7 +174,7 @@ func (countStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset
 		counts[i] = float64(unique[v])
 	}
 
-	return dataset.NewDataFrameFrom(ds, map[string][]float64{
+	return newFloat64Dataset(ds, map[string][]float64{
 		"x":     xs,
 		"count": counts,
 	})
@@ -200,23 +190,18 @@ func (densityStat) RequiredAes() []string { return []string{"x"} }
 func (densityStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
-		return nil, fmt.Errorf("stat_density: missing 'x' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_density: missing 'x' aesthetic")
 	}
 
-	col, err := ds.Column(xCol)
+	vals, err := collectFloat64Column(ds, xCol)
 	if err != nil {
-		return nil, err
-	}
-
-	vals, err := collectFloat64(col)
-	if err != nil {
-		return nil, err
+		return dataset.Dataset{}, err
 	}
 	sort.Float64s(vals)
 
 	n := len(vals)
 	if n == 0 {
-		return dataset.NewDataFrameFrom(ds, map[string][]float64{"x": {}, "density": {}})
+		return newFloat64Dataset(ds, map[string][]float64{"x": {}, "density": {}})
 	}
 
 	// Silverman's rule-of-thumb bandwidth.
@@ -257,7 +242,7 @@ func (densityStat) Compute(ds dataset.Dataset, mapping map[string]string) (datas
 		ys[i] = density / float64(n)
 	}
 
-	return dataset.NewDataFrameFrom(ds, map[string][]float64{"x": xs, "density": ys})
+	return newFloat64Dataset(ds, map[string][]float64{"x": xs, "density": ys})
 }
 
 // --- Smooth ---
@@ -271,24 +256,24 @@ func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (datase
 	xCol := mapping["x"]
 	yCol := mapping["y"]
 	if xCol == "" || yCol == "" {
-		return nil, fmt.Errorf("stat_smooth: missing 'x' or 'y' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_smooth: missing 'x' or 'y' aesthetic")
 	}
 
 	xData, err := collectFloat64Column(ds, xCol)
 	if err != nil {
-		return nil, err
+		return dataset.Dataset{}, err
 	}
 	yData, err := collectFloat64Column(ds, yCol)
 	if err != nil {
-		return nil, err
+		return dataset.Dataset{}, err
 	}
 	if len(xData) != len(yData) {
-		return nil, fmt.Errorf("stat_smooth: x and y columns have different lengths")
+		return dataset.Dataset{}, fmt.Errorf("stat_smooth: x and y columns have different lengths")
 	}
 
 	n := len(xData)
 	if n < 2 {
-		return dataset.NewDataFrameFrom(ds, map[string][]float64{"x": xData, "y": yData})
+		return newFloat64Dataset(ds, map[string][]float64{"x": xData, "y": yData})
 	}
 
 	// Sort by X for consistent ordering.
@@ -377,7 +362,7 @@ func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (datase
 		}
 	}
 
-	return dataset.NewDataFrameFrom(ds, map[string][]float64{"x": xs, "y": ys})
+	return newFloat64Dataset(ds, map[string][]float64{"x": xs, "y": ys})
 }
 
 // --- Summary ---
@@ -392,16 +377,16 @@ func (summaryStat) Compute(ds dataset.Dataset, mapping map[string]string) (datas
 	xCol := mapping["x"]
 	yCol := mapping["y"]
 	if xCol == "" || yCol == "" {
-		return nil, fmt.Errorf("stat_summary: missing 'x' or 'y' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_summary: missing 'x' or 'y' aesthetic")
 	}
 
 	xData, err := collectFloat64Column(ds, xCol)
 	if err != nil {
-		return nil, err
+		return dataset.Dataset{}, err
 	}
 	yData, err := collectFloat64Column(ds, yCol)
 	if err != nil {
-		return nil, err
+		return dataset.Dataset{}, err
 	}
 
 	groups := make(map[float64][]float64)
@@ -425,31 +410,24 @@ func (summaryStat) Compute(ds dataset.Dataset, mapping map[string]string) (datas
 		means[i] = sum / float64(len(groups[x]))
 	}
 
-	return dataset.NewDataFrameFrom(ds, map[string][]float64{"x": xs, "y": means})
+	return newFloat64Dataset(ds, map[string][]float64{"x": xs, "y": means})
 }
 
 // --- Helpers ---
 
-func collectFloat64(col dataset.Column) ([]float64, error) {
-	iter, ok := col.(dataset.IterableColumn)
+func collectFloat64(col dataset.AnyColumn) ([]float64, error) {
+	fc, ok := col.(dataset.Column[float64])
 	if !ok {
-		return nil, fmt.Errorf("stat: column does not support float64 iteration")
+		return nil, fmt.Errorf("stat: column %q (%s) is not float64", col.Name(), col.DType())
 	}
-	flt, err := iter.Float64s()
-	if err != nil {
-		return nil, err
-	}
-	var vals []float64
-	for {
-		v, isNull, ok := flt.Next()
-		if !ok {
-			break
-		}
-		if !isNull {
-			vals = append(vals, v)
+	vals := fc.Values()
+	out := make([]float64, 0, len(vals))
+	for _, v := range vals {
+		if !math.IsNaN(v) {
+			out = append(out, v)
 		}
 	}
-	return vals, nil
+	return out, nil
 }
 
 func collectFloat64Column(ds dataset.Dataset, name string) ([]float64, error) {
@@ -458,6 +436,30 @@ func collectFloat64Column(ds dataset.Dataset, name string) ([]float64, error) {
 		return nil, err
 	}
 	return collectFloat64(col)
+}
+
+// newFloat64Dataset creates a Dataset from float64 columns using the engine
+// from the source dataset. Never imports a specific engine.
+func newFloat64Dataset(ds dataset.Dataset, cols map[string][]float64) (dataset.Dataset, error) {
+	eng := dataset.GetEngine(ds.Table())
+	if eng == nil {
+		return dataset.Dataset{}, fmt.Errorf("stat: source dataset has no engine")
+	}
+	factory, ok := eng.(dataset.ColumnFactory)
+	if !ok {
+		return dataset.Dataset{}, fmt.Errorf("stat: engine %q does not support ColumnFactory", eng.Name())
+	}
+	var anyCols []dataset.AnyColumn
+	// Deterministic column order: sort keys
+	keys := make([]string, 0, len(cols))
+	for k := range cols {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, name := range keys {
+		anyCols = append(anyCols, factory.NewFloat64Column(name, cols[name]))
+	}
+	return dataset.NewDataset(eng, anyCols...)
 }
 
 // --- Boxplot ---
@@ -472,13 +474,13 @@ func (boxplotStat) RequiredAes() []string { return []string{"y"} }
 func (boxplotStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
 	yCol := mapping["y"]
 	if yCol == "" {
-		return nil, fmt.Errorf("stat_boxplot: missing 'y' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_boxplot: missing 'y' aesthetic")
 	}
 
 	// Collect Y values, optionally grouped by X.
 	yVals, err := collectFloat64Column(ds, yCol)
 	if err != nil {
-		return nil, err
+		return dataset.Dataset{}, err
 	}
 
 	// Collect X values for grouping (if they exist).
@@ -553,7 +555,7 @@ func (boxplotStat) Compute(ds dataset.Dataset, mapping map[string]string) (datas
 		}
 	}
 
-	return dataset.NewDataFrameFrom(ds, map[string][]float64{
+	return newFloat64Dataset(ds, map[string][]float64{
 		"x":      xs,
 		"lower":  lower,
 		"q1":     q1,

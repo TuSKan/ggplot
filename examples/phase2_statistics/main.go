@@ -11,6 +11,7 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 )
 
@@ -35,10 +36,10 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 
 // Identity stat — raw data passed through (default for geom.Point, geom.Line)
 func identityStat(dir string) {
-	ds, _ := dataset.NewDataFrame(map[string][]float64{
-		"x": {1, 2, 3, 4, 5, 6, 7, 8},
-		"y": {3, 1, 4, 1, 5, 9, 2, 6},
-	})
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8}),
+		memory.NewEngine().NewFloat64Column("y", []float64{3, 1, 4, 1, 5, 9, 2, 6}),
+	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#3498DB"), geom.WithLineWidth(2))).
 		Layer(geom.Point(geom.WithSize(4), geom.WithColor("#E74C3C"))).
@@ -55,7 +56,7 @@ func binCountStat(dir string) {
 	for i := range xs {
 		xs[i] = rng.NormFloat64()*12 + 100
 	}
-	ds, _ := dataset.NewDataFrame(map[string][]float64{"weight": xs})
+	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("weight", xs))
 	p := ggplot.New(ds, aes.X("weight")).
 		Layer(geom.Histogram(geom.WithFill("#1ABC9C"), geom.WithAlpha(0.8))).
 		Labs(ggplot.Title("stat: Bin/Count"), ggplot.Subtitle("Automatic binning of weight distribution")).
@@ -75,7 +76,7 @@ func densityStat(dir string) {
 			xs[i] = rng.NormFloat64()*5 + 40
 		}
 	}
-	ds, _ := dataset.NewDataFrame(map[string][]float64{"measurement": xs})
+	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("measurement", xs))
 	p := ggplot.New(ds, aes.X("measurement")).
 		Layer(geom.Density(geom.WithFill("#9B59B6"), geom.WithAlpha(0.5), geom.WithColor("#6C3483"))).
 		Labs(ggplot.Title("stat: Density (KDE)"), ggplot.Subtitle("Kernel density of bimodal measurement data")).
@@ -92,7 +93,7 @@ func smoothStat(dir string) {
 		xs[i] = float64(i) * 0.12
 		ys[i] = 2*math.Sin(xs[i]) + 0.5*xs[i] + rng.NormFloat64()*0.8
 	}
-	ds, _ := dataset.NewDataFrame(map[string][]float64{"x": xs, "y": ys})
+	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(2), geom.WithAlpha(0.3), geom.WithColor("#95A5A6"))).
 		Layer(geom.Smooth(geom.WithColor("#E74C3C"), geom.WithLineWidth(2.5))).
@@ -111,7 +112,7 @@ func boxplotStat(dir string) {
 			y = append(y, float64(g)*10+rng.NormFloat64()*float64(g)*3)
 		}
 	}
-	ds, _ := dataset.NewDataFrame(map[string][]float64{"group": x, "value": y})
+	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("group", x), memory.NewEngine().NewFloat64Column("value", y))
 	p := ggplot.New(ds, aes.X("group"), aes.Y("value")).
 		Layer(geom.Boxplot(geom.WithFill("#F0E68C"), geom.WithColor("#2C3E50"), geom.WithWidth(0.5))).
 		Labs(ggplot.Title("stat: BoxPlot"), ggplot.Subtitle("Five-number summary per group (variance increases with group)")).

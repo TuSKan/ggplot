@@ -9,7 +9,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset/memory"
 )
 
-func makeBenchDS(b *testing.B, n int) dataset.Dataset {
+func makeBenchDS(b *testing.B, n int) dataset.Table {
 	b.Helper()
 	eng := memory.NewEngine()
 

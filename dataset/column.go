@@ -112,7 +112,7 @@ func (s *Schema) HasField(name string) bool {
 // Every engine-native column type implements this.
 type AnyColumn interface {
 	Name() string
-	Len() int
+	Len() int64
 	DType() DType
 }
 
@@ -132,7 +132,7 @@ type Column[T any] interface {
 // GetColumn retrieves a typed column from a dataset.
 // This is the only place a type assertion occurs — call sites get
 // compile-time type safety from this point forward.
-func GetColumn[T any](ds Dataset, name string) (Column[T], error) {
+func GetColumn[T any](ds Table, name string) (Column[T], error) {
 	raw, err := ds.Column(name)
 	if err != nil {
 		return nil, err

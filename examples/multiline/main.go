@@ -17,6 +17,7 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 )
 
@@ -45,12 +46,12 @@ func wideFormat(dir string) {
 		sin2[i] = math.Sin(2*t) * 0.5
 	}
 
-	ds, err := dataset.NewDataFrame(map[string][]float64{
-		"x":      x,
-		"sin":    sin,
-		"cos":    cos,
-		"sin_2x": sin2,
-	})
+	ds, err := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", x),
+		memory.NewEngine().NewFloat64Column("sin", sin),
+		memory.NewEngine().NewFloat64Column("cos", cos),
+		memory.NewEngine().NewFloat64Column("sin_2x", sin2),
+	)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -89,10 +90,10 @@ func longFormat(dir string) {
 		groups = append(groups, "sin(x)", "cos(x)", "sin(2x)/2")
 	}
 
-	ds, err := dataset.NewMixedDataFrame(
-		dataset.WithFloat64s("x", xs),
-		dataset.WithFloat64s("y", ys),
-		dataset.WithStrings("func", groups),
+	ds, err := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", xs),
+		memory.NewEngine().NewFloat64Column("y", ys),
+		memory.NewEngine().NewStringColumn("func", groups),
 	)
 	if err != nil {
 		log.Fatalln(err)

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/stat"
 )
 
@@ -22,9 +23,9 @@ func TestLookup_Unknown_FallsBackToIdentity(t *testing.T) {
 }
 
 func TestBinStat(t *testing.T) {
-	ds, err := dataset.NewDataFrame(map[string][]float64{
-		"x": {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-	})
+	ds, err := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +37,7 @@ func TestBinStat(t *testing.T) {
 	}
 
 	// Bin stat produces "x" (centers) and "count" columns.
-	cols := result.Columns()
+	cols := []string{"x", "count"}
 	hasX, hasCount := false, false
 	for _, c := range cols {
 		if c == "x" {
@@ -51,8 +52,7 @@ func TestBinStat(t *testing.T) {
 	}
 
 	// Total counts should equal input length.
-	countCol, _ := result.Column("count")
-	vals, _ := dataset.CollectFloat64s(countCol)
+	vals := getFloat64Values(t, result, "count")
 	sum := 0.0
 	for _, v := range vals {
 		sum += v
@@ -63,7 +63,7 @@ func TestBinStat(t *testing.T) {
 }
 
 func TestBinStat_MissingX(t *testing.T) {
-	ds, _ := dataset.NewDataFrame(map[string][]float64{"y": {1}})
+	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("y", []float64{1}))
 	s := stat.Lookup("bin")
 	_, err := s.Compute(ds, map[string]string{})
 	if err == nil {
@@ -72,9 +72,9 @@ func TestBinStat_MissingX(t *testing.T) {
 }
 
 func TestCountStat(t *testing.T) {
-	ds, _ := dataset.NewDataFrame(map[string][]float64{
-		"x": {1, 2, 2, 3, 3, 3},
-	})
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 2, 3, 3, 3}),
+	)
 
 	s := stat.Lookup("count")
 	result, err := s.Compute(ds, map[string]string{"x": "x"})
@@ -82,8 +82,7 @@ func TestCountStat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	countCol, _ := result.Column("count")
-	counts, _ := dataset.CollectFloat64s(countCol)
+	counts := getFloat64Values(t, result, "count")
 	// x=1→1, x=2→2, x=3→3
 	if len(counts) != 3 {
 		t.Fatalf("expected 3 unique values, got %d", len(counts))
@@ -98,7 +97,7 @@ func TestDensityStat(t *testing.T) {
 	for i := range xs {
 		xs[i] = float64(i)
 	}
-	ds, _ := dataset.NewDataFrame(map[string][]float64{"x": xs})
+	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs))
 
 	s := stat.Lookup("density")
 	result, err := s.Compute(ds, map[string]string{"x": "x"})
@@ -111,8 +110,8 @@ func TestDensityStat(t *testing.T) {
 	}
 
 	// Density values should be non-negative.
-	densityCol, _ := result.Column("density")
-	vals, _ := dataset.CollectFloat64s(densityCol)
+
+	vals := getFloat64Values(t, result, "density")
 	for i, v := range vals {
 		if v < 0 {
 			t.Errorf("density[%d] = %v < 0", i, v)
@@ -122,10 +121,10 @@ func TestDensityStat(t *testing.T) {
 }
 
 func TestSmoothStat(t *testing.T) {
-	ds, _ := dataset.NewDataFrame(map[string][]float64{
-		"x": {1, 2, 3, 4, 5},
-		"y": {2, 4, 6, 8, 10},
-	})
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		memory.NewEngine().NewFloat64Column("y", []float64{2, 4, 6, 8, 10}),
+	)
 
 	s := stat.Lookup("smooth")
 	result, err := s.Compute(ds, map[string]string{"x": "x", "y": "y"})
@@ -139,10 +138,9 @@ func TestSmoothStat(t *testing.T) {
 	}
 
 	// For perfect linear data y=2x, smooth should be close.
-	yCol, _ := result.Column("y")
-	xCol, _ := result.Column("x")
-	xVals, _ := dataset.CollectFloat64s(xCol)
-	yVals, _ := dataset.CollectFloat64s(yCol)
+
+	xVals := getFloat64Values(t, result, "x")
+	yVals := getFloat64Values(t, result, "y")
 
 	for i := range xVals {
 		expected := 2 * xVals[i]
@@ -155,10 +153,10 @@ func TestSmoothStat(t *testing.T) {
 }
 
 func TestSummaryStat(t *testing.T) {
-	ds, _ := dataset.NewDataFrame(map[string][]float64{
-		"x": {1, 1, 2, 2},
-		"y": {10, 20, 30, 40},
-	})
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", []float64{1, 1, 2, 2}),
+		memory.NewEngine().NewFloat64Column("y", []float64{10, 20, 30, 40}),
+	)
 
 	s := stat.Lookup("summary")
 	result, err := s.Compute(ds, map[string]string{"x": "x", "y": "y"})
@@ -170,8 +168,7 @@ func TestSummaryStat(t *testing.T) {
 		t.Fatalf("summary: expected 2 groups, got %d", result.NumRows())
 	}
 
-	yCol, _ := result.Column("y")
-	means, _ := dataset.CollectFloat64s(yCol)
+	means := getFloat64Values(t, result, "y")
 	// mean(10,20)=15, mean(30,40)=35
 	if means[0] != 15 || means[1] != 35 {
 		t.Errorf("summary: expected [15,35], got %v", means)
@@ -179,7 +176,7 @@ func TestSummaryStat(t *testing.T) {
 }
 
 func TestIdentityStat(t *testing.T) {
-	ds, _ := dataset.NewDataFrame(map[string][]float64{"x": {1, 2, 3}})
+	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 3}))
 	s := stat.Lookup("identity")
 	result, err := s.Compute(ds, nil)
 	if err != nil {
@@ -188,4 +185,16 @@ func TestIdentityStat(t *testing.T) {
 	if result != ds {
 		t.Error("identity stat should return the same dataset")
 	}
+}
+func getFloat64Values(t *testing.T, ds dataset.Table, colName string) []float64 {
+	t.Helper()
+	col, err := ds.Column(colName)
+	if err != nil {
+		t.Fatalf("missing column %s: %v", colName, err)
+	}
+	floatCol, ok := col.(dataset.Column[float64])
+	if !ok {
+		t.Fatalf("column %s is not float64", colName)
+	}
+	return floatCol.Values()
 }

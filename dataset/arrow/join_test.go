@@ -11,7 +11,7 @@ import (
 // helper: build two test datasets for join testing.
 // left:  id=[1,2,3,4]  x=[10,20,30,40]
 // right: id=[2,3,5]    y=[200,300,500]
-func makeJoinDatasets(t *testing.T) (*Engine, dataset.Dataset, dataset.Dataset) {
+func makeJoinDatasets(t *testing.T) (*Engine, dataset.Table, dataset.Table) {
 	t.Helper()
 	eng := NewEngine(memory.DefaultAllocator)
 	schema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
@@ -34,7 +34,7 @@ func makeJoinDatasets(t *testing.T) (*Engine, dataset.Dataset, dataset.Dataset) 
 	return eng, left, right
 }
 
-func joinFloat64(t *testing.T, ds dataset.Dataset, name string) []float64 {
+func joinFloat64(t *testing.T, ds dataset.Table, name string) []float64 {
 	t.Helper()
 	col, err := ds.Column(name)
 	if err != nil {
@@ -47,7 +47,7 @@ func joinFloat64(t *testing.T, ds dataset.Dataset, name string) []float64 {
 	return c.Values()
 }
 
-func joinInt64(t *testing.T, ds dataset.Dataset, name string) []int64 {
+func joinInt64(t *testing.T, ds dataset.Table, name string) []int64 {
 	t.Helper()
 	col, err := ds.Column(name)
 	if err != nil {
@@ -60,7 +60,7 @@ func joinInt64(t *testing.T, ds dataset.Dataset, name string) []int64 {
 	return c.Values()
 }
 
-func joinIsNull(t *testing.T, ds dataset.Dataset, name string) []bool {
+func joinIsNull(t *testing.T, ds dataset.Table, name string) []bool {
 	t.Helper()
 	col, err := ds.Column(name)
 	if err != nil {

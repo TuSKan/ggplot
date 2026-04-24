@@ -9,11 +9,12 @@
 //
 // Usage:
 //
-//	ds, err := csv.Read(file, eng, csv.WithHeader(true))
-//	err = csv.Write(file, ds, eng)
+//	ds, err := csv.Read(ctx, file, eng, csv.WithHeader(true))
+//	err = csv.Write(ctx, file, ds, eng)
 package csv
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -67,20 +68,24 @@ func buildConfig(opts []Option) dataset.CSVConfig {
 
 // Read reads a CSV from r using the given engine.
 // The engine must implement [dataset.CSVReader].
-func Read(r io.Reader, eng dataset.Engine, opts ...Option) (dataset.Dataset, error) {
+func Read(ctx context.Context, r io.Reader, eng dataset.Engine, opts ...Option) (dataset.Dataset, error) {
 	reader, ok := eng.(dataset.CSVReader)
 	if !ok {
-		return nil, fmt.Errorf("csv: engine %q does not implement CSVReader", eng.Name())
+		return dataset.Dataset{}, fmt.Errorf("csv: engine %q does not implement CSVReader", eng.Name())
 	}
-	return reader.ReadCSV(r, buildConfig(opts))
+	tbl, err := reader.ReadCSV(ctx, r, buildConfig(opts))
+	if err != nil {
+		return dataset.Dataset{}, err
+	}
+	return dataset.From(tbl), nil
 }
 
 // Write writes a Dataset as CSV to w using the given engine.
 // The engine must implement [dataset.CSVWriter].
-func Write(w io.Writer, ds dataset.Dataset, eng dataset.Engine, opts ...Option) error {
+func Write(ctx context.Context, w io.Writer, ds dataset.Dataset, eng dataset.Engine, opts ...Option) error {
 	writer, ok := eng.(dataset.CSVWriter)
 	if !ok {
 		return fmt.Errorf("csv: engine %q does not implement CSVWriter", eng.Name())
 	}
-	return writer.WriteCSV(w, ds, buildConfig(opts))
+	return writer.WriteCSV(ctx, w, ds.Table(), buildConfig(opts))
 }

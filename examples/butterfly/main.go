@@ -15,6 +15,7 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 )
 
@@ -45,11 +46,11 @@ func main() {
 		zData[i] = math.Sqrt(xData[i]*xData[i] + yData[i]*yData[i])
 	}
 
-	ds, err := dataset.NewDataFrame(map[string][]float64{
-		"x": xData,
-		"y": yData,
-		"z": zData,
-	})
+	ds, err := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", xData),
+		memory.NewEngine().NewFloat64Column("y", yData),
+		memory.NewEngine().NewFloat64Column("z", zData),
+	)
 	if err != nil {
 		log.Fatalln(err)
 	}

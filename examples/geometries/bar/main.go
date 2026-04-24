@@ -8,14 +8,15 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 )
 
 func main() {
-	ds, err := dataset.NewDataFrame(map[string][]float64{
-		"x":     {1, 2, 3, 4, 5},
-		"count": {10, 25, 15, 30, 20},
-	})
+	ds, err := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		memory.NewEngine().NewFloat64Column("count", []float64{10, 25, 15, 30, 20}),
+	)
 	if err != nil {
 		log.Fatalln(err)
 	}

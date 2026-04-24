@@ -346,9 +346,9 @@ func TestPivotLongerFrameAPI(t *testing.T) {
 	}
 }
 
-func getStringValues(t *testing.T, ds dataset.Dataset, name string) []string {
+func getStringValues(t *testing.T, tbl dataset.Table, name string) []string {
 	t.Helper()
-	col, err := ds.Column(name)
+	col, err := tbl.Column(name)
 	if err != nil {
 		t.Fatalf("column %q: %v", name, err)
 	}

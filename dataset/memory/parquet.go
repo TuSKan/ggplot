@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -11,7 +12,7 @@ import (
 )
 
 // ReadParquet reads Parquet data using parquet-go (row-based reader).
-func (e *Engine) ReadParquet(r io.ReaderAt, size int64, cfg dataset.ParquetConfig) (dataset.Dataset, error) {
+func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg dataset.ParquetConfig) (dataset.Table, error) {
 	f, err := pq.OpenFile(r, size)
 	if err != nil {
 		return nil, fmt.Errorf("memory: parquet open: %w", err)
@@ -118,7 +119,7 @@ func (e *Engine) ReadParquet(r io.ReaderAt, size int64, cfg dataset.ParquetConfi
 }
 
 // WriteParquet writes a Dataset as Parquet using parquet-go.
-func (e *Engine) WriteParquet(w io.Writer, ds dataset.Dataset, cfg dataset.ParquetConfig) error {
+func (e *Engine) WriteParquet(ctx context.Context, w io.Writer, ds dataset.Table, cfg dataset.ParquetConfig) error {
 	schema := ds.Schema()
 	nCols := schema.NumFields()
 	nRows := int(ds.NumRows())
@@ -226,4 +227,3 @@ func makeParquetValue(col dataset.AnyColumn, row, colIdx int) pq.Value {
 		return pq.Value{}.Level(0, 0, colIdx)
 	}
 }
-

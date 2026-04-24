@@ -15,7 +15,7 @@ import (
 )
 
 // ReadParquet reads Parquet data using pqarrow for zero-copy columnar ingest.
-func (e *Engine) ReadParquet(r io.ReaderAt, size int64, cfg dataset.ParquetConfig) (dataset.Dataset, error) {
+func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg dataset.ParquetConfig) (dataset.Table, error) {
 	sr := io.NewSectionReader(r, 0, size)
 	pf, err := file.NewParquetReader(sr)
 	if err != nil {
@@ -38,7 +38,7 @@ func (e *Engine) ReadParquet(r io.ReaderAt, size int64, cfg dataset.ParquetConfi
 }
 
 // arrowTableToDataset converts an arrow.Table into a dataset.Dataset.
-func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Dataset, error) {
+func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 	schema := tbl.Schema()
 	nCols := int(tbl.NumCols())
 	nRows := int(tbl.NumRows())
@@ -108,7 +108,7 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Dataset, error) 
 }
 
 // WriteParquet writes a Dataset as Parquet using pqarrow.WriteTable.
-func (e *Engine) WriteParquet(w io.Writer, ds dataset.Dataset, cfg dataset.ParquetConfig) error {
+func (e *Engine) WriteParquet(ctx context.Context, w io.Writer, ds dataset.Table, cfg dataset.ParquetConfig) error {
 	schema := ds.Schema()
 	nCols := schema.NumFields()
 	nRows := int(ds.NumRows())
@@ -134,11 +134,11 @@ func (e *Engine) WriteParquet(w io.Writer, ds dataset.Dataset, cfg dataset.Parqu
 		appendToBuilder(bld.Field(i), col, nRows)
 	}
 
-	rec := bld.NewRecord()
+	rec := bld.NewRecordBatch()
 	defer rec.Release()
 
 	// Build table from record.
-	tbl := arrowarray.NewTableFromRecords(arrowSchema, []arrow.Record{rec})
+	tbl := arrowarray.NewTableFromRecords(arrowSchema, []arrow.RecordBatch{rec})
 	defer tbl.Release()
 
 	// Write table to parquet via pqarrow.

@@ -18,6 +18,7 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 )
 
@@ -56,10 +57,10 @@ func stepExample(dir string) {
 		labels = append(labels, "Sensor A", "Sensor B", "Sensor C")
 	}
 
-	ds, err := dataset.NewMixedDataFrame(
-		dataset.WithFloat64s("time", xs),
-		dataset.WithFloat64s("level", ys),
-		dataset.WithStrings("sensor", labels),
+	ds, err := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("time", xs),
+		memory.NewEngine().NewFloat64Column("level", ys),
+		memory.NewEngine().NewStringColumn("sensor", labels),
 	)
 	if err != nil {
 		log.Fatalln(err)
@@ -105,10 +106,10 @@ func limitsExample(dir string) {
 		}
 	}
 
-	ds, _ := dataset.NewMixedDataFrame(
-		dataset.WithFloat64s("x", xs),
-		dataset.WithFloat64s("y", ys),
-		dataset.WithStrings("type", groups),
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", xs),
+		memory.NewEngine().NewFloat64Column("y", ys),
+		memory.NewEngine().NewStringColumn("type", groups),
 	)
 
 	p := ggplot.New(ds,
@@ -135,10 +136,10 @@ func limitsExample(dir string) {
 }
 
 func flipExample(dir string) {
-	ds, _ := dataset.NewDataFrame(map[string][]float64{
-		"category": {1, 2, 3, 4, 5},
-		"value":    {42, 28, 65, 53, 37},
-	})
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("category", []float64{1, 2, 3, 4, 5}),
+		memory.NewEngine().NewFloat64Column("value", []float64{42, 28, 65, 53, 37}),
+	)
 
 	p := ggplot.New(ds,
 		aes.X("category"),
@@ -179,10 +180,10 @@ func rugExample(dir string) {
 		}
 	}
 
-	ds, _ := dataset.NewMixedDataFrame(
-		dataset.WithFloat64s("x", xs),
-		dataset.WithFloat64s("y", ys),
-		dataset.WithStrings("cluster", groups),
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", xs),
+		memory.NewEngine().NewFloat64Column("y", ys),
+		memory.NewEngine().NewStringColumn("cluster", groups),
 	)
 
 	p := ggplot.New(ds,

@@ -1,6 +1,7 @@
 package arrow
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -17,7 +18,7 @@ import (
 
 // ReadCSV reads CSV data using arrow/csv.NewInferringReader with chunked
 // streaming. Default chunk is 64K rows per batch to bound memory for large files.
-func (e *Engine) ReadCSV(r io.Reader, cfg dataset.CSVConfig) (dataset.Dataset, error) {
+func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig) (dataset.Table, error) {
 	chunkSize := cfg.ChunkSize
 	if chunkSize <= 0 {
 		chunkSize = 1 << 16 // 65 536 rows default
@@ -130,7 +131,7 @@ func (e *Engine) ReadCSV(r io.Reader, cfg dataset.CSVConfig) (dataset.Dataset, e
 }
 
 // WriteCSV writes a Dataset as CSV using go-simdcsv (generic string-based output).
-func (e *Engine) WriteCSV(w io.Writer, ds dataset.Dataset, cfg dataset.CSVConfig) error {
+func (e *Engine) WriteCSV(ctx context.Context, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
 	writer := simdcsv.NewWriter(w)
 	writer.Comma = cfg.Comma
 	defer writer.Flush()

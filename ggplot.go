@@ -253,7 +253,7 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 	if len(p.spec.Layers) == 0 {
 		return fmt.Errorf("ggplot: plot has no layers")
 	}
-	if p.spec.Dataset == nil {
+	if p.spec.Dataset.Table() == nil {
 		return fmt.Errorf("ggplot: plot has no dataset")
 	}
 
@@ -303,7 +303,7 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 			continuousColorCol := ""
 			if colorCol != "" {
 				if col, err := ds.Column(colorCol); err == nil {
-					if _, fErr := dataset.Min(col); fErr == nil {
+					if col.DType() == dataset.DTypeFloat64 || col.DType() == dataset.DTypeInt64 {
 						// Numeric column → continuous color mapping, no grouping.
 						continuousColorCol = colorCol
 						colorCol = "" // prevent grouping
@@ -318,7 +318,7 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 
 			if groupCol != "" {
 				// Split data by group, assign palette colours.
-				groups, subsets := dataset.GroupBy(ds, groupCol)
+				groups, subsets := groupByColumn(ds, groupCol)
 				if legendTitle == "" && colorCol != "" {
 					legendTitle = colorCol
 				}
@@ -342,7 +342,7 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 							statMapping["__bins"] = fmt.Sprintf("%d", layer.Geom.Params.Bins)
 						}
 						transformed, err := s.Compute(grpDS, statMapping)
-						if err == nil && transformed != nil {
+						if err == nil && transformed.Table() != nil {
 							grpDS = transformed
 							grpMerged = updateMappingForStat(statName, grpMerged)
 						}
@@ -384,7 +384,7 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 						statMapping["__bins"] = fmt.Sprintf("%d", layer.Geom.Params.Bins)
 					}
 					transformed, err := s.Compute(ds, statMapping)
-					if err == nil && transformed != nil {
+					if err == nil && transformed.Table() != nil {
 						ds = transformed
 						merged = updateMappingForStat(statName, merged)
 					}
@@ -394,12 +394,22 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 				// Build continuous color bar legend spec.
 				if continuousColorCol != "" && colorBarSpec == nil && pi == 0 {
 					if col, err := ds.Column(continuousColorCol); err == nil {
-						zMin, _ := dataset.Min(col)
-						zMax, _ := dataset.Max(col)
-						colorBarSpec = &guide.ColorBarSpec{
-							Title: continuousColorCol,
-							Min:   zMin,
-							Max:   zMax,
+						if fc, ok := col.(dataset.Column[float64]); ok {
+							vals := fc.Values()
+							zMin, zMax := vals[0], vals[0]
+							for _, v := range vals[1:] {
+								if v < zMin {
+									zMin = v
+								}
+								if v > zMax {
+									zMax = v
+								}
+							}
+							colorBarSpec = &guide.ColorBarSpec{
+								Title: continuousColorCol,
+								Min:   zMin,
+								Max:   zMax,
+							}
 						}
 					}
 				}
@@ -425,7 +435,7 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 		for _, rl := range resolved {
 			if colName, ok := rl.mapping["x"]; ok {
 				if col, err := rl.ds.Column(colName); err == nil {
-					if _, fErr := dataset.Min(col); fErr != nil {
+					if col.DType() != dataset.DTypeFloat64 && col.DType() != dataset.DTypeInt64 {
 						// Column is not numeric — treat as discrete.
 						xIsDiscrete = true
 					}
@@ -451,22 +461,16 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 				}
 
 				// Replace string column with float64 positions.
-				if ic, ok2 := col.(dataset.IterableColumn); ok2 {
-					si, err := ic.Strings()
+				if sc, ok2 := col.(dataset.Column[string]); ok2 {
+					vals := sc.Values()
+					positions := make([]float64, len(vals))
+					for j, v := range vals {
+						positions[j] = ds.MapCategory(v)
+					}
+					// Build new dataset with numeric X.
+					newDS, err := dataset.ReplaceColumn(rl.ds, xColName, positions)
 					if err == nil {
-						var positions []float64
-						for {
-							v, _, ok := si.Next()
-							if !ok {
-								break
-							}
-							positions = append(positions, ds.MapCategory(v))
-						}
-						// Build new dataset with numeric X.
-						newDS, err := dataset.ReplaceColumn(rl.ds, xColName, positions)
-						if err == nil {
-							resolved[i].ds = newDS
-						}
+						resolved[i].ds = newDS
 					}
 				}
 			}
@@ -908,4 +912,54 @@ func updateMappingForStat(statName string, mapping grammar.AesMap) grammar.AesMa
 		result["y"] = "middle"
 	}
 	return result
+}
+
+// groupByColumn splits a Dataset into subsets by the distinct values in the
+// given column. Returns ordered unique labels and corresponding filtered datasets.
+func groupByColumn(ds dataset.Dataset, colName string) ([]string, []dataset.Dataset) {
+	col, err := ds.Column(colName)
+	if err != nil {
+		return nil, nil
+	}
+
+	// Extract string values from the column.
+	var vals []string
+	switch tc := col.(type) {
+	case dataset.Column[string]:
+		vals = tc.Values()
+	case dataset.Column[float64]:
+		vals = make([]string, len(tc.Values()))
+		for i, v := range tc.Values() {
+			vals[i] = fmt.Sprintf("%g", v)
+		}
+	case dataset.Column[int64]:
+		vals = make([]string, len(tc.Values()))
+		for i, v := range tc.Values() {
+			vals[i] = fmt.Sprintf("%d", v)
+		}
+	default:
+		return nil, nil
+	}
+
+	n := len(vals)
+	groupMasks := make(map[string][]bool)
+	var order []string
+	for i := 0; i < n; i++ {
+		v := vals[i]
+		if _, exists := groupMasks[v]; !exists {
+			groupMasks[v] = make([]bool, n)
+			order = append(order, v)
+		}
+		groupMasks[v][i] = true
+	}
+
+	subsets := make([]dataset.Dataset, len(order))
+	for i, label := range order {
+		filtered := ds.Filter(dataset.BoolMask(groupMasks[label]))
+		if filtered.Err() != nil {
+			return nil, nil
+		}
+		subsets[i] = filtered
+	}
+	return order, subsets
 }

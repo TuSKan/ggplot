@@ -11,7 +11,7 @@ import (
 )
 
 // PivotLonger reshapes a wide dataset to long format.
-func (e *Engine) PivotLonger(ds dataset.Dataset, spec dataset.PivotLongerSpec) (dataset.Dataset, error) {
+func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (dataset.Table, error) {
 	if len(spec.Cols) == 0 {
 		return nil, fmt.Errorf("arrow: PivotLonger requires at least one column to pivot")
 	}
@@ -132,7 +132,7 @@ func (e *Engine) arrowRepeatColumn(col dataset.AnyColumn, times, outLen int, nam
 	}
 }
 
-func (e *Engine) arrowGatherPivotValues(ds dataset.Dataset, cols []string, dtype dataset.DType,
+func (e *Engine) arrowGatherPivotValues(ds dataset.Table, cols []string, dtype dataset.DType,
 	nRows, nPivot, outLen int, name string) dataset.AnyColumn {
 	switch dtype {
 	case dataset.DTypeFloat64:
@@ -186,7 +186,7 @@ func (e *Engine) arrowGatherPivotValues(ds dataset.Dataset, cols []string, dtype
 }
 
 // PivotWider reshapes a long dataset to wide format.
-func (e *Engine) PivotWider(ds dataset.Dataset, spec dataset.PivotWiderSpec) (dataset.Dataset, error) {
+func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (dataset.Table, error) {
 	if spec.NamesFrom == "" || spec.ValuesFrom == "" {
 		return nil, fmt.Errorf("arrow: PivotWider requires NamesFrom and ValuesFrom")
 	}
@@ -385,7 +385,7 @@ func arrowIDKey(cols []dataset.AnyColumn, row int) string {
 }
 
 // Separate splits a string column by a delimiter into multiple columns.
-func (e *Engine) Separate(ds dataset.Dataset, col string, into []string, sep string) (dataset.Dataset, error) {
+func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep string) (dataset.Table, error) {
 	srcCol, err := ds.Column(col)
 	if err != nil {
 		return nil, err
@@ -434,7 +434,7 @@ func (e *Engine) Separate(ds dataset.Dataset, col string, into []string, sep str
 }
 
 // Concatenate joins multiple string columns into one with a separator.
-func (e *Engine) Concatenate(ds dataset.Dataset, col string, from []string, sep string) (dataset.Dataset, error) {
+func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep string) (dataset.Table, error) {
 	n := int(ds.NumRows())
 	schema := ds.Schema()
 
@@ -493,7 +493,7 @@ func (e *Engine) Concatenate(ds dataset.Dataset, col string, from []string, sep 
 }
 
 // Complete generates all combinations of the specified columns' unique values.
-func (e *Engine) Complete(ds dataset.Dataset, cols ...string) (dataset.Dataset, error) {
+func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, error) {
 	if len(cols) == 0 {
 		return ds, nil
 	}

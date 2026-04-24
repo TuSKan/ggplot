@@ -13,6 +13,7 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 )
 
@@ -51,10 +52,10 @@ func main() {
 		}
 	}
 
-	ds, err := dataset.NewMixedDataFrame(
-		dataset.WithFloat64s("sepal_length", sepalLen),
-		dataset.WithFloat64s("sepal_width", sepalWid),
-		dataset.WithStrings("species", species),
+	ds, err := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("sepal_length", sepalLen),
+		memory.NewEngine().NewFloat64Column("sepal_width", sepalWid),
+		memory.NewEngine().NewStringColumn("species", species),
 	)
 	if err != nil {
 		log.Fatalln(err)

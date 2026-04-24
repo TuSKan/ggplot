@@ -11,7 +11,7 @@ import (
 
 // Join implements the Joiner interface with a hash-join algorithm.
 // It supports Inner, Left, Right, Full, Semi, and Anti joins.
-func (e *Engine) Join(left, right dataset.Dataset, spec dataset.JoinSpec) (dataset.Dataset, error) {
+func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset.Table, error) {
 	if len(spec.LeftCols) == 0 || len(spec.RightCols) == 0 {
 		return nil, fmt.Errorf("memory: Join requires at least one key column")
 	}
@@ -49,7 +49,7 @@ func (e *Engine) Join(left, right dataset.Dataset, spec dataset.JoinSpec) (datas
 }
 
 // buildHashIndex creates a map from hash key → row indices for the right dataset.
-func buildHashIndex(ds dataset.Dataset, cols []string) (map[string][]int, error) {
+func buildHashIndex(ds dataset.Table, cols []string) (map[string][]int, error) {
 	n := int(ds.NumRows())
 	index := make(map[string][]int, n)
 	keyCols := make([]dataset.AnyColumn, len(cols))
@@ -103,7 +103,7 @@ func colValueString(col dataset.AnyColumn, row int) string {
 
 // probeJoin probes the left dataset against the right hash index and produces
 // row index pairs. A value of -1 means "no match" (null-fill).
-func probeJoin(left, right dataset.Dataset, spec dataset.JoinSpec,
+func probeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 	rightIndex map[string][]int) (leftIdx, rightIdx []int, err error) {
 
 	leftKeyCols := make([]dataset.AnyColumn, len(spec.LeftCols))
@@ -211,8 +211,8 @@ func probeJoin(left, right dataset.Dataset, spec dataset.JoinSpec,
 }
 
 // buildJoinResult constructs the output dataset from row index pairs.
-func buildJoinResult(e *Engine, left, right dataset.Dataset, spec dataset.JoinSpec,
-	leftIdx, rightIdx []int) (dataset.Dataset, error) {
+func buildJoinResult(e *Engine, left, right dataset.Table, spec dataset.JoinSpec,
+	leftIdx, rightIdx []int) (dataset.Table, error) {
 
 	isSemiAnti := spec.Type == dataset.JoinSemi || spec.Type == dataset.JoinAnti
 	n := len(leftIdx)

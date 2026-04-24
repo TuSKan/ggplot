@@ -2,6 +2,7 @@ package parquet
 
 import (
 	"bytes"
+	"context"
 	"math"
 	"testing"
 
@@ -16,12 +17,8 @@ import (
 
 func TestRoundTripMemory(t *testing.T) {
 	eng := memEngine.NewEngine()
-	schema := dataset.NewSchema(
-		dataset.StringCol("city"),
-		dataset.IntCol("pop"),
-		dataset.FloatCol("area"),
-	)
-	ds, err := eng.FromColumns(schema,
+
+	ds, err := dataset.NewDataset(eng,
 		eng.NewStringColumn("city", []string{"SP", "RJ", "BH"}),
 		eng.NewInt64Column("pop", []int64{12000000, 6700000, 2500000}),
 		eng.NewFloat64Column("area", []float64{1521.1, 1200.3, 331.4}),
@@ -31,12 +28,12 @@ func TestRoundTripMemory(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := Write(&buf, ds, eng); err != nil {
+	if err := Write(context.Background(), &buf, ds, eng); err != nil {
 		t.Fatal(err)
 	}
 
 	data := buf.Bytes()
-	ds2, err := Read(bytes.NewReader(data), int64(len(data)), eng)
+	ds2, err := Read(context.Background(), bytes.NewReader(data), int64(len(data)), eng)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,22 +66,19 @@ func TestRoundTripMemory(t *testing.T) {
 
 func TestMemoryNullHandling(t *testing.T) {
 	eng := memEngine.NewEngine()
-	schema := dataset.NewSchema(
-		dataset.StringCol("name"),
-		dataset.FloatCol("val"),
-	)
-	ds, _ := eng.FromColumns(schema,
+
+	ds, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("name", []string{"a", "b"}),
 		eng.NewFloat64Column("val", []float64{1.5, math.NaN()}),
 	)
 
 	var buf bytes.Buffer
-	if err := Write(&buf, ds, eng); err != nil {
+	if err := Write(context.Background(), &buf, ds, eng); err != nil {
 		t.Fatal(err)
 	}
 
 	data := buf.Bytes()
-	ds2, err := Read(bytes.NewReader(data), int64(len(data)), eng)
+	ds2, err := Read(context.Background(), bytes.NewReader(data), int64(len(data)), eng)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,12 +97,8 @@ func TestMemoryNullHandling(t *testing.T) {
 
 func TestRoundTripArrow(t *testing.T) {
 	eng := arrowEngine.NewEngine(memory.DefaultAllocator)
-	schema := dataset.NewSchema(
-		dataset.StringCol("city"),
-		dataset.IntCol("pop"),
-		dataset.FloatCol("area"),
-	)
-	ds, err := eng.FromColumns(schema,
+
+	ds, err := dataset.NewDataset(eng,
 		eng.NewStringColumn("city", []string{"SP", "RJ"}),
 		eng.NewInt64Column("pop", []int64{12000000, 6700000}),
 		eng.NewFloat64Column("area", []float64{1521.1, 1200.3}),
@@ -118,12 +108,12 @@ func TestRoundTripArrow(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := Write(&buf, ds, eng); err != nil {
+	if err := Write(context.Background(), &buf, ds, eng); err != nil {
 		t.Fatal(err)
 	}
 
 	data := buf.Bytes()
-	ds2, err := Read(bytes.NewReader(data), int64(len(data)), eng)
+	ds2, err := Read(context.Background(), bytes.NewReader(data), int64(len(data)), eng)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,20 +137,17 @@ func TestRoundTripArrow(t *testing.T) {
 
 func TestArrowNullHandling(t *testing.T) {
 	eng := arrowEngine.NewEngine(memory.DefaultAllocator)
-	schema := dataset.NewSchema(
-		dataset.FloatCol("x"),
-	)
-	ds, _ := eng.FromColumns(schema,
+	ds, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{42.0, math.NaN(), 3.14}),
 	)
 
 	var buf bytes.Buffer
-	if err := Write(&buf, ds, eng); err != nil {
+	if err := Write(context.Background(), &buf, ds, eng); err != nil {
 		t.Fatal(err)
 	}
 
 	data := buf.Bytes()
-	ds2, err := Read(bytes.NewReader(data), int64(len(data)), eng)
+	ds2, err := Read(context.Background(), bytes.NewReader(data), int64(len(data)), eng)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,20 +171,17 @@ func TestArrowNullHandling(t *testing.T) {
 
 func TestBoolRoundTrip(t *testing.T) {
 	eng := memEngine.NewEngine()
-	schema := dataset.NewSchema(
-		dataset.BoolCol("flag"),
-	)
-	ds, _ := eng.FromColumns(schema,
+	ds, _ := dataset.NewDataset(eng,
 		eng.NewBoolColumn("flag", []bool{true, false, true}),
 	)
 
 	var buf bytes.Buffer
-	if err := Write(&buf, ds, eng); err != nil {
+	if err := Write(context.Background(), &buf, ds, eng); err != nil {
 		t.Fatal(err)
 	}
 
 	data := buf.Bytes()
-	ds2, err := Read(bytes.NewReader(data), int64(len(data)), eng)
+	ds2, err := Read(context.Background(), bytes.NewReader(data), int64(len(data)), eng)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,22 +200,18 @@ func TestCrossEngineReadWrite(t *testing.T) {
 	memEng := memEngine.NewEngine()
 	arrowEng := arrowEngine.NewEngine(memory.DefaultAllocator)
 
-	schema := dataset.NewSchema(
-		dataset.StringCol("name"),
-		dataset.FloatCol("val"),
-	)
-	ds, _ := memEng.FromColumns(schema,
+	ds, _ := dataset.NewDataset(memEng,
 		memEng.NewStringColumn("name", []string{"a", "b", "c"}),
 		memEng.NewFloat64Column("val", []float64{1.0, 2.0, 3.0}),
 	)
 
 	var buf bytes.Buffer
-	if err := Write(&buf, ds, memEng); err != nil {
+	if err := Write(context.Background(), &buf, ds, memEng); err != nil {
 		t.Fatal(err)
 	}
 
 	data := buf.Bytes()
-	ds2, err := Read(bytes.NewReader(data), int64(len(data)), arrowEng)
+	ds2, err := Read(context.Background(), bytes.NewReader(data), int64(len(data)), arrowEng)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,20 +229,17 @@ func TestCrossEngineReadWrite(t *testing.T) {
 
 func TestWithCompression(t *testing.T) {
 	eng := memEngine.NewEngine()
-	schema := dataset.NewSchema(
-		dataset.IntCol("x"),
-	)
-	ds, _ := eng.FromColumns(schema,
+	ds, _ := dataset.NewDataset(eng,
 		eng.NewInt64Column("x", []int64{1, 2, 3, 4, 5}),
 	)
 
 	var buf bytes.Buffer
-	if err := Write(&buf, ds, eng, WithCompression("snappy")); err != nil {
+	if err := Write(context.Background(), &buf, ds, eng, WithCompression("snappy")); err != nil {
 		t.Fatal(err)
 	}
 
 	data := buf.Bytes()
-	ds2, err := Read(bytes.NewReader(data), int64(len(data)), eng)
+	ds2, err := Read(context.Background(), bytes.NewReader(data), int64(len(data)), eng)
 	if err != nil {
 		t.Fatal(err)
 	}

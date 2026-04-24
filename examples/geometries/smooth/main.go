@@ -9,6 +9,7 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 )
 
@@ -21,7 +22,7 @@ func main() {
 		ys[i] = xs[i]*0.5 + rand.NormFloat64()*1.5
 	}
 
-	ds, err := dataset.NewDataFrame(map[string][]float64{"x": xs, "y": ys})
+	ds, err := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
 	if err != nil {
 		log.Fatalln(err)
 	}

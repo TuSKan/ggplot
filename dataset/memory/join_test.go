@@ -10,7 +10,7 @@ import (
 // helper: build two test datasets for join testing.
 // left:  id=[1,2,3,4]  x=[10,20,30,40]
 // right: id=[2,3,5]    y=[200,300,500]
-func makeJoinDatasets(t *testing.T) (dataset.Dataset, dataset.Dataset) {
+func makeJoinDatasets(t *testing.T) (dataset.Table, dataset.Table) {
 	t.Helper()
 	eng := NewEngine()
 	schema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
@@ -33,7 +33,7 @@ func makeJoinDatasets(t *testing.T) (dataset.Dataset, dataset.Dataset) {
 	return left, right
 }
 
-func getFloat64Values(t *testing.T, ds dataset.Dataset, name string) []float64 {
+func getFloat64Values(t *testing.T, ds dataset.Table, name string) []float64 {
 	t.Helper()
 	col, err := ds.Column(name)
 	if err != nil {
@@ -46,7 +46,7 @@ func getFloat64Values(t *testing.T, ds dataset.Dataset, name string) []float64 {
 	return c.Values()
 }
 
-func getInt64Values(t *testing.T, ds dataset.Dataset, name string) []int64 {
+func getInt64Values(t *testing.T, ds dataset.Table, name string) []int64 {
 	t.Helper()
 	col, err := ds.Column(name)
 	if err != nil {

@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -13,7 +14,7 @@ import (
 )
 
 // ReadCSV reads CSV data using go-simdcsv with schema inference.
-func (e *Engine) ReadCSV(r io.Reader, cfg dataset.CSVConfig) (dataset.Dataset, error) {
+func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig) (dataset.Table, error) {
 	reader := csv.NewReader(r)
 	reader.Comma = cfg.Comma
 	if cfg.Comment != 0 {
@@ -133,7 +134,7 @@ func (e *Engine) ReadCSV(r io.Reader, cfg dataset.CSVConfig) (dataset.Dataset, e
 }
 
 // WriteCSV writes a Dataset as CSV using go-simdcsv.
-func (e *Engine) WriteCSV(w io.Writer, ds dataset.Dataset, cfg dataset.CSVConfig) error {
+func (e *Engine) WriteCSV(ctx context.Context, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
 	writer := csv.NewWriter(w)
 	writer.Comma = cfg.Comma
 	defer writer.Flush()

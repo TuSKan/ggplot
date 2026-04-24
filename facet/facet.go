@@ -4,6 +4,8 @@
 package facet
 
 import (
+	"fmt"
+
 	"github.com/TuSKan/ggplot/dataset"
 )
 
@@ -68,34 +70,17 @@ type wrapFacet struct {
 }
 
 func (f *wrapFacet) Split(ds dataset.Dataset) ([]Panel, error) {
-	col, err := ds.Column(f.col)
+	vals, err := columnStrings(ds, f.col)
 	if err != nil {
 		return nil, err
 	}
 
-	iter, ok := col.(dataset.IterableColumn)
-	if !ok {
-		return nil, &dataset.ErrColumnNotFound{Name: f.col}
-	}
-
-	sit, err := iter.Strings()
-	if err != nil {
-		return nil, err
-	}
-
-	// Collect group memberships.
-	n := int(ds.NumRows())
+	n := len(vals)
 	groupMasks := make(map[string][]bool)
 	var order []string
 
 	for i := 0; i < n; i++ {
-		v, isNull, ok := sit.Next()
-		if !ok {
-			break
-		}
-		if isNull {
-			v = "NA"
-		}
+		v := vals[i]
 		if _, exists := groupMasks[v]; !exists {
 			groupMasks[v] = make([]bool, n)
 			order = append(order, v)
@@ -105,9 +90,13 @@ func (f *wrapFacet) Split(ds dataset.Dataset) ([]Panel, error) {
 
 	panels := make([]Panel, 0, len(order))
 	for _, label := range order {
+		filtered := ds.Filter(dataset.BoolMask(groupMasks[label]))
+		if filtered.Err() != nil {
+			return nil, filtered.Err()
+		}
 		panels = append(panels, Panel{
 			Label:   label,
-			Dataset: dataset.FilterMask(ds, groupMasks[label]),
+			Dataset: filtered,
 		})
 	}
 	return panels, nil
@@ -161,27 +150,26 @@ func (g *gridFacet) Split(ds dataset.Dataset) ([]Panel, error) {
 		return nil, err
 	}
 
-	n := int(ds.NumRows())
+	rStrings, _ := columnStrings(ds, g.rowCol)
+	cStrings, _ := columnStrings(ds, g.colCol)
+	n := len(rStrings)
+
 	panels := make([]Panel, 0, len(rowVals)*len(colVals))
 
 	for _, rv := range rowVals {
 		for _, cv := range colVals {
 			mask := make([]bool, n)
-			// Read both columns to build mask.
-			rc, _ := ds.Column(g.rowCol)
-			cc, _ := ds.Column(g.colCol)
-			ri, _ := rc.(dataset.IterableColumn).Strings()
-			ci, _ := cc.(dataset.IterableColumn).Strings()
-
 			for i := 0; i < n; i++ {
-				rval, _, _ := ri.Next()
-				cval, _, _ := ci.Next()
-				mask[i] = rval == rv && cval == cv
+				mask[i] = rStrings[i] == rv && cStrings[i] == cv
 			}
 
+			filtered := ds.Filter(dataset.BoolMask(mask))
+			if filtered.Err() != nil {
+				return nil, filtered.Err()
+			}
 			panels = append(panels, Panel{
 				Label:   rv + " | " + cv,
-				Dataset: dataset.FilterMask(ds, mask),
+				Dataset: filtered,
 			})
 		}
 	}
@@ -189,9 +177,6 @@ func (g *gridFacet) Split(ds dataset.Dataset) ([]Panel, error) {
 }
 
 func (g *gridFacet) GridDims(nPanels int) (int, int) {
-	// Grid dimensions: infer from panel count assuming square-ish layout.
-	// The actual layout is nRowVals × nColVals, but since we only get nPanels here,
-	// we compute the best factorization.
 	if nPanels <= 0 {
 		return 1, 1
 	}
@@ -203,30 +188,49 @@ func (g *gridFacet) String() string { return "grid(" + g.rowCol + " ~ " + g.colC
 
 // --- Helpers ---
 
-func distinctStrings(ds dataset.Dataset, col string) ([]string, error) {
+// columnStrings extracts a string slice from a column, supporting string and
+// float64/int64 columns via fmt.Sprintf conversion.
+func columnStrings(ds dataset.Dataset, col string) ([]string, error) {
 	c, err := ds.Column(col)
 	if err != nil {
 		return nil, err
 	}
-	iter, ok := c.(dataset.IterableColumn)
-	if !ok {
-		return nil, &dataset.ErrColumnNotFound{Name: col}
+	n := int(c.Len())
+	out := make([]string, n)
+
+	switch tc := c.(type) {
+	case dataset.Column[string]:
+		copy(out, tc.Values())
+	case dataset.Column[float64]:
+		for i, v := range tc.Values() {
+			out[i] = fmt.Sprintf("%g", v)
+		}
+	case dataset.Column[int64]:
+		for i, v := range tc.Values() {
+			out[i] = fmt.Sprintf("%d", v)
+		}
+	case dataset.Column[bool]:
+		for i, v := range tc.Values() {
+			if v {
+				out[i] = "TRUE"
+			} else {
+				out[i] = "FALSE"
+			}
+		}
+	default:
+		return nil, fmt.Errorf("facet: unsupported column type %T for %q", c, col)
 	}
-	sit, err := iter.Strings()
+	return out, nil
+}
+
+func distinctStrings(ds dataset.Dataset, col string) ([]string, error) {
+	vals, err := columnStrings(ds, col)
 	if err != nil {
 		return nil, err
 	}
-
 	seen := make(map[string]struct{})
 	var order []string
-	for {
-		v, isNull, ok := sit.Next()
-		if !ok {
-			break
-		}
-		if isNull {
-			v = "NA"
-		}
+	for _, v := range vals {
 		if _, exists := seen[v]; !exists {
 			seen[v] = struct{}{}
 			order = append(order, v)

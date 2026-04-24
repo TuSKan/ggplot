@@ -53,7 +53,7 @@ func (e *Engine) NewTimestampColumn(name string, data []int64) dataset.AnyColumn
 	return &int64Column{name: name, data: data, dtype: dataset.DTypeTimestamp}
 }
 
-func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) (dataset.Dataset, error) {
+func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) (dataset.Table, error) {
 	if len(cols) == 0 {
 		return nil, fmt.Errorf("memory: FromColumns requires at least one column")
 	}
@@ -299,7 +299,7 @@ type float64Column struct {
 }
 
 func (c *float64Column) Name() string         { return c.name }
-func (c *float64Column) Len() int             { return len(c.data) }
+func (c *float64Column) Len() int64           { return int64(len(c.data)) }
 func (c *float64Column) DType() dataset.DType { return dataset.DTypeFloat64 }
 func (c *float64Column) Values() []float64    { return c.data }
 func (c *float64Column) IsNull() []bool {
@@ -328,7 +328,7 @@ type int64Column struct {
 }
 
 func (c *int64Column) Name() string { return c.name }
-func (c *int64Column) Len() int     { return len(c.data) }
+func (c *int64Column) Len() int64   { return int64(len(c.data)) }
 func (c *int64Column) DType() dataset.DType {
 	if c.dtype != 0 {
 		return c.dtype
@@ -344,7 +344,7 @@ type stringColumn struct {
 }
 
 func (c *stringColumn) Name() string         { return c.name }
-func (c *stringColumn) Len() int             { return len(c.data) }
+func (c *stringColumn) Len() int64           { return int64(len(c.data)) }
 func (c *stringColumn) DType() dataset.DType { return dataset.DTypeString }
 func (c *stringColumn) Values() []string     { return c.data }
 func (c *stringColumn) IsNull() []bool       { return nil }
@@ -355,7 +355,7 @@ type boolColumn struct {
 }
 
 func (c *boolColumn) Name() string         { return c.name }
-func (c *boolColumn) Len() int             { return len(c.data) }
+func (c *boolColumn) Len() int64           { return int64(len(c.data)) }
 func (c *boolColumn) DType() dataset.DType { return dataset.DTypeBool }
 func (c *boolColumn) Values() []bool       { return c.data }
 func (c *boolColumn) IsNull() []bool       { return nil }
@@ -365,14 +365,14 @@ func (c *boolColumn) IsNull() []bool       { return nil }
 type memDataset struct {
 	schema  *dataset.Schema
 	columns map[string]dataset.AnyColumn
-	length  int
+	length  int64
 	eng     *Engine
 }
 
 func (d *memDataset) Schema() *dataset.Schema { return d.schema }
-func (d *memDataset) NumRows() int64           { return int64(d.length) }
-func (d *memDataset) NumCols() int64           { return int64(d.schema.NumFields()) }
-func (d *memDataset) Engine() dataset.Engine   { return d.eng }
+func (d *memDataset) NumRows() int64          { return d.length }
+func (d *memDataset) NumCols() int64          { return int64(d.schema.NumFields()) }
+func (d *memDataset) Engine() dataset.Engine  { return d.eng }
 func (d *memDataset) Column(name string) (dataset.AnyColumn, error) {
 	col, ok := d.columns[name]
 	if !ok {
@@ -402,7 +402,7 @@ func (b *memBuilder) Bool(col string) dataset.BoolAppender {
 	return b.appenders[col].(*memBoolAppender)
 }
 
-func (b *memBuilder) Build() (dataset.Dataset, error) {
+func (b *memBuilder) Build() (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, b.schema.NumFields())
 	for i := 0; i < b.schema.NumFields(); i++ {
 		f := b.schema.Field(i)
@@ -566,7 +566,7 @@ func (e *Engine) FilterIndices(mask []bool) []int {
 
 // --- Filterer ---
 
-func (e *Engine) Filter(ds dataset.Dataset, mask dataset.Masker) (dataset.Dataset, error) {
+func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, error) {
 	bools, err := mask.Mask(ds)
 	if err != nil {
 		return nil, err
@@ -694,7 +694,7 @@ func fillString(_ *Engine, c *stringColumn, dir dataset.FillDirection) dataset.A
 	return &stringColumn{name: c.name, data: out}
 }
 
-func (e *Engine) DropNA(ds dataset.Dataset, cols ...string) (dataset.Dataset, error) {
+func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error) {
 	n := int(ds.NumRows())
 	if n == 0 {
 		return ds, nil
@@ -789,7 +789,7 @@ func (e *Engine) ReplaceNA(col dataset.AnyColumn, defaultVal float64) (dataset.A
 
 // --- Composer ---
 
-func (e *Engine) Stack(datasets ...dataset.Dataset) (dataset.Dataset, error) {
+func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
 		return nil, fmt.Errorf("memory: Stack requires at least one dataset")
 	}
@@ -862,7 +862,7 @@ func (e *Engine) Stack(datasets ...dataset.Dataset) (dataset.Dataset, error) {
 	return e.FromColumns(schema, cols...)
 }
 
-func (e *Engine) Combine(datasets ...dataset.Dataset) (dataset.Dataset, error) {
+func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
 		return nil, fmt.Errorf("memory: Combine requires at least one dataset")
 	}

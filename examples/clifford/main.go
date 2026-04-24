@@ -15,6 +15,7 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 )
 
@@ -41,11 +42,11 @@ func main() {
 		x, y = nextX, nextY
 	}
 
-	ds, err := dataset.NewDataFrame(map[string][]float64{
-		"Space X": xData,
-		"Space Y": yData,
-		"Density": cData,
-	})
+	ds, err := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("Space X", xData),
+		memory.NewEngine().NewFloat64Column("Space Y", yData),
+		memory.NewEngine().NewFloat64Column("Density", cData),
+	)
 	if err != nil {
 		log.Fatalln(err)
 	}

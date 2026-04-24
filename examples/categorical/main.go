@@ -11,6 +11,7 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 )
 
@@ -24,11 +25,11 @@ func main() {
 
 // categoricalBars demonstrates a bar chart with string categories on the X axis.
 func categoricalBars(dir string) {
-	ds, _ := dataset.NewMixedDataFrame(
-		dataset.WithStrings("city", []string{
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewStringColumn("city", []string{
 			"London", "Paris", "Berlin", "Madrid", "Rome",
 		}),
-		dataset.WithFloat64s("population", []float64{
+		memory.NewEngine().NewFloat64Column("population", []float64{
 			8.982, 2.161, 3.645, 3.223, 2.873,
 		}),
 	)
@@ -87,10 +88,10 @@ func boxplot(dir string) {
 		y[i] = math.Max(0, y[i])
 	}
 
-	ds, _ := dataset.NewDataFrame(map[string][]float64{
-		"group": x,
-		"score": y,
-	})
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("group", x),
+		memory.NewEngine().NewFloat64Column("score", y),
+	)
 
 	p := ggplot.New(ds, aes.X("group"), aes.Y("score")).
 		Layer(geom.Boxplot(

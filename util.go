@@ -25,8 +25,8 @@ func setColorFromTheme(cv canvas.Canvas, c color.Color) {
 	)
 }
 
-// getFloat64Iter returns a Float64Iter for the named column, or nil on any error.
-func getFloat64Iter(ds dataset.Dataset, col string) dataset.Float64Iter {
+// getFloat64Values returns the float64 values for the named column, or nil on any error.
+func getFloat64Values(ds dataset.Dataset, col string) []float64 {
 	if col == "" {
 		return nil
 	}
@@ -34,15 +34,11 @@ func getFloat64Iter(ds dataset.Dataset, col string) dataset.Float64Iter {
 	if err != nil {
 		return nil
 	}
-	iter, ok := c.(dataset.IterableColumn)
+	fc, ok := c.(dataset.Column[float64])
 	if !ok {
 		return nil
 	}
-	flt, err := iter.Float64s()
-	if err != nil {
-		return nil
-	}
-	return flt
+	return fc.Values()
 }
 
 // normalize maps a value to [0, 1] within [min, max].

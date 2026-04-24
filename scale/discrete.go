@@ -23,14 +23,9 @@ type DiscreteScale struct {
 
 // Train extracts unique string values from the column. If the column is
 // already numeric (e.g. after stat transforms), this is a no-op.
-func (s *DiscreteScale) Train(col dataset.Column) error {
-	ic, ok := col.(dataset.IterableColumn)
+func (s *DiscreteScale) Train(col dataset.AnyColumn) error {
+	sc, ok := col.(dataset.Column[string])
 	if !ok {
-		return nil
-	}
-
-	si, err := ic.Strings()
-	if err != nil {
 		return nil // not a string column — skip
 	}
 
@@ -41,17 +36,11 @@ func (s *DiscreteScale) Train(col dataset.Column) error {
 		}
 	}
 
-	for {
-		v, isNull, ok := si.Next()
-		if !ok {
-			break
-		}
-		if isNull {
+	for _, v := range sc.Values() {
+		if v == "" {
 			continue
 		}
-		if _, exists := seen[v]; !exists {
-			seen[v] = struct{}{}
-		}
+		seen[v] = struct{}{}
 	}
 
 	// Rebuild sorted categories.

@@ -62,9 +62,9 @@ func drawLayer(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, g geom.Layer
 }
 
 func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, continuousColor string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xIter := getFloat64Iter(ds, xCol)
-	yIter := getFloat64Iter(ds, yCol)
-	if xIter == nil || yIter == nil {
+	xVals := getFloat64Values(ds, xCol)
+	yVals := getFloat64Values(ds, yCol)
+	if xVals == nil || yVals == nil {
 		return
 	}
 
@@ -78,43 +78,29 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 	}
 
 	// Continuous color: read z values and find range.
-	var zVals []float64
+	zVals := getFloat64Values(ds, continuousColor)
 	var zMin, zMax float64
-	if continuousColor != "" {
-		zIter := getFloat64Iter(ds, continuousColor)
-		if zIter != nil {
-			for {
-				v, _, ok := zIter.Next()
-				if !ok {
-					break
-				}
-				zVals = append(zVals, v)
+	if len(zVals) > 0 {
+		zMin, zMax = zVals[0], zVals[0]
+		for _, v := range zVals[1:] {
+			if v < zMin {
+				zMin = v
 			}
-			if len(zVals) > 0 {
-				zMin, zMax = zVals[0], zVals[0]
-				for _, v := range zVals[1:] {
-					if v < zMin {
-						zMin = v
-					}
-					if v > zMax {
-						zMax = v
-					}
-				}
+			if v > zMax {
+				zMax = v
 			}
 		}
 	}
 
 	cr, cg, cb := resolveColor(p.Color, 0.3, 0.5, 0.8)
 
-	i := 0
-	for {
-		x, _, ok1 := xIter.Next()
-		y, _, ok2 := yIter.Next()
-		if !ok1 || !ok2 {
-			break
-		}
-		nx := normalize(x, xMin, xMax)
-		ny := normalize(y, yMin, yMax)
+	n := len(xVals)
+	if len(yVals) < n {
+		n = len(yVals)
+	}
+	for i := 0; i < n; i++ {
+		nx := normalize(xVals[i], xMin, xMax)
+		ny := normalize(yVals[i], yMin, yMax)
 		px, py := c.Transform(nx, ny, w, h)
 
 		if i < len(zVals) && zMax > zMin {
@@ -127,14 +113,13 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 		}
 		cv.DrawCircle(px, py, r)
 		cv.Fill()
-		i++
 	}
 }
 
 func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, continuousColor string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xIter := getFloat64Iter(ds, xCol)
-	yIter := getFloat64Iter(ds, yCol)
-	if xIter == nil || yIter == nil {
+	xVals := getFloat64Values(ds, xCol)
+	yVals := getFloat64Values(ds, yCol)
+	if xVals == nil || yVals == nil {
 		return
 	}
 
@@ -149,42 +134,29 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 
 	// Collect all points.
 	type linePt struct{ x, y float64 }
-	var pts []linePt
-	for {
-		x, _, ok1 := xIter.Next()
-		y, _, ok2 := yIter.Next()
-		if !ok1 || !ok2 {
-			break
-		}
-		pts = append(pts, linePt{x, y})
+	n := len(xVals)
+	if len(yVals) < n {
+		n = len(yVals)
+	}
+	pts := make([]linePt, n)
+	for i := 0; i < n; i++ {
+		pts[i] = linePt{xVals[i], yVals[i]}
 	}
 	if len(pts) < 2 {
 		return
 	}
 
 	// Continuous color: read z values and find range.
-	var zVals []float64
+	zVals := getFloat64Values(ds, continuousColor)
 	var zMin, zMax float64
-	if continuousColor != "" {
-		zIter := getFloat64Iter(ds, continuousColor)
-		if zIter != nil {
-			for {
-				v, _, ok := zIter.Next()
-				if !ok {
-					break
-				}
-				zVals = append(zVals, v)
+	if len(zVals) > 0 {
+		zMin, zMax = zVals[0], zVals[0]
+		for _, v := range zVals[1:] {
+			if v < zMin {
+				zMin = v
 			}
-			if len(zVals) > 0 {
-				zMin, zMax = zVals[0], zVals[0]
-				for _, v := range zVals[1:] {
-					if v < zMin {
-						zMin = v
-					}
-					if v > zMax {
-						zMax = v
-					}
-				}
+			if v > zMax {
+				zMax = v
 			}
 		}
 	}
@@ -232,30 +204,20 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	type barPt struct{ x, y float64 }
 	var pts []barPt
 
-	xIter := getFloat64Iter(ds, xCol)
-	if xIter == nil {
+	xVals := getFloat64Values(ds, xCol)
+	if xVals == nil {
 		return
 	}
 
-	var yIter dataset.Float64Iter
-	if yCol != "" {
-		yIter = getFloat64Iter(ds, yCol)
-	}
-	if yIter == nil {
-		yIter = getFloat64Iter(ds, "count")
+	yVals := getFloat64Values(ds, yCol)
+	if yVals == nil {
+		yVals = getFloat64Values(ds, "count")
 	}
 
-	for {
-		x, _, ok1 := xIter.Next()
-		if !ok1 {
-			break
-		}
+	for i, x := range xVals {
 		y := 1.0
-		if yIter != nil {
-			yv, _, ok2 := yIter.Next()
-			if ok2 {
-				y = yv
-			}
+		if yVals != nil && i < len(yVals) {
+			y = yVals[i]
 		}
 		pts = append(pts, barPt{x, y})
 	}
@@ -352,26 +314,24 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 }
 
 func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xIter := getFloat64Iter(ds, xCol)
-	yIter := getFloat64Iter(ds, yCol)
-	if xIter == nil || yIter == nil {
+	xVals := getFloat64Values(ds, xCol)
+	yVals := getFloat64Values(ds, yCol)
+	if xVals == nil || yVals == nil {
 		return
 	}
 
 	// Collect normalized data points and their corresponding baselines.
 	type normPt struct{ nx, ny float64 }
-	var npts []normPt
-
-	for {
-		x, _, ok1 := xIter.Next()
-		y, _, ok2 := yIter.Next()
-		if !ok1 || !ok2 {
-			break
+	n := len(xVals)
+	if len(yVals) < n {
+		n = len(yVals)
+	}
+	npts := make([]normPt, n)
+	for i := 0; i < n; i++ {
+		npts[i] = normPt{
+			nx: normalize(xVals[i], xMin, xMax),
+			ny: normalize(yVals[i], yMin, yMax),
 		}
-		npts = append(npts, normPt{
-			nx: normalize(x, xMin, xMax),
-			ny: normalize(y, yMin, yMax),
-		})
 	}
 
 	if len(npts) < 2 {
@@ -408,9 +368,9 @@ func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 }
 
 func drawStep(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xIter := getFloat64Iter(ds, xCol)
-	yIter := getFloat64Iter(ds, yCol)
-	if xIter == nil || yIter == nil {
+	xVals := getFloat64Values(ds, xCol)
+	yVals := getFloat64Values(ds, yCol)
+	if xVals == nil || yVals == nil {
 		return
 	}
 
@@ -426,17 +386,16 @@ func drawStep(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 
 	// Collect normalized data points.
 	type normPt struct{ nx, ny float64 }
-	var npts []normPt
-	for {
-		x, _, ok1 := xIter.Next()
-		y, _, ok2 := yIter.Next()
-		if !ok1 || !ok2 {
-			break
+	n := len(xVals)
+	if len(yVals) < n {
+		n = len(yVals)
+	}
+	npts := make([]normPt, n)
+	for i := 0; i < n; i++ {
+		npts[i] = normPt{
+			nx: normalize(xVals[i], xMin, xMax),
+			ny: normalize(yVals[i], yMin, yMax),
 		}
-		npts = append(npts, normPt{
-			nx: normalize(x, xMin, xMax),
-			ny: normalize(y, yMin, yMax),
-		})
 	}
 
 	if len(npts) < 2 {
@@ -475,48 +434,30 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 	const rugFrac = 0.02 // 2% of panel extent
 
 	// X rugs: tick marks along the bottom edge of the panel.
-	if xCol != "" {
-		xIter := getFloat64Iter(ds, xCol)
-		if xIter != nil {
-			cv.SetRGBA(cr, cg, cb, alpha)
-			cv.SetLineWidth(lw)
-			for {
-				x, _, ok := xIter.Next()
-				if !ok {
-					break
-				}
-				nx := normalize(x, xMin, xMax)
-				// Bottom edge: Y=0 in normalized space.
-				px1, py1 := c.Transform(nx, 0, w, h)
-				// Tick extends inward by rugFrac.
-				px2, py2 := c.Transform(nx, rugFrac, w, h)
-				cv.MoveTo(px1, py1)
-				cv.LineTo(px2, py2)
-				cv.Stroke()
-			}
+	if xVals := getFloat64Values(ds, xCol); xVals != nil {
+		cv.SetRGBA(cr, cg, cb, alpha)
+		cv.SetLineWidth(lw)
+		for _, x := range xVals {
+			nx := normalize(x, xMin, xMax)
+			px1, py1 := c.Transform(nx, 0, w, h)
+			px2, py2 := c.Transform(nx, rugFrac, w, h)
+			cv.MoveTo(px1, py1)
+			cv.LineTo(px2, py2)
+			cv.Stroke()
 		}
 	}
 
 	// Y rugs: tick marks along the left edge of the panel.
-	if yCol != "" {
-		yIter := getFloat64Iter(ds, yCol)
-		if yIter != nil {
-			cv.SetRGBA(cr, cg, cb, alpha)
-			cv.SetLineWidth(lw)
-			for {
-				y, _, ok := yIter.Next()
-				if !ok {
-					break
-				}
-				ny := normalize(y, yMin, yMax)
-				// Left edge: X=0 in normalized space.
-				px1, py1 := c.Transform(0, ny, w, h)
-				// Tick extends inward by rugFrac.
-				px2, py2 := c.Transform(rugFrac, ny, w, h)
-				cv.MoveTo(px1, py1)
-				cv.LineTo(px2, py2)
-				cv.Stroke()
-			}
+	if yVals := getFloat64Values(ds, yCol); yVals != nil {
+		cv.SetRGBA(cr, cg, cb, alpha)
+		cv.SetLineWidth(lw)
+		for _, y := range yVals {
+			ny := normalize(y, yMin, yMax)
+			px1, py1 := c.Transform(0, ny, w, h)
+			px2, py2 := c.Transform(rugFrac, ny, w, h)
+			cv.MoveTo(px1, py1)
+			cv.LineTo(px2, py2)
+			cv.Stroke()
 		}
 	}
 }
@@ -576,9 +517,9 @@ func drawVLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax flo
 }
 
 func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, mapping grammar.AesMap, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xIter := getFloat64Iter(ds, xCol)
-	yIter := getFloat64Iter(ds, yCol)
-	if xIter == nil || yIter == nil {
+	xVals := getFloat64Values(ds, xCol)
+	yVals := getFloat64Values(ds, yCol)
+	if xVals == nil || yVals == nil {
 		return
 	}
 
@@ -589,16 +530,8 @@ func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	}
 	var labels []string
 	if col, err := ds.Column(labelCol); err == nil {
-		if ic, ok := col.(dataset.IterableColumn); ok {
-			if si, err := ic.Strings(); err == nil {
-				for {
-					v, _, ok := si.Next()
-					if !ok {
-						break
-					}
-					labels = append(labels, v)
-				}
-			}
+		if sc, ok := col.(dataset.Column[string]); ok {
+			labels = sc.Values()
 		}
 	}
 
@@ -615,40 +548,36 @@ func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	cv.SetFontSize(fontSize)
 	cv.SetRGBA(cr, cg, cb, alpha)
 
-	i := 0
-	for {
-		x, _, ok1 := xIter.Next()
-		y, _, ok2 := yIter.Next()
-		if !ok1 || !ok2 {
-			break
-		}
-		nx := normalize(x, xMin, xMax)
-		ny := normalize(y, yMin, yMax)
+	n := len(xVals)
+	if len(yVals) < n {
+		n = len(yVals)
+	}
+	for i := 0; i < n; i++ {
+		nx := normalize(xVals[i], xMin, xMax)
+		ny := normalize(yVals[i], yMin, yMax)
 		px, py := c.Transform(nx, ny, w, h)
 
 		var lbl string
 		if i < len(labels) {
 			lbl = labels[i]
 		} else {
-			lbl = fmt.Sprintf("%.4g", y)
+			lbl = fmt.Sprintf("%.4g", yVals[i])
 		}
 
-		// Place text above the point with enough clearance.
 		cv.SetRGBA(cr, cg, cb, alpha)
 		cv.DrawStringAnchored(lbl, px, py-fontSize-4, 0.5, 1.0)
-		i++
 	}
 }
 
 func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
 	// Read stat_boxplot output columns.
-	xIter := getFloat64Iter(ds, "x")
-	lowerIter := getFloat64Iter(ds, "lower")
-	q1Iter := getFloat64Iter(ds, "q1")
-	midIter := getFloat64Iter(ds, "middle")
-	q3Iter := getFloat64Iter(ds, "q3")
-	upperIter := getFloat64Iter(ds, "upper")
-	if xIter == nil || lowerIter == nil || q1Iter == nil || midIter == nil || q3Iter == nil || upperIter == nil {
+	xVals := getFloat64Values(ds, "x")
+	lowerVals := getFloat64Values(ds, "lower")
+	q1Vals := getFloat64Values(ds, "q1")
+	midVals := getFloat64Values(ds, "middle")
+	q3Vals := getFloat64Values(ds, "q3")
+	upperVals := getFloat64Values(ds, "upper")
+	if xVals == nil || lowerVals == nil || q1Vals == nil || midVals == nil || q3Vals == nil || upperVals == nil {
 		return
 	}
 
@@ -668,18 +597,15 @@ func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin
 	cr, cg, cb := resolveColor(p.Color, 0.2, 0.2, 0.2)
 
 	// Compute half-box-width in pixel space.
-	// Use per-group spacing: first collect unique X values to find min spacing.
 	xRange := xMax - xMin
 	if xRange <= 0 {
 		xRange = 1
 	}
 	pixPerUnit := w / xRange
 
-	// Default to 1 data-unit spacing (typical for integer-coded groups).
 	groupSpacing := 1.0
 	halfPixel := (groupSpacing * pixPerUnit * boxW) / 2
 
-	// Cap at reasonable pixel sizes.
 	maxHalf := math.Min(w*0.08, 40)
 	if halfPixel > maxHalf {
 		halfPixel = maxHalf
@@ -688,23 +614,18 @@ func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin
 		halfPixel = 3
 	}
 
-	for {
-		xv, _, ok1 := xIter.Next()
-		lo, _, ok2 := lowerIter.Next()
-		q1v, _, ok3 := q1Iter.Next()
-		md, _, ok4 := midIter.Next()
-		q3v, _, ok5 := q3Iter.Next()
-		hi, _, ok6 := upperIter.Next()
-		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 {
+	n := len(xVals)
+	for i := 0; i < n; i++ {
+		if i >= len(lowerVals) || i >= len(q1Vals) || i >= len(midVals) || i >= len(q3Vals) || i >= len(upperVals) {
 			break
 		}
 
-		nx := normalize(xv, xMin, xMax)
-		nLo := normalize(lo, yMin, yMax)
-		nQ1 := normalize(q1v, yMin, yMax)
-		nMd := normalize(md, yMin, yMax)
-		nQ3 := normalize(q3v, yMin, yMax)
-		nHi := normalize(hi, yMin, yMax)
+		nx := normalize(xVals[i], xMin, xMax)
+		nLo := normalize(lowerVals[i], yMin, yMax)
+		nQ1 := normalize(q1Vals[i], yMin, yMax)
+		nMd := normalize(midVals[i], yMin, yMax)
+		nQ3 := normalize(q3Vals[i], yMin, yMax)
+		nHi := normalize(upperVals[i], yMin, yMax)
 
 		// Center X pixel and Y positions via coord.Transform.
 		cx, _ := c.Transform(nx, 0.5, w, h)

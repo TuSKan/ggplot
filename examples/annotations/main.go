@@ -10,6 +10,7 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 )
 
@@ -32,10 +33,10 @@ func referenceLines(dir string) {
 		y[i] = math.Sin(t)
 	}
 
-	ds, _ := dataset.NewDataFrame(map[string][]float64{
-		"x": x,
-		"y": y,
-	})
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", x),
+		memory.NewEngine().NewFloat64Column("y", y),
+	)
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#1F77B4"), geom.WithLineWidth(2), geom.WithLabel("sin(x)"))).
@@ -80,10 +81,10 @@ func textLabels(dir string) {
 	peakY := []float64{1, -1, 1, -1}
 	peakLabels := []string{"peak", "trough", "peak", "trough"}
 
-	ds, _ := dataset.NewMixedDataFrame(
-		dataset.WithFloat64s("x", peakX),
-		dataset.WithFloat64s("y", peakY),
-		dataset.WithStrings("label", peakLabels),
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", peakX),
+		memory.NewEngine().NewFloat64Column("y", peakY),
+		memory.NewEngine().NewStringColumn("label", peakLabels),
 	)
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Label("label")).

@@ -11,6 +11,7 @@ import (
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
 )
@@ -45,7 +46,7 @@ func coordCartesian(dir string) {
 		xs[i] = float64(i) * 0.1
 		ys[i] = math.Sin(xs[i]) * 3
 	}
-	ds, _ := dataset.NewDataFrame(map[string][]float64{"x": xs, "y": ys})
+	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#3498DB"), geom.WithLineWidth(2))).
 		Labs(ggplot.Title("Coord: Cartesian (default)"), ggplot.Subtitle("Standard x-y axes")).
@@ -54,9 +55,9 @@ func coordCartesian(dir string) {
 }
 
 func coordFlipped(dir string) {
-	ds, _ := dataset.NewMixedDataFrame(
-		dataset.WithStrings("city", []string{"Tokyo", "Delhi", "Shanghai", "São Paulo", "Mumbai"}),
-		dataset.WithFloat64s("population", []float64{37.4, 30.3, 27.1, 22.0, 20.7}),
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewStringColumn("city", []string{"Tokyo", "Delhi", "Shanghai", "São Paulo", "Mumbai"}),
+		memory.NewEngine().NewFloat64Column("population", []float64{37.4, 30.3, 27.1, 22.0, 20.7}),
 	)
 	p := ggplot.New(ds, aes.X("city"), aes.Y("population")).
 		Layer(geom.Col(geom.WithFill("#E74C3C"), geom.WithAlpha(0.85))).
@@ -80,10 +81,10 @@ func facetWrap(dir string) {
 			seasons = append(seasons, s)
 		}
 	}
-	ds, _ := dataset.NewMixedDataFrame(
-		dataset.WithFloat64s("day", xs),
-		dataset.WithFloat64s("temp", ys),
-		dataset.WithStrings("season", seasons),
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("day", xs),
+		memory.NewEngine().NewFloat64Column("temp", ys),
+		memory.NewEngine().NewStringColumn("season", seasons),
 	)
 	p := ggplot.New(ds, aes.X("day"), aes.Y("temp")).
 		Layer(geom.Line(geom.WithColor("#2ECC71"), geom.WithLineWidth(1.5))).
@@ -114,11 +115,11 @@ func facetGrid(dir string) {
 			}
 		}
 	}
-	ds, _ := dataset.NewMixedDataFrame(
-		dataset.WithFloat64s("month", xs),
-		dataset.WithFloat64s("sales", ys),
-		dataset.WithStrings("region", regions),
-		dataset.WithStrings("type", types),
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("month", xs),
+		memory.NewEngine().NewFloat64Column("sales", ys),
+		memory.NewEngine().NewStringColumn("region", regions),
+		memory.NewEngine().NewStringColumn("type", types),
 	)
 	p := ggplot.New(ds, aes.X("month"), aes.Y("sales")).
 		Layer(geom.Point(geom.WithSize(2.5), geom.WithColor("#9B59B6"), geom.WithAlpha(0.7))).
@@ -137,7 +138,7 @@ func allThemes(dir string) {
 		xs[i] = float64(i) * 0.15
 		ys[i] = math.Sin(xs[i]) * 5
 	}
-	ds, _ := dataset.NewDataFrame(map[string][]float64{"x": xs, "y": ys})
+	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
 
 	for _, name := range []string{"default", "classic", "minimal", "dark", "bw"} {
 		p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -162,10 +163,10 @@ func legendPositions(dir string) {
 			groups = append(groups, g)
 		}
 	}
-	ds, _ := dataset.NewMixedDataFrame(
-		dataset.WithFloat64s("x", xs),
-		dataset.WithFloat64s("y", ys),
-		dataset.WithStrings("series", groups),
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", xs),
+		memory.NewEngine().NewFloat64Column("y", ys),
+		memory.NewEngine().NewStringColumn("series", groups),
 	)
 
 	for _, pos := range []string{"right", "left", "top", "bottom", "none"} {
@@ -197,10 +198,10 @@ func aestheticsShowcase(dir string) {
 			groups = append(groups, "Group C")
 		}
 	}
-	ds, _ := dataset.NewMixedDataFrame(
-		dataset.WithFloat64s("x", xs),
-		dataset.WithFloat64s("y", ys),
-		dataset.WithStrings("group", groups),
+	ds, _ := dataset.NewDataset(memory.NewEngine(),
+		memory.NewEngine().NewFloat64Column("x", xs),
+		memory.NewEngine().NewFloat64Column("y", ys),
+		memory.NewEngine().NewStringColumn("group", groups),
 	)
 	p := ggplot.New(ds,
 		aes.X("x"),

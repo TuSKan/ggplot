@@ -17,7 +17,7 @@ import (
 // Scale defines the interface for all scale types.
 type Scale interface {
 	// Train updates the scale's domain from the given column data.
-	Train(col dataset.Column) error
+	Train(col dataset.AnyColumn) error
 
 	// Map transforms a raw value to the [0,1] normalized scale.
 	Map(v float64) float64
@@ -52,16 +52,30 @@ type domain struct {
 	trained  bool
 }
 
-// train updates the domain from a column, using the dataset.Min/Max functions
-// that fall back to iteration when Aggregator is not implemented.
-func (d *domain) train(col dataset.Column) error {
-	mn, err := dataset.Min(col)
-	if err != nil {
-		return err
+// train updates the domain from a column's float64 values.
+func (d *domain) train(col dataset.AnyColumn) error {
+	fc, ok := col.(dataset.Column[float64])
+	if !ok {
+		return fmt.Errorf("scale: column %q (%s) is not float64", col.Name(), col.DType())
 	}
-	mx, err := dataset.Max(col)
-	if err != nil {
-		return err
+	vals := fc.Values()
+	if len(vals) == 0 {
+		return nil
+	}
+	mn, mx := math.Inf(1), math.Inf(-1)
+	for _, v := range vals {
+		if math.IsNaN(v) {
+			continue
+		}
+		if v < mn {
+			mn = v
+		}
+		if v > mx {
+			mx = v
+		}
+	}
+	if math.IsInf(mn, 1) {
+		return nil // all NaN
 	}
 	return d.update(mn, mx)
 }
@@ -93,7 +107,7 @@ type LinearScale struct {
 	domain
 }
 
-func (s *LinearScale) Train(col dataset.Column) error {
+func (s *LinearScale) Train(col dataset.AnyColumn) error {
 	return s.domain.train(col)
 }
 
@@ -134,7 +148,7 @@ type logScale struct {
 	domain
 }
 
-func (s *logScale) Train(col dataset.Column) error {
+func (s *logScale) Train(col dataset.AnyColumn) error {
 	if err := s.domain.train(col); err != nil {
 		return err
 	}
@@ -197,7 +211,7 @@ type sqrtScale struct {
 	domain
 }
 
-func (s *sqrtScale) Train(col dataset.Column) error {
+func (s *sqrtScale) Train(col dataset.AnyColumn) error {
 	if err := s.domain.train(col); err != nil {
 		return err
 	}
@@ -257,7 +271,7 @@ type reverseScale struct {
 	domain
 }
 
-func (s *reverseScale) Train(col dataset.Column) error { return s.domain.train(col) }
+func (s *reverseScale) Train(col dataset.AnyColumn) error { return s.domain.train(col) }
 func (s *reverseScale) Map(v float64) float64 {
 	if s.max == s.min {
 		return 0.5

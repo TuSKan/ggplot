@@ -24,7 +24,7 @@ import "fmt"
 //
 // Implementations include in-memory frames, Arrow tables, and SQL-backed
 // remote tables. All ETL operations are available via [Frame].
-type Dataset interface {
+type Table interface {
 	// Schema returns the dataset's schema.
 	Schema() *Schema
 
@@ -41,7 +41,7 @@ type Dataset interface {
 }
 
 // Names returns the column names from a dataset's schema.
-func Names(ds Dataset) []string {
+func Names(ds Table) []string {
 	fields := ds.Schema().Fields()
 	names := make([]string, len(fields))
 	for i, f := range fields {
@@ -58,7 +58,7 @@ type Closer interface {
 
 // Close releases resources if the dataset implements [Closer]. Safe to call
 // on any Dataset — returns nil for datasets without resources.
-func Close(ds Dataset) error {
+func Close(ds Table) error {
 	if c, ok := ds.(Closer); ok {
 		return c.Close()
 	}

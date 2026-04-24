@@ -155,7 +155,7 @@ func TestBuilder(t *testing.T) {
 	}
 }
 
-func makeGroupDS(t testing.TB) dataset.Dataset {
+func makeGroupDS(t testing.TB) dataset.Table {
 	t.Helper()
 	eng := memory.NewEngine()
 	schema := dataset.NewSchema(
@@ -237,7 +237,7 @@ func TestGroupBySummarize(t *testing.T) {
 // MutateFunc implementation for testing
 type doubleX struct{}
 
-func (doubleX) Apply(ds dataset.Dataset) (dataset.AnyColumn, error) {
+func (doubleX) Apply(ds dataset.Table) (dataset.AnyColumn, error) {
 	eng := dataset.GetEngine(ds)
 	factory := eng.(dataset.ColumnFactory)
 	col, err := dataset.GetColumn[float64](ds, "x")
@@ -294,7 +294,7 @@ func TestFullPipeline(t *testing.T) {
 	}
 }
 
-func makeTestDS(t *testing.T) dataset.Dataset {
+func makeTestDS(t *testing.T) dataset.Table {
 	t.Helper()
 	eng := memory.NewEngine()
 	schema := dataset.NewSchema(
@@ -410,30 +410,13 @@ func TestFrameChain(t *testing.T) {
 	}
 }
 
-// --- Masker for Filter tests ---
-
-type gtMask struct {
-	col string
-	val float64
-}
-
-func (m gtMask) Mask(ds dataset.Dataset) ([]bool, error) {
-	col, err := dataset.GetColumn[float64](ds, m.col)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]bool, col.Len())
-	for i, v := range col.Values() {
-		out[i] = v > m.val
-	}
-	return out, nil
-}
+// --- Filter tests using Predicate ---
 
 func TestFilter(t *testing.T) {
 	ds := makeTestDS(t)
 	// x = [3, 1, 4, 1, 5], filter x > 3 → [4, 5]
 	result, err := dataset.From(ds).
-		Filter(gtMask{col: "x", val: 3}).
+		Filter(dataset.Gt("x", 3.0)).
 		Collect()
 	if err != nil {
 		t.Fatal(err)
@@ -457,7 +440,7 @@ func TestFilterEmpty(t *testing.T) {
 	ds := makeTestDS(t)
 	// x = [3, 1, 4, 1, 5], filter x > 100 → empty
 	result, err := dataset.From(ds).
-		Filter(gtMask{col: "x", val: 100}).
+		Filter(dataset.Gt("x", 100.0)).
 		Collect()
 	if err != nil {
 		t.Fatal(err)
@@ -468,6 +451,7 @@ func TestFilterEmpty(t *testing.T) {
 	if result.Schema().NumFields() != 3 {
 		t.Fatalf("expected 3 fields, got %d", result.Schema().NumFields())
 	}
+
 }
 
 func TestDropNA(t *testing.T) {
