@@ -614,11 +614,28 @@ ds, _ := eng.FromColumns(schema,
 - `SortIndices` → `compute.SortIndicesArray` (Arrow native)
 - `Filter` → `compute.FilterArray` (Arrow native)
 
-### sql/ — SQL Pushdown Engine (planned)
+### bigquery/ — Google BigQuery Engine
 
-Generates SQL queries; pushes predicates, joins, and aggregations to the database.
+High-performance SQL pushdown engine that executes all computations in BigQuery.
+Data only reaches local memory when explicitly evaluated.
 
-**Will implement**: `Engine`, `Aggregator`, `Joiner`, `Filterer`
+```go
+eng, _ := bigquery.NewEngine(ctx, "my-project")
+defer eng.Close()
+
+ds := eng.Table("analytics", "events")
+
+result, _ := dataset.From(ds).
+    Select("region", "revenue").
+    Filter(dataset.Gt("revenue", 1000)).
+    Collect()
+```
+
+**Features**:
+- **Storage Read API**: Downloads data via Apache Arrow IPC for ultra-fast materialization.
+- **Lazy Evaluation**: Accumulates `SelectedFields` and `RowRestriction` without executing.
+- **SQL Translation**: Complex operations (GROUP BY, JOIN) generate SQL Jobs that write to temporary tables.
+- **Local Fallback**: Seamlessly bridges to the local `arrow` engine for operations not supported by SQL.
 
 ---
 

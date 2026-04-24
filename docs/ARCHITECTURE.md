@@ -46,10 +46,7 @@ github.com/TuSKan/ggplot
 ├── position/            # Position adjustments (dodge, stack — scaffolded)
 ├── output/              # Output format helpers (SVG — scaffolded)
 │
-├── dataset/             # Columnar data abstraction
-│   ├── dataset.go       #   Dataset interface, DataFrame, Column, IterableColumn
-│   ├── frame.go         #   Fluent ETL: Select, Filter, Mutate, Arrange, Summarize
-│   └── arrow/           #   Apache Arrow adapter: TableDataset, TableColumn, zero-copy
+├── dataset/             # Columnar data abstraction, see docs/DATASET.md
 │
 ├── internal/
 │   ├── canvas/          # Canvas abstraction wrapping gogpu/gg
@@ -146,19 +143,9 @@ multiple plots from a shared base.
 
 ### Dataset Abstraction
 
-The `dataset.Dataset` interface isolates the library from data storage details:
+Data storage, memory layout, and SIMD computation are isolated inside the `dataset` package. `ggplot` interacts exclusively with the engine-agnostic `dataset.Table` interface. 
 
-```go
-type Dataset interface {
-    Column(name string) (Column, error)
-    Columns() []string
-    Len() int
-}
-```
-
-The native `DataFrame` uses `[]float64` and `[]string` slices.
-The Arrow adapter (`dataset/arrow`) provides `TableDataset` for zero-copy
-columnar access via Apache Arrow arrays.
+For an in-depth look at how the execution engines (Memory, Arrow, BigQuery) operate, see [**DATASET.md**](DATASET.md).
 
 ### Scale Training + Resolution
 
