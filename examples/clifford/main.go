@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math"
 	"path/filepath"
@@ -67,7 +68,7 @@ func main() {
 		Theme("dark")
 
 	out := filepath.Join(dir, "clifford.png")
-	if err := p.Save(out, 900, 900); err != nil {
+	if err := p.Save(context.Background(), out, 900, 900); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)

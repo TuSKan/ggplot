@@ -10,6 +10,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math"
 	"path/filepath"
@@ -81,7 +82,7 @@ func stepExample(dir string) {
 		Theme("minimal")
 
 	out := filepath.Join(dir, "step_signals.png")
-	if err := p.Save(out, 900, 500); err != nil {
+	if err := p.Save(context.Background(), out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)
@@ -129,7 +130,7 @@ func limitsExample(dir string) {
 		Theme("bw")
 
 	out := filepath.Join(dir, "axis_limits.png")
-	if err := p.Save(out, 900, 500); err != nil {
+	if err := p.Save(context.Background(), out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)
@@ -156,7 +157,7 @@ func flipExample(dir string) {
 		Theme("classic")
 
 	out := filepath.Join(dir, "coord_flip.png")
-	if err := p.Save(out, 700, 500); err != nil {
+	if err := p.Save(context.Background(), out, 700, 500); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)
@@ -201,7 +202,7 @@ func rugExample(dir string) {
 		)
 
 	out := filepath.Join(dir, "rug_scatter.png")
-	if err := p.Save(out, 800, 600); err != nil {
+	if err := p.Save(context.Background(), out, 800, 600); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)

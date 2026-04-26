@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math"
 	"math/rand"
@@ -44,7 +45,7 @@ func categoricalBars(dir string) {
 		)
 
 	out := filepath.Join(dir, "categorical_bars.png")
-	if err := p.Save(out, 800, 500); err != nil {
+	if err := p.Save(context.Background(), out, 800, 500); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)
@@ -107,7 +108,7 @@ func boxplot(dir string) {
 		)
 
 	out := filepath.Join(dir, "boxplot.png")
-	if err := p.Save(out, 700, 500); err != nil {
+	if err := p.Save(context.Background(), out, 700, 500); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)

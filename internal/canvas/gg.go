@@ -1,7 +1,9 @@
 package canvas
 
 import (
+	"image"
 	"image/color"
+	"io"
 	"sync"
 
 	"github.com/TuSKan/ggplot/internal/fonts"
@@ -158,6 +160,16 @@ func (c *GGCanvas) Height() int { return c.ctx.Height() }
 // SavePNG writes the canvas to a PNG file.
 func (c *GGCanvas) SavePNG(path string) error {
 	return c.ctx.SavePNG(path)
+}
+
+// EncodePNG writes the canvas as PNG to the given writer.
+func (c *GGCanvas) EncodePNG(w io.Writer) error {
+	return c.ctx.EncodePNG(w)
+}
+
+// Image returns the underlying image.
+func (c *GGCanvas) Image() image.Image {
+	return c.ctx.Image()
 }
 
 // Compile-time check.

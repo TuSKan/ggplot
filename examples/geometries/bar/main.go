@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"path/filepath"
 	"runtime"
@@ -33,7 +34,7 @@ func main() {
 		)
 
 	_, filename, _, _ := runtime.Caller(0)
-	if err := p.Save(filepath.Join(filepath.Dir(filename), "bar.png"), 800, 600); err != nil {
+	if err := p.Save(context.Background(), filepath.Join(filepath.Dir(filename), "bar.png"), 800, 600); err != nil {
 		log.Fatalln(err)
 	}
 }

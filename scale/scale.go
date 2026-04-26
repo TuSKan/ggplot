@@ -62,32 +62,51 @@ type domain struct {
 	trained  bool
 }
 
-// train updates the domain from a column's float64 values.
+// train updates the domain from a column's numeric values.
 func (d *domain) train(col dataset.AnyColumn) error {
-	fc, ok := col.(dataset.Column[float64])
-	if !ok {
-		return fmt.Errorf("scale: column %q (%s) is not float64", col.Name(), col.DType())
-	}
-	vals := fc.Values()
-	if len(vals) == 0 {
-		return nil
-	}
-	mn, mx := math.Inf(1), math.Inf(-1)
-	for _, v := range vals {
-		if math.IsNaN(v) {
-			continue
+	switch c := col.(type) {
+	case dataset.Column[float64]:
+		vals := c.Values()
+		if len(vals) == 0 {
+			return nil
 		}
-		if v < mn {
-			mn = v
+		mn, mx := math.Inf(1), math.Inf(-1)
+		for _, v := range vals {
+			if math.IsNaN(v) {
+				continue
+			}
+			if v < mn {
+				mn = v
+			}
+			if v > mx {
+				mx = v
+			}
 		}
-		if v > mx {
-			mx = v
+		if math.IsInf(mn, 1) {
+			return nil // all NaN
 		}
+		return d.update(mn, mx)
+
+	case dataset.Column[int64]:
+		vals := c.Values()
+		if len(vals) == 0 {
+			return nil
+		}
+		mn, mx := float64(vals[0]), float64(vals[0])
+		for _, v := range vals[1:] {
+			fv := float64(v)
+			if fv < mn {
+				mn = fv
+			}
+			if fv > mx {
+				mx = fv
+			}
+		}
+		return d.update(mn, mx)
+
+	default:
+		return fmt.Errorf("scale: column %q (%s) is not numeric", col.Name(), col.DType())
 	}
-	if math.IsInf(mn, 1) {
-		return nil // all NaN
-	}
-	return d.update(mn, mx)
 }
 
 func (d *domain) update(mn, mx float64) error {

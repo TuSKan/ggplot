@@ -16,6 +16,7 @@ package memory
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/TuSKan/ggplot/dataset"
 	simd "github.com/TuSKan/ggplot/dataset/compute"
@@ -434,9 +435,7 @@ func (a *memFloat64Appender) Append(v float64)          { a.data = append(a.data
 func (a *memFloat64Appender) AppendNull()               { a.data = append(a.data, math.NaN()) }
 func (a *memFloat64Appender) AppendValues(vs []float64) { a.data = append(a.data, vs...) }
 func (a *memFloat64Appender) Reserve(n int) {
-	if cap(a.data)-len(a.data) < n {
-		a.data = append(make([]float64, 0, len(a.data)+n), a.data...)
-	}
+	a.data = slices.Grow(a.data, n)
 }
 
 type memInt64Appender struct{ data []int64 }
@@ -445,9 +444,7 @@ func (a *memInt64Appender) Append(v int64)          { a.data = append(a.data, v)
 func (a *memInt64Appender) AppendNull()             { a.data = append(a.data, 0) }
 func (a *memInt64Appender) AppendValues(vs []int64) { a.data = append(a.data, vs...) }
 func (a *memInt64Appender) Reserve(n int) {
-	if cap(a.data)-len(a.data) < n {
-		a.data = append(make([]int64, 0, len(a.data)+n), a.data...)
-	}
+	a.data = slices.Grow(a.data, n)
 }
 
 type memStringAppender struct{ data []string }
@@ -456,9 +453,7 @@ func (a *memStringAppender) Append(v string)          { a.data = append(a.data, 
 func (a *memStringAppender) AppendNull()              { a.data = append(a.data, "") }
 func (a *memStringAppender) AppendValues(vs []string) { a.data = append(a.data, vs...) }
 func (a *memStringAppender) Reserve(n int) {
-	if cap(a.data)-len(a.data) < n {
-		a.data = append(make([]string, 0, len(a.data)+n), a.data...)
-	}
+	a.data = slices.Grow(a.data, n)
 }
 
 type memBoolAppender struct{ data []bool }
@@ -467,9 +462,7 @@ func (a *memBoolAppender) Append(v bool)          { a.data = append(a.data, v) }
 func (a *memBoolAppender) AppendNull()            { a.data = append(a.data, false) }
 func (a *memBoolAppender) AppendValues(vs []bool) { a.data = append(a.data, vs...) }
 func (a *memBoolAppender) Reserve(n int) {
-	if cap(a.data)-len(a.data) < n {
-		a.data = append(make([]bool, 0, len(a.data)+n), a.data...)
-	}
+	a.data = slices.Grow(a.data, n)
 }
 
 // --- Selector ---

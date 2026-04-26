@@ -7,6 +7,7 @@
 package stat
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sort"
@@ -27,6 +28,14 @@ const (
 	Boxplot  Name = "boxplot"
 )
 
+// Options holds typed parameters for stat computations,
+// replacing magic string keys like "__bins".
+type Options struct {
+	Bins   int    // number of bins (histogram/bin stat)
+	Method string // smoothing method: "lm", "loess"
+	Points int    // number of output grid points
+}
+
 // Stat computes a statistical transformation on a dataset, producing a
 // new (possibly differently shaped) dataset. The transformed dataset's
 // columns depend on the stat type.
@@ -41,7 +50,7 @@ type Stat interface {
 	OutputSchema() []string
 
 	// Compute performs the transformation.
-	Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error)
+	Compute(ctx context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error)
 }
 
 // --- Registry ---
@@ -77,7 +86,7 @@ type identityStat struct{}
 func (identityStat) Name() Name             { return Identity }
 func (identityStat) RequiredAes() []string  { return nil }
 func (identityStat) OutputSchema() []string { return nil }
-func (identityStat) Compute(ds dataset.Dataset, _ map[string]string) (dataset.Dataset, error) {
+func (identityStat) Compute(_ context.Context, ds dataset.Dataset, _ map[string]string, _ Options) (dataset.Dataset, error) {
 	return ds, nil
 }
 
@@ -89,7 +98,7 @@ func (binStat) Name() Name             { return Bin }
 func (binStat) RequiredAes() []string  { return []string{"x"} }
 func (binStat) OutputSchema() []string { return []string{"x", "count", "xmin", "xmax"} }
 
-func (binStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
+func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
 		return dataset.Dataset{}, fmt.Errorf("stat_bin: missing 'x' aesthetic")
@@ -100,13 +109,8 @@ func (binStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.D
 		return dataset.Dataset{}, err
 	}
 
-	// Determine number of bins: explicit __bins param > Sturges' rule.
-	nBins := 0
-	if binsStr, ok := mapping["__bins"]; ok {
-		if _, err := fmt.Sscanf(binsStr, "%d", &nBins); err != nil {
-			nBins = 0 // Fall through to Sturges' rule below.
-		}
-	}
+	// Determine number of bins: explicit opts.Bins > Sturges' rule.
+	nBins := opts.Bins
 	if nBins <= 0 {
 		// Sturges' rule: k = ceil(1 + log2(n))
 		nBins = int(math.Ceil(1.0 + math.Log2(float64(len(vals)))))
@@ -164,7 +168,7 @@ func (countStat) Name() Name             { return Count }
 func (countStat) RequiredAes() []string  { return []string{"x"} }
 func (countStat) OutputSchema() []string { return []string{"x", "count"} }
 
-func (countStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
+func (countStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, _ Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
 		return dataset.Dataset{}, fmt.Errorf("stat_count: missing 'x' aesthetic")
@@ -207,7 +211,7 @@ func (densityStat) Name() Name             { return Density }
 func (densityStat) RequiredAes() []string  { return []string{"x"} }
 func (densityStat) OutputSchema() []string { return []string{"x", "density"} }
 
-func (densityStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
+func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
 		return dataset.Dataset{}, fmt.Errorf("stat_density: missing 'x' aesthetic")
@@ -252,6 +256,11 @@ func (densityStat) Compute(ds dataset.Dataset, mapping map[string]string) (datas
 	ys := make([]float64, points)
 
 	for i := 0; i < points; i++ {
+		if i%64 == 0 {
+			if err := ctx.Err(); err != nil {
+				return dataset.Dataset{}, err
+			}
+		}
 		x := xmin + float64(i)*step
 		xs[i] = x
 		density := 0.0
@@ -273,7 +282,7 @@ func (smoothStat) Name() Name             { return Smooth }
 func (smoothStat) RequiredAes() []string  { return []string{"x", "y"} }
 func (smoothStat) OutputSchema() []string { return []string{"x", "y"} }
 
-func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
+func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	yCol := mapping["y"]
 	if xCol == "" || yCol == "" {
@@ -310,13 +319,16 @@ func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (datase
 	// LOESS parameters.
 	alpha := 0.3 // bandwidth: fraction of data used per local fit
 	if n < 20 {
-		alpha = 0.75 // use wider bandwidth for small datasets
+		alpha = 0.75
 	} else if n < 50 {
 		alpha = 0.5
 	}
 
-	// Number of output points.
-	nOut := 80
+	// Number of output points (from opts or default 80).
+	nOut := opts.Points
+	if nOut <= 0 {
+		nOut = 80
+	}
 	if nOut > n {
 		nOut = n
 	}
@@ -325,7 +337,7 @@ func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (datase
 	xs := make([]float64, nOut)
 	ys := make([]float64, nOut)
 
-	k := int(math.Ceil(alpha * float64(n))) // number of neighbors
+	k := int(math.Ceil(alpha * float64(n)))
 	if k < 3 {
 		k = 3
 	}
@@ -333,29 +345,33 @@ func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (datase
 		k = n
 	}
 
+	// Sliding window: since pts is sorted and xEval advances monotonically,
+	// maintain a [lo, hi) window of size k instead of sorting distances per point.
+	lo, hi := 0, k
 	for i := 0; i < nOut; i++ {
+		if i%32 == 0 {
+			if err := ctx.Err(); err != nil {
+				return dataset.Dataset{}, err
+			}
+		}
 		xEval := xMin + float64(i)*step
 		xs[i] = xEval
 
-		// Find k nearest neighbors by distance to xEval.
-		dists := make([]float64, n)
-		for j := range pts {
-			dists[j] = math.Abs(pts[j].x - xEval)
+		// Advance window: expand hi rightward while it's closer than lo.
+		for hi < n && math.Abs(pts[hi].x-xEval) < math.Abs(pts[lo].x-xEval) {
+			lo++
+			hi++
 		}
-		// Find the k-th smallest distance (max bandwidth).
-		sortedDists := make([]float64, n)
-		copy(sortedDists, dists)
-		sort.Float64s(sortedDists)
-		maxDist := sortedDists[k-1]
+
+		maxDist := math.Max(math.Abs(pts[lo].x-xEval), math.Abs(pts[hi-1].x-xEval))
 		if maxDist < 1e-12 {
 			maxDist = 1e-12
 		}
 
-		// Weighted local linear regression: y = a + b*(x - xEval)
-		// using tri-cube kernel: w = (1 - (d/maxDist)^3)^3
+		// Weighted local linear regression over pts[lo:hi].
 		var sw, swx, swy, swxx, swxy float64
-		for j := range pts {
-			u := dists[j] / maxDist
+		for j := lo; j < hi; j++ {
+			u := math.Abs(pts[j].x-xEval) / maxDist
 			if u >= 1.0 {
 				continue
 			}
@@ -373,13 +389,12 @@ func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (datase
 			ys[i] = 0
 			continue
 		}
-		// Solve 2x2 WLS system: [sw swx; swx swxx] [a; b] = [swy; swxy]
 		det := sw*swxx - swx*swx
 		if math.Abs(det) < 1e-15 {
 			ys[i] = swy / sw
 		} else {
 			a := (swxx*swy - swx*swxy) / det
-			ys[i] = a // evaluate at xEval where dx=0, so y = a
+			ys[i] = a
 		}
 	}
 
@@ -394,7 +409,7 @@ func (summaryStat) Name() Name             { return Summary }
 func (summaryStat) RequiredAes() []string  { return []string{"x", "y"} }
 func (summaryStat) OutputSchema() []string { return []string{"x", "y"} }
 
-func (summaryStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
+func (summaryStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, _ Options) (dataset.Dataset, error) {
 	// summaryStat computes mean(y) for each distinct x value.
 	xCol := mapping["x"]
 	yCol := mapping["y"]
@@ -496,7 +511,7 @@ func (boxplotStat) OutputSchema() []string {
 
 // Compute produces the five-number summary for each unique X value (group).
 // Output columns: x, lower, q1, middle, q3, upper.
-func (boxplotStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
+func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, _ Options) (dataset.Dataset, error) {
 	yCol := mapping["y"]
 	if yCol == "" {
 		return dataset.Dataset{}, fmt.Errorf("stat_boxplot: missing 'y' aesthetic")

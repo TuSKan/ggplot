@@ -47,7 +47,6 @@ type PlotSpec struct {
 	YLim [2]*float64
 
 	// LegendPosition controls where the legend is drawn.
-	// Valid values: "right" (default), "left", "top", "bottom", "none".
 	LegendPosition string
 }
 

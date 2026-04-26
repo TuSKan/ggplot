@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math"
 	"math/rand"
@@ -54,7 +55,7 @@ func main() {
 			)
 
 		outPath := filepath.Join(dir, "theme_"+string(name)+".png")
-		if err := p.Save(outPath, 800, 600); err != nil {
+		if err := p.Save(context.Background(), outPath, 800, 600); err != nil {
 			log.Fatalf("theme %q: %v", name, err)
 		}
 		log.Printf("Saved %s", outPath)

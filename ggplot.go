@@ -30,8 +30,10 @@
 package ggplot
 
 import (
+	"context"
 	"fmt"
 	"image/color"
+	"io"
 	"math"
 
 	"github.com/TuSKan/ggplot/aes"
@@ -56,6 +58,17 @@ import (
 type Plot struct {
 	spec grammar.PlotSpec
 }
+
+// LegendPos controls legend placement.
+type LegendPos string
+
+const (
+	LegendRight  LegendPos = "right"
+	LegendLeft   LegendPos = "left"
+	LegendTop    LegendPos = "top"
+	LegendBottom LegendPos = "bottom"
+	LegendNone   LegendPos = "none"
+)
 
 // New initializes a plot with a dataset and optional global aesthetic mappings.
 func New(ds dataset.Dataset, globalAes ...aes.Mapping) *Plot {
@@ -191,10 +204,9 @@ func (p *Plot) CoordFlip() *Plot {
 func ptrF64(v float64) *float64 { return &v }
 
 // LegendPosition sets the legend placement.
-// Valid values: "right" (default), "left", "top", "bottom", "none".
-func (p *Plot) LegendPosition(pos string) *Plot {
+func (p *Plot) LegendPosition(pos LegendPos) *Plot {
 	cloned := p.clone()
-	cloned.spec.LegendPosition = pos
+	cloned.spec.LegendPosition = string(pos)
 	return cloned
 }
 
@@ -240,10 +252,10 @@ func YLab(text string) LabOpt { return func(l *grammar.Labels) { l.Y = text } }
 func Caption(text string) LabOpt { return func(l *grammar.Labels) { l.Caption = text } }
 
 // Save renders the plot to a PNG file at the given dimensions.
-func (p *Plot) Save(filename string, width, height int) error {
+func (p *Plot) Save(ctx context.Context, filename string, width, height int) error {
 	cv := canvas.NewGGCanvas(width, height)
 
-	if err := p.renderTo(cv, width, height); err != nil {
+	if err := p.renderTo(ctx, cv, width, height); err != nil {
 		return err
 	}
 
@@ -251,19 +263,53 @@ func (p *Plot) Save(filename string, width, height int) error {
 }
 
 // Render produces the rendered canvas for further processing.
-// This is the low-level entry point; prefer [Save] or Show for common cases.
-func (p *Plot) Render(width, height int) (*canvas.GGCanvas, error) {
+func (p *Plot) Render(ctx context.Context, width, height int) (*canvas.GGCanvas, error) {
 	cv := canvas.NewGGCanvas(width, height)
-	if err := p.renderTo(cv, width, height); err != nil {
+	if err := p.renderTo(ctx, cv, width, height); err != nil {
 		return nil, err
 	}
 	return cv, nil
 }
 
+// WriteTo renders the plot and writes the output to w in the given format.
+// Supported formats: "png". Returns the number of bytes written.
+func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, height int) (int64, error) {
+	cv := canvas.NewGGCanvas(width, height)
+	if err := p.renderTo(ctx, cv, width, height); err != nil {
+		return 0, err
+	}
+
+	cw := &countWriter{w: w}
+	switch format {
+	case "png", "":
+		if err := cv.EncodePNG(cw); err != nil {
+			return cw.n, err
+		}
+		return cw.n, nil
+	default:
+		return 0, fmt.Errorf("ggplot: unsupported format %q", format)
+	}
+}
+
+// countWriter wraps an io.Writer and counts bytes written.
+type countWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (cw *countWriter) Write(p []byte) (int, error) {
+	n, err := cw.w.Write(p)
+	cw.n += int64(n)
+	return n, err
+}
+
 // renderTo is the core rendering pipeline orchestrator.
 //
 // Pipeline: Stat Transform → Scale Training → Layout → Grid → Data → Axes → Labels.
-func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
+func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if len(p.spec.Layers) == 0 {
 		return fmt.Errorf("ggplot: plot has no layers")
 	}
@@ -357,14 +403,16 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 
 					// Apply stat transform per-group.
 					if s.Name() != stat.Identity {
-						statMapping := make(map[string]string, len(grpMerged)+2)
+						statMapping := make(map[string]string, len(grpMerged))
 						for k, v := range grpMerged {
 							statMapping[k] = v
 						}
-						if layer.Geom.Params.Bins > 0 {
-							statMapping["__bins"] = fmt.Sprintf("%d", layer.Geom.Params.Bins)
+						opts := stat.Options{
+							Bins:   layer.Geom.Params.Bins,
+							Method: layer.Geom.Params.Method,
+							Points: layer.Geom.Params.Points,
 						}
-						transformed, err := s.Compute(grpDS, statMapping)
+						transformed, err := s.Compute(ctx, grpDS, statMapping, opts)
 						if err != nil {
 							return fmt.Errorf("ggplot: stat %q failed for group %q: %w",
 								statName, grpLabel, err)
@@ -403,14 +451,16 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 			} else {
 				// No grouping — single layer with optional fixed color.
 				if s.Name() != stat.Identity {
-					statMapping := make(map[string]string, len(merged)+2)
+					statMapping := make(map[string]string, len(merged))
 					for k, v := range merged {
 						statMapping[k] = v
 					}
-					if layer.Geom.Params.Bins > 0 {
-						statMapping["__bins"] = fmt.Sprintf("%d", layer.Geom.Params.Bins)
+					opts := stat.Options{
+						Bins:   layer.Geom.Params.Bins,
+						Method: layer.Geom.Params.Method,
+						Points: layer.Geom.Params.Points,
 					}
-					transformed, err := s.Compute(ds, statMapping)
+					transformed, err := s.Compute(ctx, ds, statMapping, opts)
 					if err != nil {
 						return fmt.Errorf("ggplot: stat %q failed: %w", statName, err)
 					}

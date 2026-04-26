@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math"
 	"path/filepath"
@@ -70,7 +71,7 @@ func main() {
 		Theme("dark")
 
 	out := filepath.Join(dir, "butterfly.png")
-	if err := p.Save(out, 800, 800); err != nil {
+	if err := p.Save(context.Background(), out, 800, 800); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)

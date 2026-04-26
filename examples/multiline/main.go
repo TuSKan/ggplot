@@ -9,6 +9,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math"
 	"path/filepath"
@@ -68,7 +69,7 @@ func wideFormat(dir string) {
 		)
 
 	out := filepath.Join(dir, "multiline_wide.png")
-	if err := p.Save(out, 900, 600); err != nil {
+	if err := p.Save(context.Background(), out, 900, 600); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)
@@ -113,7 +114,7 @@ func longFormat(dir string) {
 		)
 
 	out := filepath.Join(dir, "multiline.png")
-	if err := p.Save(out, 900, 600); err != nil {
+	if err := p.Save(context.Background(), out, 900, 600); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)

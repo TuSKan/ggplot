@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math/rand"
 	"path/filepath"
@@ -52,7 +53,7 @@ func main() {
 	_, filename, _, _ := runtime.Caller(0)
 	outPath := filepath.Join(filepath.Dir(filename), "point.png")
 
-	if err := p.Save(outPath, 800, 600); err != nil {
+	if err := p.Save(context.Background(), outPath, 800, 600); err != nil {
 		log.Fatalln(err)
 	}
 

@@ -1,6 +1,7 @@
 package stat_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/TuSKan/ggplot/dataset"
@@ -37,7 +38,7 @@ func TestBinStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := s.Compute(ds, map[string]string{"x": "x"})
+	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x"}, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestBinStat_MissingX(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.Compute(ds, map[string]string{})
+	_, err = s.Compute(context.Background(), ds, map[string]string{}, stat.Options{})
 	if err == nil {
 		t.Fatal("expected error for missing x aesthetic")
 	}
@@ -89,7 +90,7 @@ func TestCountStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := s.Compute(ds, map[string]string{"x": "x"})
+	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x"}, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +116,7 @@ func TestDensityStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := s.Compute(ds, map[string]string{"x": "x"})
+	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x"}, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +146,7 @@ func TestSmoothStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := s.Compute(ds, map[string]string{"x": "x", "y": "y"})
+	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x", "y": "y"}, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +181,7 @@ func TestSummaryStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := s.Compute(ds, map[string]string{"x": "x", "y": "y"})
+	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x", "y": "y"}, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +203,7 @@ func TestIdentityStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := s.Compute(ds, nil)
+	result, err := s.Compute(context.Background(), ds, nil, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

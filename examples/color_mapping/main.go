@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math/rand"
 	"path/filepath"
@@ -76,7 +77,7 @@ func main() {
 
 	_, filename, _, _ := runtime.Caller(0)
 	outPath := filepath.Join(filepath.Dir(filename), "color_mapping.png")
-	if err := p.Save(outPath, 900, 600); err != nil {
+	if err := p.Save(context.Background(), outPath, 900, 600); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", outPath)

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math"
 	"path/filepath"
@@ -69,7 +70,7 @@ func referenceLines(dir string) {
 		Theme("minimal")
 
 	out := filepath.Join(dir, "annotations.png")
-	if err := p.Save(out, 900, 500); err != nil {
+	if err := p.Save(context.Background(), out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)
@@ -98,7 +99,7 @@ func textLabels(dir string) {
 		)
 
 	out := filepath.Join(dir, "text_labels.png")
-	if err := p.Save(out, 900, 500); err != nil {
+	if err := p.Save(context.Background(), out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)

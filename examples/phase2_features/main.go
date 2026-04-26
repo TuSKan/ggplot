@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math"
 	"math/rand"
@@ -32,7 +33,7 @@ func main() {
 
 func save(p *ggplot.Plot, dir, name string, w, h int) {
 	out := filepath.Join(dir, name+".png")
-	if err := p.Save(out, w, h); err != nil {
+	if err := p.Save(context.Background(), out, w, h); err != nil {
 		log.Fatalln(err)
 	}
 	log.Printf("Saved %s", out)
@@ -170,13 +171,13 @@ func legendPositions(dir string) {
 		memory.NewEngine().NewStringColumn("series", groups),
 	)
 
-	for _, pos := range []string{"right", "left", "top", "bottom", "none"} {
+	for _, pos := range []ggplot.LegendPos{ggplot.LegendRight, ggplot.LegendLeft, ggplot.LegendTop, ggplot.LegendBottom, ggplot.LegendNone} {
 		p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("series")).
 			Layer(geom.Line(geom.WithLineWidth(2))).
 			LegendPosition(pos).
-			Labs(ggplot.Title("Legend: "+pos), ggplot.Subtitle("LegendPosition(\""+pos+"\")")).
+			Labs(ggplot.Title("Legend: "+string(pos)), ggplot.Subtitle("LegendPosition(\""+string(pos)+"\")")).
 			Theme(theme.Dark)
-		save(p, dir, "06_legend_"+pos, 700, 500)
+		save(p, dir, "06_legend_"+string(pos), 700, 500)
 	}
 }
 
