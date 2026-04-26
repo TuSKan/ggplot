@@ -14,6 +14,16 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 )
 
+// Type identifies a scale transformation.
+type Type string
+
+const (
+	Linear  Type = "linear"
+	Log10   Type = "log10"
+	Sqrt    Type = "sqrt"
+	Reverse Type = "reverse"
+)
+
 // Scale defines the interface for all scale types.
 type Scale interface {
 	// Train updates the scale's domain from the given column data.
@@ -97,8 +107,8 @@ func (d *domain) update(mn, mx float64) error {
 
 // --- Continuous scales ---
 
-// Linear returns a standard linear scale.
-func Linear() Scale {
+// NewLinear returns a standard linear scale.
+func NewLinear() Scale {
 	return &LinearScale{}
 }
 
@@ -138,8 +148,8 @@ func (s *LinearScale) SetBounds(mn, mx float64) {
 	s.trained = true
 }
 
-// Log10 returns a base-10 logarithmic scale.
-func Log10() Scale {
+// NewLog10 returns a base-10 logarithmic scale.
+func NewLog10() Scale {
 	return &logScale{base: 10}
 }
 
@@ -202,8 +212,8 @@ func (s *logScale) SetBounds(mn, mx float64) {
 	s.trained = true
 }
 
-// Sqrt returns a square-root scale.
-func Sqrt() Scale {
+// NewSqrt returns a square-root scale.
+func NewSqrt() Scale {
 	return &sqrtScale{}
 }
 
@@ -262,8 +272,8 @@ func (s *sqrtScale) SetBounds(mn, mx float64) {
 	s.trained = true
 }
 
-// Reverse returns a scale that inverts the axis direction.
-func Reverse() Scale {
+// NewReverse returns a scale that inverts the axis direction.
+func NewReverse() Scale {
 	return &reverseScale{}
 }
 
@@ -298,18 +308,20 @@ func (s *reverseScale) SetBounds(mn, mx float64) {
 	s.trained = true
 }
 
-// Resolve returns a Scale by name. Known names: "log10", "sqrt", "reverse".
-// Returns a Linear scale for any unrecognized name or empty string.
-func Resolve(name string) Scale {
-	switch name {
-	case "log10":
-		return Log10()
-	case "sqrt":
-		return Sqrt()
-	case "reverse":
-		return Reverse()
+// Resolve returns a Scale for the given type.
+// Returns an error for unknown types.
+func Resolve(t Type) (Scale, error) {
+	switch t {
+	case Linear, "":
+		return NewLinear(), nil
+	case Log10:
+		return NewLog10(), nil
+	case Sqrt:
+		return NewSqrt(), nil
+	case Reverse:
+		return NewReverse(), nil
 	default:
-		return Linear()
+		return nil, fmt.Errorf("scale: unknown type %q", t)
 	}
 }
 
@@ -335,7 +347,7 @@ func (m *Manager) Get(channel string) Scale {
 	if s, ok := m.scales[channel]; ok {
 		return s
 	}
-	s := Linear()
+	s := NewLinear()
 	m.scales[channel] = s
 	return s
 }

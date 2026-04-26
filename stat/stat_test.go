@@ -9,16 +9,19 @@ import (
 )
 
 func TestLookup_Identity(t *testing.T) {
-	s := stat.Lookup("identity")
-	if s.Name() != "identity" {
+	s, err := stat.Lookup(stat.Identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Name() != stat.Identity {
 		t.Errorf("expected identity, got %s", s.Name())
 	}
 }
 
-func TestLookup_Unknown_FallsBackToIdentity(t *testing.T) {
-	s := stat.Lookup("nonexistent")
-	if s.Name() != "identity" {
-		t.Errorf("expected identity fallback, got %s", s.Name())
+func TestLookup_Unknown_ReturnsError(t *testing.T) {
+	_, err := stat.Lookup("nonexistent")
+	if err == nil {
+		t.Fatal("expected error for unknown stat name")
 	}
 }
 
@@ -30,7 +33,10 @@ func TestBinStat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := stat.Lookup("bin")
+	s, err := stat.Lookup(stat.Bin)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := s.Compute(ds, map[string]string{"x": "x"})
 	if err != nil {
 		t.Fatal(err)
@@ -64,8 +70,11 @@ func TestBinStat(t *testing.T) {
 
 func TestBinStat_MissingX(t *testing.T) {
 	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("y", []float64{1}))
-	s := stat.Lookup("bin")
-	_, err := s.Compute(ds, map[string]string{})
+	s, err := stat.Lookup(stat.Bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.Compute(ds, map[string]string{})
 	if err == nil {
 		t.Fatal("expected error for missing x aesthetic")
 	}
@@ -76,7 +85,10 @@ func TestCountStat(t *testing.T) {
 		memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 2, 3, 3, 3}),
 	)
 
-	s := stat.Lookup("count")
+	s, err := stat.Lookup(stat.Count)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := s.Compute(ds, map[string]string{"x": "x"})
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +111,10 @@ func TestDensityStat(t *testing.T) {
 	}
 	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs))
 
-	s := stat.Lookup("density")
+	s, err := stat.Lookup(stat.Density)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := s.Compute(ds, map[string]string{"x": "x"})
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +141,10 @@ func TestSmoothStat(t *testing.T) {
 		memory.NewEngine().NewFloat64Column("y", []float64{2, 4, 6, 8, 10}),
 	)
 
-	s := stat.Lookup("smooth")
+	s, err := stat.Lookup(stat.Smooth)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := s.Compute(ds, map[string]string{"x": "x", "y": "y"})
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +176,10 @@ func TestSummaryStat(t *testing.T) {
 		memory.NewEngine().NewFloat64Column("y", []float64{10, 20, 30, 40}),
 	)
 
-	s := stat.Lookup("summary")
+	s, err := stat.Lookup(stat.Summary)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := s.Compute(ds, map[string]string{"x": "x", "y": "y"})
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +198,10 @@ func TestSummaryStat(t *testing.T) {
 
 func TestIdentityStat(t *testing.T) {
 	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 3}))
-	s := stat.Lookup("identity")
+	s, err := stat.Lookup(stat.Identity)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := s.Compute(ds, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -186,6 +210,32 @@ func TestIdentityStat(t *testing.T) {
 		t.Error("identity stat should return the same dataset")
 	}
 }
+
+func TestOutputSchema(t *testing.T) {
+	tests := []struct {
+		name   stat.Name
+		expect []string
+	}{
+		{stat.Identity, nil},
+		{stat.Bin, []string{"x", "count", "xmin", "xmax"}},
+		{stat.Count, []string{"x", "count"}},
+		{stat.Density, []string{"x", "density"}},
+		{stat.Smooth, []string{"x", "y"}},
+		{stat.Summary, []string{"x", "y"}},
+		{stat.Boxplot, []string{"x", "lower", "q1", "middle", "q3", "upper"}},
+	}
+	for _, tc := range tests {
+		s, err := stat.Lookup(tc.name)
+		if err != nil {
+			t.Fatalf("Lookup(%q): %v", tc.name, err)
+		}
+		schema := s.OutputSchema()
+		if len(schema) != len(tc.expect) {
+			t.Errorf("OutputSchema(%q) = %v, want %v", tc.name, schema, tc.expect)
+		}
+	}
+}
+
 func getFloat64Values(t *testing.T, ds dataset.Table, colName string) []float64 {
 	t.Helper()
 	col, err := ds.Column(colName)

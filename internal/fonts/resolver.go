@@ -1,6 +1,7 @@
 package fonts
 
-// Resolver acts as the pure logical cascade engine intercepting queries and mapping exact ties vs aliases overrides.
+// Resolver maps font requests to loaded font faces, applying a CSS-like
+// cascade: exact match → family alias → weight fallback → system default.
 type Resolver struct {
 	registry    *Registry
 	config      FallbackConfig
@@ -20,7 +21,8 @@ func NewResolver(registry *Registry, config FallbackConfig) *Resolver {
 	}
 }
 
-// LoadFace exposes completely parallel-safe resolutions returning generic mapping handles to external renderers.
+// LoadFace returns a font.Face for the given family, size, weight, and style.
+// Results are cached; concurrent calls for the same parameters share one Face.
 func (r *Resolver) LoadFace(req FaceRequest) (*FaceHandle, error) {
 	// 1. Thread-safe lock checked quickly bypassing expensive loops identically.
 	if handle, ok := r.faceCache.Get(req); ok {

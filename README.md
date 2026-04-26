@@ -11,7 +11,7 @@
 
 **Production-grade Grammar of Graphics for Go.**
 
-A pure-Go data visualization library implementing a rigorous, declarative Grammar of Graphics pipeline. Inspired by Hadley Wickham's renowned [ggplot2](https://ggplot2-book.org/), but architected specifically for Go's performance characteristics, static typing, and concurrency model.
+A pure-Go data visualization library implementing a rigorous, declarative Grammar of Graphics pipeline. Inspired by Hadley Wickham's renowned [ggplot2](https://ggplot2-book.org/), but architected specifically for Go's type safety and interface-driven engine architecture.
 
 ## Overview
 
@@ -121,7 +121,7 @@ ggplot.New(ds, aes.X("group"), aes.Y("value")).
 `ggplot` is built around a rigorous, interface-driven `dataset.Table` engine. This means you are not limited to `[]float64` slices. You can back your plots with robust columnar frameworks. See [**DATASET.md**](docs/DATASET.md) for a deep-dive into the backend engine architecture.
 
 - **Memory Engine (`dataset/memory`)**: Lightweight, native Go slices. Best for standard web-server rendering.
-- **Arrow Engine (`dataset/arrow`)**: Apache Arrow backed IPC streams and Parquet datasets. Best for high-performance ML pipelines or datasets >1M rows.
+- **Arrow Engine (`dataset/arrow`)**: Apache Arrow backed IPC streams and Parquet datasets. Provides zero-copy reads from IPC/Parquet files. Best for datasets >1M rows.
 - **BigQuery Engine (`dataset/bigquery`)**: Lazy SQL pushdown execution. Best for massive data warehouses where filtering and statistics must be executed on the database before streaming the visual aggregate to Go.
 
 ---
@@ -142,7 +142,7 @@ We actively track our development pipeline across multiple capability tiers focu
 
 Please see our full [**Project Roadmap**](docs/ROADMAP.md) to understand current milestones and architectural expansion goals.
 
-- ✅ **Phases 1–4** — Core architecture, grammar primitives, data backends, production hardening
+- 🔶 **Phases 1–4** — Core architecture, grammar primitives, data backends, production hardening (in progress)
 - 🔲 **Phases 5–8** — Position/colour/other scales, faceting controls
 - 🔲 **Phases 9–12** — Annotations, composition (patchwork), maps, networks
 - 🔲 **Phases 13–19** — Themes deep-dive, guides, output backends, programming/extensibility
@@ -154,7 +154,7 @@ Please see our full [**Project Roadmap**](docs/ROADMAP.md) to understand current
 | Package | Role |
 |---|---|
 | [`gogpu/gg`](https://github.com/gogpu/gg) | 2D vector rendering with anti-aliased lines, fills, and text |
-| [`apache/arrow-go`](https://github.com/apache/arrow-go) | Zero-copy columnar data |
+| [`apache/arrow-go`](https://github.com/apache/arrow-go) | Columnar data (zero-copy for IPC/Parquet reads) |
 
 ## Contributing
 

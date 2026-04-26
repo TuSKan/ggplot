@@ -3,6 +3,8 @@
 // applied after statistical transforms and before final rendering.
 package position
 
+import "math/rand/v2"
+
 // Pos adjusts the positions of geometric elements to handle overlap.
 // Each adjustment receives the raw data coordinates and group metadata,
 // and returns adjusted coordinates.
@@ -49,6 +51,10 @@ func (dodge) String() string { return "dodge" }
 
 // Stack returns a position that stacks groups vertically.
 // Each group's y-values are offset by the cumulative sum of prior groups.
+//
+// NOTE: Real stacking requires the pipeline coordinator to accumulate
+// offsets across groups. This is not yet implemented — calling Stack()
+// with groupIdx > 0 will panic. Use [Dodge] or [Identity] instead.
 func Stack() Pos { return stack{} }
 
 type stack struct{}
@@ -57,14 +63,13 @@ func (stack) Adjust(xs, ys []float64, _ float64, groupIdx, _ int) ([]float64, []
 	if groupIdx == 0 {
 		return xs, ys
 	}
-	// In practice, stacking requires knowledge of all groups' y-values.
-	// The pipeline coordinator accumulates offsets across groups and passes
-	// them here. For now, identity behavior is the base case.
-	return xs, ys
+	panic("position.Stack: stacking for groupIdx > 0 is not yet implemented; " +
+		"use position.Dodge() or position.Identity() instead")
 }
 func (stack) String() string { return "stack" }
 
 // Jitter returns a position that adds random noise to (x, y) to reduce overplotting.
+// The jitter is reproducible: same data length produces same offsets.
 func Jitter(xAmount, yAmount float64) Pos {
 	return jitter{xAmt: xAmount, yAmt: yAmount}
 }
@@ -77,16 +82,11 @@ func (j jitter) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []floa
 	adjX := make([]float64, len(xs))
 	adjY := make([]float64, len(ys))
 
-	// Use a simple deterministic hash-based jitter (reproducible).
+	// Reproducible PRNG seeded by data length for deterministic-per-dataset behavior.
+	rng := rand.New(rand.NewPCG(42, uint64(len(xs))))
 	for i := range xs {
-		// Deterministic pseudo-random based on index.
-		seed := uint64(i*2654435761) & 0xFFFFFFFF
-		fx := float64(seed%1000)/1000.0 - 0.5
-		seed = uint64((i+7)*2654435761) & 0xFFFFFFFF
-		fy := float64(seed%1000)/1000.0 - 0.5
-
-		adjX[i] = xs[i] + fx*j.xAmt
-		adjY[i] = ys[i] + fy*j.yAmt
+		adjX[i] = xs[i] + (rng.Float64()-0.5)*j.xAmt
+		adjY[i] = ys[i] + (rng.Float64()-0.5)*j.yAmt
 	}
 	return adjX, adjY
 }

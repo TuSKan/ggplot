@@ -2,6 +2,7 @@ package bigquery
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"cloud.google.com/go/bigquery"
@@ -20,8 +21,10 @@ func (e *Engine) execToTempTable(sql string) (tableRef, *bigquery.TableMetadata,
 		status := job.LastStatus()
 		if status.Statistics != nil {
 			total := status.Statistics.TotalBytesProcessed
-			fmt.Printf("bigquery: DRY RUN — %s would process %d bytes (%.2f MB)\n",
-				sql[:min(len(sql), 80)], total, float64(total)/(1<<20))
+			slog.Info("bigquery: dry run",
+				"sql_prefix", sql[:min(len(sql), 80)],
+				"bytes", total,
+				"mb", fmt.Sprintf("%.2f", float64(total)/(1<<20)))
 		}
 		return tableRef{}, nil, fmt.Errorf("bigquery: dry-run mode — query not executed")
 	}
@@ -82,8 +85,9 @@ func (e *Engine) execToTempTable(sql string) (tableRef, *bigquery.TableMetadata,
 	}, "")
 	if err != nil {
 		// Non-fatal — table will remain but without auto-expiration
-		fmt.Printf("bigquery: WARNING — failed to set TTL on temp table %s: %v\n",
-			ref.FullyQualified(), err)
+		slog.Warn("bigquery: failed to set TTL on temp table",
+			"table", ref.FullyQualified(),
+			"error", err)
 	}
 
 	// Register for cleanup on Close

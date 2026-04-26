@@ -6,7 +6,7 @@ import (
 
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/internal/canvas"
-	"github.com/TuSKan/ggplot/theme"
+	icolor "github.com/TuSKan/ggplot/internal/color"
 )
 
 // setColorFromTheme sets the canvas colour from a theme color.Color,
@@ -49,17 +49,16 @@ func normalize(v, min, max float64) float64 {
 	return (v - min) / (max - min)
 }
 
-// resolveColor uses theme.ParseHexColor to parse hex strings,
-// returning normalized [0,1] RGB. Falls back to defaults if hex is empty.
+// resolveColor parses a hex color string into normalized [0,1] RGB.
+// Falls back to defaults if hex is empty or invalid.
 func resolveColor(hex string, defR, defG, defB float64) (float64, float64, float64) {
 	if hex == "" {
 		return defR, defG, defB
 	}
-	c := theme.ParseHexColor(hex)
-	r, g, b, _ := c.RGBA()
-	if r == 0 && g == 0 && b == 0 {
-		// ParseHexColor returns transparent on invalid input.
+	c := icolor.Hex(hex)
+	if c.A == 0 {
+		// Hex returns transparent on invalid input.
 		return defR, defG, defB
 	}
-	return float64(r) / 65535.0, float64(g) / 65535.0, float64(b) / 65535.0
+	return float64(c.R) / 255.0, float64(c.G) / 255.0, float64(c.B) / 255.0
 }

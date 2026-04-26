@@ -14,6 +14,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/theme"
 )
 
 func main() {
@@ -50,7 +51,7 @@ func coordCartesian(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#3498DB"), geom.WithLineWidth(2))).
 		Labs(ggplot.Title("Coord: Cartesian (default)"), ggplot.Subtitle("Standard x-y axes")).
-		Theme("dark")
+		Theme(theme.Dark)
 	save(p, dir, "01_coord_cartesian", 800, 500)
 }
 
@@ -63,7 +64,7 @@ func coordFlipped(dir string) {
 		Layer(geom.Col(geom.WithFill("#E74C3C"), geom.WithAlpha(0.85))).
 		CoordFlip().
 		Labs(ggplot.Title("Coord: Flipped"), ggplot.Subtitle("Horizontal bar chart via CoordFlip()")).
-		Theme("minimal")
+		Theme(theme.Minimal)
 	save(p, dir, "02_coord_flipped", 800, 500)
 }
 
@@ -90,7 +91,7 @@ func facetWrap(dir string) {
 		Layer(geom.Line(geom.WithColor("#2ECC71"), geom.WithLineWidth(1.5))).
 		FacetWrap("season", facet.NCols(2)).
 		Labs(ggplot.Title("Facet: Wrap"), ggplot.Subtitle("Temperature by season, wrapped 2 columns")).
-		Theme("dark")
+		Theme(theme.Dark)
 	save(p, dir, "03_facet_wrap", 900, 700)
 }
 
@@ -125,7 +126,7 @@ func facetGrid(dir string) {
 		Layer(geom.Point(geom.WithSize(2.5), geom.WithColor("#9B59B6"), geom.WithAlpha(0.7))).
 		FacetGrid("region", "type").
 		Labs(ggplot.Title("Facet: Grid"), ggplot.Subtitle("Region × Type matrix")).
-		Theme("bw")
+		Theme(theme.BW)
 	save(p, dir, "04_facet_grid", 900, 700)
 }
 
@@ -140,12 +141,12 @@ func allThemes(dir string) {
 	}
 	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
 
-	for _, name := range []string{"default", "classic", "minimal", "dark", "bw"} {
+	for _, name := range []theme.Name{theme.Default, theme.Classic, theme.Minimal, theme.Dark, theme.BW} {
 		p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 			Layer(geom.Line(geom.WithColor("#E74C3C"), geom.WithLineWidth(2))).
-			Labs(ggplot.Title("Theme: "+name), ggplot.Subtitle("Same data, different theme")).
+			Labs(ggplot.Title("Theme: "+string(name)), ggplot.Subtitle("Same data, different theme")).
 			Theme(name)
-		save(p, dir, "05_theme_"+name, 700, 450)
+		save(p, dir, "05_theme_"+string(name), 700, 450)
 	}
 }
 
@@ -174,7 +175,7 @@ func legendPositions(dir string) {
 			Layer(geom.Line(geom.WithLineWidth(2))).
 			LegendPosition(pos).
 			Labs(ggplot.Title("Legend: "+pos), ggplot.Subtitle("LegendPosition(\""+pos+"\")")).
-			Theme("dark")
+			Theme(theme.Dark)
 		save(p, dir, "06_legend_"+pos, 700, 500)
 	}
 }
@@ -215,6 +216,6 @@ func aestheticsShowcase(dir string) {
 			ggplot.XLab("X value"),
 			ggplot.YLab("Y value"),
 		).
-		Theme("dark")
+		Theme(theme.Dark)
 	save(p, dir, "07_aesthetics", 800, 600)
 }

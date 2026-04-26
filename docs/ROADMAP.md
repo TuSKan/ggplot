@@ -5,12 +5,12 @@
 
 ---
 
-## ✅ Phase 1 — Core Architecture (Complete)
+## 🔶 Phase 1 — Core Architecture (Mostly Complete)
 
 > Book Ch.1–2 (Introduction, First Steps), Ch.13 (Layers), Ch.19 (Internals)
 
 - [x] Typed `Dataset` / `Frame` API with `DType` system (Float64, Int64, String, Bool)
-- [x] Lazy, fluent ETL pipeline: `Select`, `Filter`, `Mutate`, `Arrange`, `Distinct`, `Summarize`
+- [x] Fluent ETL pipeline: `Select`, `Filter`, `Mutate`, `Arrange`, `Distinct`, `Summarize` (eager execution; lazy planned)
 - [x] In-memory column types with null masks and cross-type iteration
 - [x] Canvas abstraction (`gg`-backed) with full 2D drawing primitives
 - [x] Declarative `PlotSpec` → rendering pipeline: Facet → Scale Training → Layer Rendering
@@ -30,19 +30,24 @@
 - [x] **Legend Position**: right, left, top, bottom, none via `.LegendPosition()`
 - [x] **Scale Override**: `.ScaleX("log10")`, `.ScaleY("sqrt")` via builder API
 
-## ✅ Phase 3 — Data Backends (Complete)
+## 🔶 Phase 3 — Data Backends (Mostly Complete)
 
 - [x] Arrow adapter: zero-copy `TableDataset` / `TableColumn`, chunked iterators, `Buffer` pre-allocator
 - [x] SQL adapter: lazy `Table` dataset with predicate pushdown, `FilterSQL` / `GroupBySQL`, auto type detection
 - [x] `NativeFilterProvider` / `IterableColumn` interfaces for backend extensibility
 
-## ✅ Phase 4 — Production Hardening (Complete)
+## 🔶 Phase 4 — Production Hardening (In Progress)
 
 - [x] All `errcheck` / `go vet` / linter errors resolved
 - [x] `clone()` correctly copies all spec fields (XLim, YLim, LegendPosition, ScaleOverrides)
 - [x] `BoundsSetter` implemented on all scale types (Linear, Log10, Sqrt, Reverse, Discrete)
 - [x] Compile-time interface checks for all scale types
 - [x] 70+ tests passing across all packages
+- [ ] Deep clone safety (`Plot.clone` shares `LayerSpec.Mapping` maps)
+- [ ] Error propagation in `renderTo` (swallowed stat errors)
+- [ ] `context.Context` support in engine interfaces
+- [ ] Real SIMD execution (currently scalar fallback)
+- [ ] SQL injection hardened (BigQuery filter escaping) ✅ fixed
 
 ---
 

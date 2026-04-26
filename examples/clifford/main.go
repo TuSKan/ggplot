@@ -1,4 +1,4 @@
-// Example: Clifford attractor with continuous color gradient.
+// Example: (Clifford[https://paulbourke.net/fractals/clifford/] attractor with continuous color gradient.
 //
 // Demonstrates:
 //   - Strange attractor visualization

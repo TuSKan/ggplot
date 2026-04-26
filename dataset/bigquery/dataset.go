@@ -3,7 +3,7 @@ package bigquery
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"sync"
 
 	storagepb "cloud.google.com/go/bigquery/storage/apiv1/storagepb"
@@ -263,8 +263,9 @@ func (d *bqDataset) download() (dataset.Table, error) {
 
 	// Quota guard
 	if src.engine.quota.WarnDownloadRows > 0 && src.numRows > src.engine.quota.WarnDownloadRows {
-		log.Printf("bigquery: WARNING — downloading %d rows from %s",
-			src.numRows, src.table.FullyQualified())
+		slog.Warn("bigquery: large download",
+			"rows", src.numRows,
+			"table", src.table.FullyQualified())
 	}
 	if src.engine.quota.MaxDownloadRows > 0 && src.numRows > src.engine.quota.MaxDownloadRows {
 		return nil, fmt.Errorf("bigquery: download exceeds quota (%d rows > limit %d)",

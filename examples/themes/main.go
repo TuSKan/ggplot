@@ -16,6 +16,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/theme"
 )
 
 func main() {
@@ -37,7 +38,7 @@ func main() {
 	dir := filepath.Dir(filename)
 
 	// Each theme renders the same plot with a different visual identity.
-	themes := []string{"default", "dark", "minimal", "classic", "bw"}
+	themes := []theme.Name{theme.Default, theme.Dark, theme.Minimal, theme.Classic, theme.BW}
 
 	for _, name := range themes {
 		p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -45,14 +46,14 @@ func main() {
 			Layer(geom.Point(geom.WithColor("#E74C3C"), geom.WithSize(2), geom.WithAlpha(0.5))).
 			Theme(name).
 			Labs(
-				ggplot.Title("Theme: "+name),
+				ggplot.Title("Theme: "+string(name)),
 				ggplot.Subtitle("Sin wave with Gaussian noise"),
 				ggplot.XLab("Angle (rad)"),
 				ggplot.YLab("Amplitude"),
 				ggplot.Caption("ggplot theme showcase"),
 			)
 
-		outPath := filepath.Join(dir, "theme_"+name+".png")
+		outPath := filepath.Join(dir, "theme_"+string(name)+".png")
 		if err := p.Save(outPath, 800, 600); err != nil {
 			log.Fatalf("theme %q: %v", name, err)
 		}

@@ -26,7 +26,7 @@ User Code → Frame (fluent API) → Engine (Arrow / Memory / SQL)
 | No fallbacks | If an engine doesn't implement a sub-interface, it's an error — not a slow path |
 | Two-tier column design | `AnyColumn` (type-erased) + `Column[T]` (generic typed access) |
 | Arrow-aligned schema | `Field` → `arrow.Field`, `Schema` → `arrow.Schema` |
-| Lazy evaluation | Frame verbs return thin wrappers; materialization on column access or `Collect()` |
+| Eager evaluation | Frame verbs execute immediately via the engine; `Collect()` returns the accumulated result. BigQuery has engine-specific lazy SQL accumulation. |
 | Zero-copy when possible | Arrow backend uses zero-copy slicing, mmap IPC, SIMD kernels |
 | Billion-row ready | Streaming `Builder` construction — no boxing, no intermediate slices |
 

@@ -8,6 +8,8 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/scale"
+	"github.com/TuSKan/ggplot/theme"
 )
 
 // PlotSpec is the fully declarative specification of a plot, produced by the
@@ -34,7 +36,7 @@ type PlotSpec struct {
 	Facet facet.Facet
 
 	// Theme holds the theme name or configuration.
-	ThemeName string
+	ThemeName theme.Name
 
 	// Labels holds plot title, subtitle, axis labels, caption.
 	Labels Labels
@@ -78,7 +80,7 @@ type LayerSpec struct {
 
 // ScaleOverride captures a user-requested scale for a specific aesthetic channel.
 type ScaleOverride struct {
-	Type   string            // e.g., "log10", "sqrt", "reverse", "manual", "viridis"
+	Type   scale.Type        // e.g., scale.Log10, scale.Sqrt, scale.Reverse
 	Params map[string]string // type-specific parameters
 }
 

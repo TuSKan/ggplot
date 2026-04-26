@@ -2,8 +2,8 @@
 // Stats compute derived data (bins, counts, densities, smooths) from raw data,
 // producing new datasets that are then rendered by geometries.
 //
-// Each stat implements the [Stat] interface and is registered with a string name
-// for lookup during pipeline compilation.
+// Each stat implements the [Stat] interface and is registered with a typed
+// [Name] for lookup during pipeline compilation.
 package stat
 
 import (
@@ -14,15 +14,31 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 )
 
+// Name identifies a statistical transformation.
+type Name string
+
+const (
+	Identity Name = "identity"
+	Bin      Name = "bin"
+	Count    Name = "count"
+	Density  Name = "density"
+	Smooth   Name = "smooth"
+	Summary  Name = "summary"
+	Boxplot  Name = "boxplot"
+)
+
 // Stat computes a statistical transformation on a dataset, producing a
 // new (possibly differently shaped) dataset. The transformed dataset's
 // columns depend on the stat type.
 type Stat interface {
-	// Name returns the stat's identifier (e.g., "identity", "bin", "count").
-	Name() string
+	// Name returns the stat's typed identifier.
+	Name() Name
 
 	// RequiredAes returns the aesthetic channels this stat needs.
 	RequiredAes() []string
+
+	// OutputSchema returns the column names this stat produces.
+	OutputSchema() []string
 
 	// Compute performs the transformation.
 	Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error)
@@ -30,19 +46,19 @@ type Stat interface {
 
 // --- Registry ---
 
-var registry = map[string]Stat{
-	"identity": identityStat{},
+var registry = map[Name]Stat{
+	Identity: identityStat{},
 }
 
 // Register adds a stat to the global registry.
 func Register(s Stat) { registry[s.Name()] = s }
 
-// Lookup retrieves a stat by name. Returns the identity stat if not found.
-func Lookup(name string) Stat {
+// Lookup returns a stat by name. Returns an error for unknown names.
+func Lookup(name Name) (Stat, error) {
 	if s, ok := registry[name]; ok {
-		return s
+		return s, nil
 	}
-	return identityStat{}
+	return nil, fmt.Errorf("stat: unknown stat %q", name)
 }
 
 func init() {
@@ -58,8 +74,9 @@ func init() {
 
 type identityStat struct{}
 
-func (identityStat) Name() string          { return "identity" }
-func (identityStat) RequiredAes() []string { return nil }
+func (identityStat) Name() Name             { return Identity }
+func (identityStat) RequiredAes() []string  { return nil }
+func (identityStat) OutputSchema() []string { return nil }
 func (identityStat) Compute(ds dataset.Dataset, _ map[string]string) (dataset.Dataset, error) {
 	return ds, nil
 }
@@ -68,8 +85,9 @@ func (identityStat) Compute(ds dataset.Dataset, _ map[string]string) (dataset.Da
 
 type binStat struct{}
 
-func (binStat) Name() string          { return "bin" }
-func (binStat) RequiredAes() []string { return []string{"x"} }
+func (binStat) Name() Name             { return Bin }
+func (binStat) RequiredAes() []string  { return []string{"x"} }
+func (binStat) OutputSchema() []string { return []string{"x", "count", "xmin", "xmax"} }
 
 func (binStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
 	xCol := mapping["x"]
@@ -142,8 +160,9 @@ func (binStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.D
 
 type countStat struct{}
 
-func (countStat) Name() string          { return "count" }
-func (countStat) RequiredAes() []string { return []string{"x"} }
+func (countStat) Name() Name             { return Count }
+func (countStat) RequiredAes() []string  { return []string{"x"} }
+func (countStat) OutputSchema() []string { return []string{"x", "count"} }
 
 func (countStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
 	xCol := mapping["x"]
@@ -184,8 +203,9 @@ func (countStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset
 
 type densityStat struct{}
 
-func (densityStat) Name() string          { return "density" }
-func (densityStat) RequiredAes() []string { return []string{"x"} }
+func (densityStat) Name() Name             { return Density }
+func (densityStat) RequiredAes() []string  { return []string{"x"} }
+func (densityStat) OutputSchema() []string { return []string{"x", "density"} }
 
 func (densityStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
 	xCol := mapping["x"]
@@ -249,8 +269,9 @@ func (densityStat) Compute(ds dataset.Dataset, mapping map[string]string) (datas
 
 type smoothStat struct{}
 
-func (smoothStat) Name() string          { return "smooth" }
-func (smoothStat) RequiredAes() []string { return []string{"x", "y"} }
+func (smoothStat) Name() Name             { return Smooth }
+func (smoothStat) RequiredAes() []string  { return []string{"x", "y"} }
+func (smoothStat) OutputSchema() []string { return []string{"x", "y"} }
 
 func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
 	xCol := mapping["x"]
@@ -369,8 +390,9 @@ func (smoothStat) Compute(ds dataset.Dataset, mapping map[string]string) (datase
 
 type summaryStat struct{}
 
-func (summaryStat) Name() string          { return "summary" }
-func (summaryStat) RequiredAes() []string { return []string{"x", "y"} }
+func (summaryStat) Name() Name             { return Summary }
+func (summaryStat) RequiredAes() []string  { return []string{"x", "y"} }
+func (summaryStat) OutputSchema() []string { return []string{"x", "y"} }
 
 func (summaryStat) Compute(ds dataset.Dataset, mapping map[string]string) (dataset.Dataset, error) {
 	// summaryStat computes mean(y) for each distinct x value.
@@ -466,8 +488,11 @@ func newFloat64Dataset(ds dataset.Dataset, cols map[string][]float64) (dataset.D
 
 type boxplotStat struct{}
 
-func (boxplotStat) Name() string          { return "boxplot" }
+func (boxplotStat) Name() Name            { return Boxplot }
 func (boxplotStat) RequiredAes() []string { return []string{"y"} }
+func (boxplotStat) OutputSchema() []string {
+	return []string{"x", "lower", "q1", "middle", "q3", "upper"}
+}
 
 // Compute produces the five-number summary for each unique X value (group).
 // Output columns: x, lower, q1, middle, q3, upper.

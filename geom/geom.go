@@ -13,10 +13,10 @@ package geom
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/TuSKan/ggplot/position"
+	"github.com/TuSKan/ggplot/stat"
 )
 
 // Layer represents a declarative layer specification produced by a geom
@@ -24,7 +24,7 @@ import (
 // per-layer aesthetic mappings, and visual parameters.
 type Layer struct {
 	Geom     Type              // geometry type (point, line, bar, etc.)
-	StatName string            // stat name ("identity", "bin", "count", "density", "smooth", "summary")
+	StatName stat.Name         // stat name (stat.Identity, stat.Bin, stat.Count, etc.)
 	Position position.Pos      // position adjustment
 	Params   Params            // visual parameters specific to this geometry
 	Mapping  map[string]string // per-layer aesthetic overrides (channel → column)
@@ -32,7 +32,11 @@ type Layer struct {
 	// setFlags tracks which options were explicitly set by the user.
 	// Used by Validate() to emit warnings for irrelevant options.
 	setFlags optFlag
+	warnings []string // validation warnings from applyOpts
 }
+
+// Warnings returns any validation warnings generated during construction.
+func (l *Layer) Warnings() []string { return l.warnings }
 
 // Type identifies the kind of geometry.
 type Type string
@@ -202,7 +206,7 @@ func (l *Layer) Validate() []string {
 type Opt func(*Layer)
 
 // WithStat sets the statistical transform for this layer.
-func WithStat(name string) Opt { return func(l *Layer) { l.StatName = name } }
+func WithStat(name stat.Name) Opt { return func(l *Layer) { l.StatName = name } }
 
 // WithPosition sets the position adjustment for this layer.
 func WithPosition(p position.Pos) Opt { return func(l *Layer) { l.Position = p } }
@@ -222,13 +226,10 @@ func WithAlpha(a float64) Opt {
 	return func(l *Layer) { l.Params.Alpha = a; l.setFlags |= optAlpha }
 }
 
-// WithSize sets the geometry size. For points this is the radius; for
-// lines/smooth this also sets the line width so the option is portable
-// across geometry types.
+// WithSize sets the point radius. Use [WithLineWidth] for stroke width.
 func WithSize(s float64) Opt {
 	return func(l *Layer) {
 		l.Params.Size = s
-		l.Params.LineWidth = s
 		l.setFlags |= optSize
 	}
 }
@@ -313,16 +314,12 @@ func WithIntercept(v float64) Opt {
 	return func(l *Layer) { l.Params.Intercept = v }
 }
 
-// applyOpts applies options and emits runtime warnings for misused parameters.
+// applyOpts applies options and stores validation warnings on the layer.
 func applyOpts(l *Layer, opts []Opt) {
 	for _, o := range opts {
 		o(l)
 	}
-	if warnings := l.Validate(); len(warnings) > 0 {
-		for _, w := range warnings {
-			log.Printf("ggplot warning: %s", w)
-		}
-	}
+	l.warnings = l.Validate()
 }
 
 // Point creates a scatter point geometry layer.
@@ -332,7 +329,7 @@ func applyOpts(l *Layer, opts []Opt) {
 func Point(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypePoint,
-		StatName: "identity",
+		StatName: stat.Identity,
 		Position: position.Identity(),
 		Params:   Params{Size: 3, Alpha: 1.0, Shape: "circle"},
 	}
@@ -346,7 +343,7 @@ func Point(opts ...Opt) Layer {
 func Line(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeLine,
-		StatName: "identity",
+		StatName: stat.Identity,
 		Position: position.Identity(),
 		Params:   Params{LineWidth: 2, Alpha: 1.0},
 	}
@@ -361,7 +358,7 @@ func Line(opts ...Opt) Layer {
 func Bar(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeBar,
-		StatName: "count",
+		StatName: stat.Count,
 		Position: position.Stack(),
 		Params:   Params{Width: 0.8, Alpha: 0.8},
 	}
@@ -379,7 +376,7 @@ func Bar(opts ...Opt) Layer {
 func Col(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeBar,
-		StatName: "identity",
+		StatName: stat.Identity,
 		Position: position.Stack(),
 		Params:   Params{Width: 0.7},
 	}
@@ -394,7 +391,7 @@ func Col(opts ...Opt) Layer {
 func Histogram(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeHistogram,
-		StatName: "bin",
+		StatName: stat.Bin,
 		Position: position.Stack(),
 		Params:   Params{Bins: 30, Alpha: 1.0},
 	}
@@ -408,7 +405,7 @@ func Histogram(opts ...Opt) Layer {
 func Area(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeArea,
-		StatName: "identity",
+		StatName: stat.Identity,
 		Position: position.Identity(),
 		Params:   Params{Alpha: 0.6},
 	}
@@ -422,7 +419,7 @@ func Area(opts ...Opt) Layer {
 func Polygon(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypePolygon,
-		StatName: "identity",
+		StatName: stat.Identity,
 		Position: position.Identity(),
 		Params:   Params{Alpha: 0.6, LineWidth: 2},
 	}
@@ -437,7 +434,7 @@ func Polygon(opts ...Opt) Layer {
 func Smooth(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeSmooth,
-		StatName: "smooth",
+		StatName: stat.Smooth,
 		Position: position.Identity(),
 		Params:   Params{LineWidth: 3, Alpha: 1.0, Method: "lm", Points: 80},
 	}
@@ -451,7 +448,7 @@ func Smooth(opts ...Opt) Layer {
 func Density(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeDensity,
-		StatName: "density",
+		StatName: stat.Density,
 		Position: position.Identity(),
 		Params:   Params{Alpha: 0.6, Points: 512},
 	}
@@ -465,7 +462,7 @@ func Density(opts ...Opt) Layer {
 func Text(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeText,
-		StatName: "identity",
+		StatName: stat.Identity,
 		Position: position.Identity(),
 		Params:   Params{FontSize: 10, Alpha: 1.0},
 	}
@@ -479,7 +476,7 @@ func Text(opts ...Opt) Layer {
 func Step(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeStep,
-		StatName: "identity",
+		StatName: stat.Identity,
 		Position: position.Identity(),
 		Params:   Params{LineWidth: 2, Alpha: 1.0},
 	}
@@ -495,7 +492,7 @@ func Step(opts ...Opt) Layer {
 func Boxplot(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeBoxPlot,
-		StatName: "boxplot",
+		StatName: stat.Boxplot,
 		Position: position.Identity(),
 		Params:   Params{Width: 0.5, Alpha: 0.8, LineWidth: 1.5},
 	}
@@ -509,7 +506,7 @@ func Boxplot(opts ...Opt) Layer {
 func Rug(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeRug,
-		StatName: "identity",
+		StatName: stat.Identity,
 		Position: position.Identity(),
 		Params:   Params{LineWidth: 1, Alpha: 0.5},
 	}
@@ -527,7 +524,7 @@ func Rug(opts ...Opt) Layer {
 func HLine(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeHLine,
-		StatName: "identity",
+		StatName: stat.Identity,
 		Position: position.Identity(),
 		Params:   Params{LineWidth: 1, Alpha: 0.8},
 	}
@@ -545,7 +542,7 @@ func HLine(opts ...Opt) Layer {
 func VLine(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeVLine,
-		StatName: "identity",
+		StatName: stat.Identity,
 		Position: position.Identity(),
 		Params:   Params{LineWidth: 1, Alpha: 0.8},
 	}

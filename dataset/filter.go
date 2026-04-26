@@ -3,8 +3,28 @@ package dataset
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 )
+
+// validSQLIdentifier matches safe BigQuery column identifiers.
+var validSQLIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// validateColName sanitises a column name for use in SQL.
+// If the name contains characters outside [A-Za-z0-9_] it strips them
+// to prevent SQL injection via crafted column names.
+func validateColName(name string) string {
+	if validSQLIdentifier.MatchString(name) {
+		return name
+	}
+	return strings.Map(func(r rune) rune {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') ||
+			(r >= '0' && r <= '9') || r == '_' {
+			return r
+		}
+		return -1
+	}, name)
+}
 
 // Masker describes a row-level filter condition that can be lazily
 // evaluated against a dataset to produce a boolean mask.
@@ -68,7 +88,7 @@ func Eq(col string, val any) CompPred { return CompPred{Col: col, Op: OpEq, Val:
 func Ne(col string, val any) CompPred { return CompPred{Col: col, Op: OpNe, Val: val} }
 
 func (p CompPred) Expr() string {
-	return fmt.Sprintf("`%s` %s %s", p.Col, p.Op.sql(), sqlVal(p.Val))
+	return fmt.Sprintf("`%s` %s %s", validateColName(p.Col), p.Op.sql(), sqlVal(p.Val))
 }
 
 func (p CompPred) Mask(ds Table) ([]bool, error) {
@@ -119,7 +139,7 @@ func Between(col string, lo, hi any) BetweenPred {
 }
 
 func (p BetweenPred) Expr() string {
-	return fmt.Sprintf("`%s` BETWEEN %s AND %s", p.Col, sqlVal(p.Lo), sqlVal(p.Hi))
+	return fmt.Sprintf("`%s` BETWEEN %s AND %s", validateColName(p.Col), sqlVal(p.Lo), sqlVal(p.Hi))
 }
 
 func (p BetweenPred) Mask(ds Table) ([]bool, error) {
@@ -168,7 +188,7 @@ func (p InPred) Expr() string {
 	for i, v := range p.Vals {
 		parts[i] = sqlVal(v)
 	}
-	return fmt.Sprintf("`%s` IN (%s)", p.Col, strings.Join(parts, ", "))
+	return fmt.Sprintf("`%s` IN (%s)", validateColName(p.Col), strings.Join(parts, ", "))
 }
 
 func (p InPred) Mask(ds Table) ([]bool, error) {
@@ -218,8 +238,8 @@ type IsNotNullPred struct{ Col string }
 func IsNull(col string) IsNullPred       { return IsNullPred{Col: col} }
 func IsNotNull(col string) IsNotNullPred { return IsNotNullPred{Col: col} }
 
-func (p IsNullPred) Expr() string    { return fmt.Sprintf("`%s` IS NULL", p.Col) }
-func (p IsNotNullPred) Expr() string { return fmt.Sprintf("`%s` IS NOT NULL", p.Col) }
+func (p IsNullPred) Expr() string    { return fmt.Sprintf("`%s` IS NULL", validateColName(p.Col)) }
+func (p IsNotNullPred) Expr() string { return fmt.Sprintf("`%s` IS NOT NULL", validateColName(p.Col)) }
 
 func (p IsNullPred) Mask(ds Table) ([]bool, error) {
 	return nullMask(ds, p.Col, true)
@@ -375,7 +395,10 @@ func (p NotPred) Mask(ds Table) ([]bool, error) {
 func sqlVal(v any) string {
 	switch val := v.(type) {
 	case string:
-		return fmt.Sprintf("'%s'", val)
+		// Escape single quotes to prevent SQL injection.
+		escaped := strings.ReplaceAll(val, "'", "''")
+		escaped = strings.ReplaceAll(escaped, "\\", "\\\\")
+		return fmt.Sprintf("'%s'", escaped)
 	case float64:
 		if val == float64(int64(val)) {
 			return fmt.Sprintf("%d", int64(val))

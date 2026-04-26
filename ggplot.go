@@ -23,8 +23,10 @@
 //
 //	PlotSpec → Validate → Stat Transform → Scale Training → Layout → Render
 //
-// All data flows through the [dataset.Dataset] abstraction backed by Apache Arrow
-// for zero-copy performance, with lazy evaluation for ETL operations.
+// All data flows through the [dataset.Dataset] abstraction. Multiple engine
+// backends are supported: memory (Go slices), Apache Arrow (columnar arrays),
+// and BigQuery (SQL pushdown). Arrow IPC and Parquet ingest provide zero-copy
+// reads; constructing from Go slices requires one copy.
 package ggplot
 
 import (
@@ -71,12 +73,24 @@ func New(ds dataset.Dataset, globalAes ...aes.Mapping) *Plot {
 
 // clone creates a deep copy of the plot spec for immutability.
 func (p *Plot) clone() *Plot {
+	// Deep-clone layers: each LayerSpec.Mapping must be independent.
 	layers := make([]grammar.LayerSpec, len(p.spec.Layers))
-	copy(layers, p.spec.Layers)
+	for i, l := range p.spec.Layers {
+		m := make(grammar.AesMap, len(l.Mapping))
+		for k, v := range l.Mapping {
+			m[k] = v
+		}
+		layers[i] = grammar.LayerSpec{Geom: l.Geom, Mapping: m}
+	}
 
+	// Deep-clone scale overrides (ScaleOverride.Params is a map).
 	scales := make(map[string]grammar.ScaleOverride, len(p.spec.ScaleOverrides))
 	for k, v := range p.spec.ScaleOverrides {
-		scales[k] = v
+		params := make(map[string]string, len(v.Params))
+		for pk, pv := range v.Params {
+			params[pk] = pv
+		}
+		scales[k] = grammar.ScaleOverride{Type: v.Type, Params: params}
 	}
 
 	return &Plot{
@@ -146,8 +160,8 @@ func (p *Plot) FacetGrid(rowCol, colCol string) *Plot {
 	return cloned
 }
 
-// Theme sets the theme by name.
-func (p *Plot) Theme(name string) *Plot {
+// Theme sets the visual theme.
+func (p *Plot) Theme(name theme.Name) *Plot {
 	cloned := p.clone()
 	cloned.spec.ThemeName = name
 	return cloned
@@ -184,15 +198,15 @@ func (p *Plot) LegendPosition(pos string) *Plot {
 	return cloned
 }
 
-// ScaleX sets the x-axis scale type. Valid values: "log10", "sqrt", "reverse".
-func (p *Plot) ScaleX(scaleType string) *Plot {
+// ScaleX sets the x-axis scale type.
+func (p *Plot) ScaleX(scaleType scale.Type) *Plot {
 	cloned := p.clone()
 	cloned.spec.ScaleOverrides["x"] = grammar.ScaleOverride{Type: scaleType}
 	return cloned
 }
 
-// ScaleY sets the y-axis scale type. Valid values: "log10", "sqrt", "reverse".
-func (p *Plot) ScaleY(scaleType string) *Plot {
+// ScaleY sets the y-axis scale type.
+func (p *Plot) ScaleY(scaleType scale.Type) *Plot {
 	cloned := p.clone()
 	cloned.spec.ScaleOverrides["y"] = grammar.ScaleOverride{Type: scaleType}
 	return cloned
@@ -257,7 +271,10 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 		return fmt.Errorf("ggplot: plot has no dataset")
 	}
 
-	th := theme.Resolve(p.spec.ThemeName)
+	th, err := theme.Resolve(p.spec.ThemeName)
+	if err != nil {
+		return fmt.Errorf("ggplot: %w", err)
+	}
 	cv.Clear(th.Background)
 
 	// 1. Facet.
@@ -289,7 +306,10 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 		for _, layer := range p.spec.Layers {
 			merged := p.spec.GlobalMapping.Merge(layer.Mapping)
 			statName := layer.Geom.StatName
-			s := stat.Lookup(statName)
+			s, err := stat.Lookup(statName)
+			if err != nil {
+				return fmt.Errorf("ggplot: %w", err)
+			}
 
 			ds := panel.Dataset
 
@@ -318,7 +338,10 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 
 			if groupCol != "" {
 				// Split data by group, assign palette colours.
-				groups, subsets := groupByColumn(ds, groupCol)
+				groups, subsets, err := groupByColumn(ds, groupCol)
+				if err != nil {
+					return fmt.Errorf("ggplot: group split by %q: %w", groupCol, err)
+				}
 				if legendTitle == "" && colorCol != "" {
 					legendTitle = colorCol
 				}
@@ -333,7 +356,7 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 					}
 
 					// Apply stat transform per-group.
-					if s.Name() != "identity" {
+					if s.Name() != stat.Identity {
 						statMapping := make(map[string]string, len(grpMerged)+2)
 						for k, v := range grpMerged {
 							statMapping[k] = v
@@ -342,7 +365,11 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 							statMapping["__bins"] = fmt.Sprintf("%d", layer.Geom.Params.Bins)
 						}
 						transformed, err := s.Compute(grpDS, statMapping)
-						if err == nil && transformed.Table() != nil {
+						if err != nil {
+							return fmt.Errorf("ggplot: stat %q failed for group %q: %w",
+								statName, grpLabel, err)
+						}
+						if transformed.Table() != nil {
 							grpDS = transformed
 							grpMerged = updateMappingForStat(statName, grpMerged)
 						}
@@ -375,7 +402,7 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 				}
 			} else {
 				// No grouping — single layer with optional fixed color.
-				if s.Name() != "identity" {
+				if s.Name() != stat.Identity {
 					statMapping := make(map[string]string, len(merged)+2)
 					for k, v := range merged {
 						statMapping[k] = v
@@ -384,7 +411,10 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 						statMapping["__bins"] = fmt.Sprintf("%d", layer.Geom.Params.Bins)
 					}
 					transformed, err := s.Compute(ds, statMapping)
-					if err == nil && transformed.Table() != nil {
+					if err != nil {
+						return fmt.Errorf("ggplot: stat %q failed: %w", statName, err)
+					}
+					if transformed.Table() != nil {
 						ds = transformed
 						merged = updateMappingForStat(statName, merged)
 					}
@@ -416,7 +446,7 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 
 				// Collect legend entry from explicitly labeled layers.
 				if layer.Geom.Params.Label != "" && layer.Geom.Params.Color != "" && pi == 0 {
-					c := theme.ParseHexColor(layer.Geom.Params.Color)
+					c := icolor.Hex(layer.Geom.Params.Color)
 					legendEntries = append(legendEntries, guide.LegendEntry{
 						Label: layer.Geom.Params.Label,
 						Color: c,
@@ -428,7 +458,10 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 		// 2b. Train scale objects on stat-transformed data.
 		// Detect discrete (string) X columns and build appropriate scale.
 		var xScale scale.Scale
-		yScale := scale.Resolve(p.spec.ScaleOverrides["y"].Type)
+		yScale, err := scale.Resolve(p.spec.ScaleOverrides["y"].Type)
+		if err != nil {
+			return fmt.Errorf("ggplot: %w", err)
+		}
 		xIsDiscrete := false
 
 		// Probe the first resolved layer's X column to decide scale type.
@@ -476,7 +509,10 @@ func (p *Plot) renderTo(cv canvas.Canvas, width, height int) error {
 			}
 			xScale = ds
 		} else {
-			xScale = scale.Resolve(p.spec.ScaleOverrides["x"].Type)
+			xScale, err = scale.Resolve(p.spec.ScaleOverrides["x"].Type)
+			if err != nil {
+				return fmt.Errorf("ggplot: %w", err)
+			}
 		}
 
 		// Train scales on (now numeric) data.
@@ -883,29 +919,29 @@ type resolvedLayer struct {
 
 // updateMappingForStat updates aesthetic mappings to point to the columns
 // produced by a stat transform. Each stat produces specific output columns.
-func updateMappingForStat(statName string, mapping grammar.AesMap) grammar.AesMap {
+func updateMappingForStat(statName stat.Name, mapping grammar.AesMap) grammar.AesMap {
 	result := make(grammar.AesMap, len(mapping))
 	for k, v := range mapping {
 		result[k] = v
 	}
 	switch statName {
-	case "bin", "count":
+	case stat.Bin, stat.Count:
 		// Stat bin/count produces "x" and "count" columns.
 		result["x"] = "x"
 		result["y"] = "count"
-	case "density":
+	case stat.Density:
 		// Stat density produces "x" and "density" columns.
 		result["x"] = "x"
 		result["y"] = "density"
-	case "smooth":
+	case stat.Smooth:
 		// Stat smooth produces "x" and "y" columns.
 		result["x"] = "x"
 		result["y"] = "y"
-	case "summary":
+	case stat.Summary:
 		// Stat summary produces "x" and "y" columns.
 		result["x"] = "x"
 		result["y"] = "y"
-	case "boxplot":
+	case stat.Boxplot:
 		// Stat boxplot produces x, lower, q1, middle, q3, upper columns.
 		// The drawBoxplot function reads these directly by name.
 		result["x"] = "x"
@@ -915,11 +951,12 @@ func updateMappingForStat(statName string, mapping grammar.AesMap) grammar.AesMa
 }
 
 // groupByColumn splits a Dataset into subsets by the distinct values in the
-// given column. Returns ordered unique labels and corresponding filtered datasets.
-func groupByColumn(ds dataset.Dataset, colName string) ([]string, []dataset.Dataset) {
+// given column. Returns ordered unique labels, corresponding filtered datasets,
+// and any error encountered.
+func groupByColumn(ds dataset.Dataset, colName string) ([]string, []dataset.Dataset, error) {
 	col, err := ds.Column(colName)
 	if err != nil {
-		return nil, nil
+		return nil, nil, fmt.Errorf("column %q: %w", colName, err)
 	}
 
 	// Extract string values from the column.
@@ -938,28 +975,33 @@ func groupByColumn(ds dataset.Dataset, colName string) ([]string, []dataset.Data
 			vals[i] = fmt.Sprintf("%d", v)
 		}
 	default:
-		return nil, nil
+		return nil, nil, fmt.Errorf("unsupported column type %T for %q", col, colName)
 	}
 
 	n := len(vals)
-	groupMasks := make(map[string][]bool)
+	// Use index-based grouping to avoid O(n×k) bool-mask memory.
+	groupIndices := make(map[string][]int)
 	var order []string
 	for i := 0; i < n; i++ {
 		v := vals[i]
-		if _, exists := groupMasks[v]; !exists {
-			groupMasks[v] = make([]bool, n)
+		if _, exists := groupIndices[v]; !exists {
 			order = append(order, v)
 		}
-		groupMasks[v][i] = true
+		groupIndices[v] = append(groupIndices[v], i)
 	}
 
 	subsets := make([]dataset.Dataset, len(order))
 	for i, label := range order {
-		filtered := ds.Filter(dataset.BoolMask(groupMasks[label]))
+		// Build a bool mask from indices.
+		mask := make([]bool, n)
+		for _, idx := range groupIndices[label] {
+			mask[idx] = true
+		}
+		filtered := ds.Filter(dataset.BoolMask(mask))
 		if filtered.Err() != nil {
-			return nil, nil
+			return nil, nil, fmt.Errorf("filter group %q: %w", label, filtered.Err())
 		}
 		subsets[i] = filtered
 	}
-	return order, subsets
+	return order, subsets, nil
 }

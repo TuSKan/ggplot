@@ -22,7 +22,7 @@ package bigquery
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 
 	"cloud.google.com/go/bigquery"
@@ -189,7 +189,9 @@ func (e *Engine) Close() error {
 	for _, t := range temps {
 		ref := e.bqClient.Dataset(t.DatasetID).Table(t.TableID)
 		if err := ref.Delete(e.ctx); err != nil {
-			log.Printf("bigquery: failed to delete temp table %s: %v", t.FullyQualified(), err)
+			slog.Warn("bigquery: failed to delete temp table",
+				"table", t.FullyQualified(),
+				"error", err)
 		}
 	}
 

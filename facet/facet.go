@@ -135,8 +135,10 @@ func Grid(rowCol, colCol string) Facet {
 }
 
 type gridFacet struct {
-	rowCol string
-	colCol string
+	rowCol   string
+	colCol   string
+	nRowVals int // set by Split, used by GridDims
+	nColVals int // set by Split, used by GridDims
 }
 
 func (g *gridFacet) Split(ds dataset.Dataset) ([]Panel, error) {
@@ -149,6 +151,10 @@ func (g *gridFacet) Split(ds dataset.Dataset) ([]Panel, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Store cardinalities for GridDims.
+	g.nRowVals = len(rowVals)
+	g.nColVals = len(colVals)
 
 	rStrings, _ := columnStrings(ds, g.rowCol)
 	cStrings, _ := columnStrings(ds, g.colCol)
@@ -177,6 +183,11 @@ func (g *gridFacet) Split(ds dataset.Dataset) ([]Panel, error) {
 }
 
 func (g *gridFacet) GridDims(nPanels int) (int, int) {
+	// Use actual row × col cardinalities from Split when available.
+	if g.nRowVals > 0 && g.nColVals > 0 {
+		return g.nRowVals, g.nColVals
+	}
+	// Fallback (shouldn't happen — Split is always called before GridDims).
 	if nPanels <= 0 {
 		return 1, 1
 	}

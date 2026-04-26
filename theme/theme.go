@@ -4,8 +4,19 @@
 package theme
 
 import (
+	"fmt"
 	"image/color"
-	"strconv"
+)
+
+// Name identifies a built-in theme.
+type Name string
+
+const (
+	Default Name = "default"
+	Classic Name = "classic"
+	Minimal Name = "minimal"
+	Dark    Name = "dark"
+	BW      Name = "bw"
 )
 
 // Theme encapsulates the complete visual styling for a plot.
@@ -73,8 +84,8 @@ type Spacing struct {
 
 // --- Built-in themes ---
 
-// Default returns the standard light theme.
-func Default() Theme {
+// newDefault returns the standard light theme.
+func newDefault() Theme {
 	return Theme{
 		Name:       "default",
 		Background: color.White,
@@ -108,16 +119,16 @@ func Default() Theme {
 	}
 }
 
-// Classic returns the ggplot2 classic theme (white background, grid lines).
-func Classic() Theme {
-	t := Default()
+// newClassic returns the ggplot2 classic theme (white background, grid lines).
+func newClassic() Theme {
+	t := newDefault()
 	t.Name = "classic"
 	return t
 }
 
-// Minimal returns a stripped-down theme with minimal visual clutter.
-func Minimal() Theme {
-	t := Default()
+// newMinimal returns a stripped-down theme with minimal visual clutter.
+func newMinimal() Theme {
+	t := newDefault()
 	t.Name = "minimal"
 	t.Panel.Border = color.Transparent
 	t.Panel.BorderWidth = 0
@@ -128,8 +139,8 @@ func Minimal() Theme {
 	return t
 }
 
-// Dark returns a dark-background theme suitable for presentations.
-func Dark() Theme {
+// newDark returns a dark-background theme suitable for presentations.
+func newDark() Theme {
 	bg := color.RGBA{R: 30, G: 30, B: 40, A: 255}
 	textColor := color.RGBA{R: 220, G: 220, B: 230, A: 255}
 	gridColor := color.RGBA{R: 55, G: 55, B: 65, A: 255}
@@ -167,9 +178,9 @@ func Dark() Theme {
 	}
 }
 
-// BW returns a black-and-white theme for print publications.
-func BW() Theme {
-	t := Default()
+// newBW returns a black-and-white theme for print publications.
+func newBW() Theme {
+	t := newDefault()
 	t.Name = "bw"
 	t.Panel.Border = color.Black
 	t.Panel.BorderWidth = 1
@@ -178,51 +189,22 @@ func BW() Theme {
 	return t
 }
 
-// Resolve looks up a theme by name. Returns Default if not found.
-func Resolve(name string) Theme {
+// Resolve returns a Theme for the given name.
+// Returns an error for unknown names.
+func Resolve(name Name) (Theme, error) {
 	switch name {
-	case "classic":
-		return Classic()
-	case "minimal":
-		return Minimal()
-	case "dark":
-		return Dark()
-	case "bw":
-		return BW()
+	case Default, "":
+		return newDefault(), nil
+	case Classic:
+		return newClassic(), nil
+	case Minimal:
+		return newMinimal(), nil
+	case Dark:
+		return newDark(), nil
+	case BW:
+		return newBW(), nil
 	default:
-		return Default()
-	}
-}
-
-// --- Color utilities ---
-
-// ParseHexColor parses hex strings (e.g., "#FF0000", "#F00") into color.Color.
-// Returns transparent on invalid input.
-func ParseHexColor(hex string) color.Color {
-	if len(hex) == 0 {
-		return color.Transparent
-	}
-	if hex[0] == '#' {
-		hex = hex[1:]
-	}
-	if len(hex) == 3 {
-		hex = string([]byte{hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]})
-	}
-	switch len(hex) {
-	case 6:
-		v, err := strconv.ParseUint(hex, 16, 32)
-		if err != nil {
-			return color.Transparent
-		}
-		return color.RGBA{R: uint8(v >> 16), G: uint8(v >> 8 & 0xFF), B: uint8(v & 0xFF), A: 255}
-	case 8:
-		v, err := strconv.ParseUint(hex, 16, 32)
-		if err != nil {
-			return color.Transparent
-		}
-		return color.RGBA{R: uint8(v >> 24), G: uint8(v >> 16 & 0xFF), B: uint8(v >> 8 & 0xFF), A: uint8(v & 0xFF)}
-	default:
-		return color.Transparent
+		return Theme{}, fmt.Errorf("theme: unknown name %q", name)
 	}
 }
 

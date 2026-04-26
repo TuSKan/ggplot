@@ -1,11 +1,13 @@
 package fonts
 
-// Registry provides a centralized locator index storing mapped physical font struct structs tracking states without cascade logic mappings.
+// Registry indexes system fonts discovered by scanning standard OS font directories.
+// Each entry records the font's file path, family name, weight, and style.
 type Registry struct {
 	fonts []Font
 }
 
-// NewRegistry initializes an OS-level font store generating parsing iterators fetching system standard definitions out.
+// NewRegistry discovers and indexes all fonts in the standard OS font directories.
+// On Linux this scans /usr/share/fonts; on macOS /Library/Fonts; on Windows C:\Windows\Fonts.
 func NewRegistry() (*Registry, error) {
 	discovered, _ := DiscoverFonts(DefaultDirs())
 
@@ -16,7 +18,8 @@ func NewRegistry() (*Registry, error) {
 	return r, nil
 }
 
-// Match executes explicit scoring maps comparing geometric elements generating string weights without attempting mapping alias arrays loops locally.
+// Match finds the best font in the registry for the given family, weight, and style,
+// using a scoring heuristic that prefers exact matches over partial ones.
 func (r *Registry) Match(q Query) *Font {
 	bestScore := -1 << 31
 	var best *Font
