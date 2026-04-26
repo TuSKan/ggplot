@@ -1,6 +1,9 @@
 // draw.go contains geometry rendering functions for the ggplot rendering pipeline.
 // Each draw function maps data coordinates to pixel positions using a coordinate
 // system and renders shapes via the canvas abstraction.
+//
+// The Drawer interface enables extensible geometry dispatch: third-party geoms
+// can register their own draw functions via [RegisterDrawer].
 package ggplot
 
 import (
@@ -17,7 +20,63 @@ import (
 	"github.com/gogpu/gg"
 )
 
-// drawLayer dispatches rendering to the appropriate geom-specific draw function.
+// DrawContext holds the rendering parameters passed to a [Drawer].
+// It encapsulates the canvas, coordinate system, data, aesthetic mappings,
+// and panel bounds so that Drawer implementations are self-contained.
+type DrawContext struct {
+	Canvas       canvas.Canvas
+	Coord        coord.Coord
+	Data         dataset.Dataset
+	Mapping      grammar.AesMap
+	Params       geom.Params
+	ContColorCol string          // continuous color column (empty if none)
+	ContScale    *colormap.Scale // continuous color scale (nil if none)
+	W, H         float64        // panel size in pixels
+	XMin, XMax   float64        // data domain bounds
+	YMin, YMax   float64        // data domain bounds
+}
+
+// Drawer renders a geometry type onto the canvas. Implementations are
+// registered via [RegisterDrawer] and looked up by [geom.Type] during rendering.
+type Drawer interface {
+	Draw(ctx DrawContext)
+}
+
+// DrawerFunc is an adapter to allow use of ordinary functions as [Drawer]s.
+type DrawerFunc func(DrawContext)
+
+// Draw calls f(ctx).
+func (f DrawerFunc) Draw(ctx DrawContext) { f(ctx) }
+
+// --- Registry ---
+
+var drawers = map[geom.Type]Drawer{}
+
+// RegisterDrawer registers a [Drawer] for a geometry type. Replaces any
+// previously registered drawer for the same type. Third-party geom types
+// should call this at init() time.
+func RegisterDrawer(t geom.Type, d Drawer) { drawers[t] = d }
+
+// LookupDrawer returns the registered [Drawer] for the given type, or nil.
+func LookupDrawer(t geom.Type) Drawer { return drawers[t] }
+
+func init() {
+	RegisterDrawer(geom.TypePoint, DrawerFunc(drawPointsFn))
+	RegisterDrawer(geom.TypeLine, DrawerFunc(drawLineFn))
+	RegisterDrawer(geom.TypeSmooth, DrawerFunc(drawLineFn))
+	RegisterDrawer(geom.TypeStep, DrawerFunc(drawStepFn))
+	RegisterDrawer(geom.TypeBar, DrawerFunc(drawBarsFn))
+	RegisterDrawer(geom.TypeHistogram, DrawerFunc(drawBarsFn))
+	RegisterDrawer(geom.TypeArea, DrawerFunc(drawAreaFn))
+	RegisterDrawer(geom.TypeDensity, DrawerFunc(drawAreaFn))
+	RegisterDrawer(geom.TypeRug, DrawerFunc(drawRugFn))
+	RegisterDrawer(geom.TypeHLine, DrawerFunc(drawHLineFn))
+	RegisterDrawer(geom.TypeVLine, DrawerFunc(drawVLineFn))
+	RegisterDrawer(geom.TypeText, DrawerFunc(drawTextFn))
+	RegisterDrawer(geom.TypeBoxPlot, DrawerFunc(drawBoxplotFn))
+}
+
+// drawLayer dispatches rendering to the registered Drawer for the layer's geom type.
 //
 // groupColor (when non-nil) overrides the layer's Params.Color/Fill — used for
 // categorical color groups where a single color applies to the whole layer.
@@ -36,9 +95,6 @@ func drawLayer(
 	contScale *colormap.Scale,
 	w, h, xMin, xMax, yMin, yMax float64,
 ) {
-	xCol := mapping["x"]
-	yCol := mapping["y"]
-
 	// If a group colour was assigned, override the layer's fixed color.
 	params := g.Params
 	if groupColor != nil {
@@ -52,30 +108,74 @@ func drawLayer(
 		}
 	}
 
-	switch g.Geom {
-	case geom.TypePoint:
-		drawPoints(cv, c, ds, xCol, yCol, contColorCol, contScale, w, h, xMin, xMax, yMin, yMax, params)
-	case geom.TypeLine, geom.TypeSmooth:
-		drawLine(cv, c, ds, xCol, yCol, contColorCol, contScale, w, h, xMin, xMax, yMin, yMax, params)
-	case geom.TypeStep:
-		drawStep(cv, c, ds, xCol, yCol, w, h, xMin, xMax, yMin, yMax, params)
-	case geom.TypeBar, geom.TypeHistogram:
-		drawBars(cv, c, ds, xCol, yCol, w, h, xMin, xMax, yMin, yMax, params)
-	case geom.TypeArea:
-		drawArea(cv, c, ds, xCol, yCol, w, h, xMin, xMax, yMin, yMax, params)
-	case geom.TypeDensity:
-		drawArea(cv, c, ds, xCol, yCol, w, h, xMin, xMax, yMin, yMax, params)
-	case geom.TypeRug:
-		drawRug(cv, c, ds, xCol, yCol, w, h, xMin, xMax, yMin, yMax, params)
-	case geom.TypeHLine:
-		drawHLine(cv, c, w, h, xMin, xMax, yMin, yMax, params)
-	case geom.TypeVLine:
-		drawVLine(cv, c, w, h, xMin, xMax, yMin, yMax, params)
-	case geom.TypeText:
-		drawText(cv, c, ds, xCol, yCol, mapping, w, h, xMin, xMax, yMin, yMax, params)
-	case geom.TypeBoxPlot:
-		drawBoxplot(cv, c, ds, w, h, xMin, xMax, yMin, yMax, params)
+	d := LookupDrawer(g.Geom)
+	if d == nil {
+		return // unknown geom type — silently skip (validated at construction)
 	}
+	d.Draw(DrawContext{
+		Canvas:       cv,
+		Coord:        c,
+		Data:         ds,
+		Mapping:      mapping,
+		Params:       params,
+		ContColorCol: contColorCol,
+		ContScale:    contScale,
+		W:            w,
+		H:            h,
+		XMin:         xMin,
+		XMax:         xMax,
+		YMin:         yMin,
+		YMax:         yMax,
+	})
+}
+
+// --- Drawer adapters: bridge DrawContext to existing draw functions ---
+
+func drawPointsFn(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	drawPoints(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.ContColorCol, dc.ContScale, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+}
+
+func drawLineFn(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	drawLine(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.ContColorCol, dc.ContScale, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+}
+
+func drawStepFn(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	drawStep(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+}
+
+func drawBarsFn(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+}
+
+func drawAreaFn(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	drawArea(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+}
+
+func drawRugFn(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	drawRug(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+}
+
+func drawHLineFn(dc DrawContext) {
+	drawHLine(dc.Canvas, dc.Coord, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+}
+
+func drawVLineFn(dc DrawContext) {
+	drawVLine(dc.Canvas, dc.Coord, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+}
+
+func drawTextFn(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	drawText(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.Mapping, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+}
+
+func drawBoxplotFn(dc DrawContext) {
+	drawBoxplot(dc.Canvas, dc.Coord, dc.Data, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
 }
 
 func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, contColorCol string, contScale *colormap.Scale, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {

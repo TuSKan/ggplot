@@ -48,7 +48,7 @@ func coordCartesian(dir string) {
 		xs[i] = float64(i) * 0.1
 		ys[i] = math.Sin(xs[i]) * 3
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#3498DB"), geom.WithLineWidth(2))).
 		Labs(ggplot.Title("Coord: Cartesian (default)"), ggplot.Subtitle("Standard x-y axes")).
@@ -57,9 +57,9 @@ func coordCartesian(dir string) {
 }
 
 func coordFlipped(dir string) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewStringColumn("city", []string{"Tokyo", "Delhi", "Shanghai", "São Paulo", "Mumbai"}),
-		memory.NewEngine().NewFloat64Column("population", []float64{37.4, 30.3, 27.1, 22.0, 20.7}),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewStringColumn("city", []string{"Tokyo", "Delhi", "Shanghai", "São Paulo", "Mumbai"}),
+		memory.NewEngine(context.Background()).NewFloat64Column("population", []float64{37.4, 30.3, 27.1, 22.0, 20.7}),
 	)
 	p := ggplot.New(ds, aes.X("city"), aes.Y("population")).
 		Layer(geom.Col(geom.WithFill("#E74C3C"), geom.WithAlpha(0.85))).
@@ -83,10 +83,10 @@ func facetWrap(dir string) {
 			seasons = append(seasons, s)
 		}
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("day", xs),
-		memory.NewEngine().NewFloat64Column("temp", ys),
-		memory.NewEngine().NewStringColumn("season", seasons),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("day", xs),
+		memory.NewEngine(context.Background()).NewFloat64Column("temp", ys),
+		memory.NewEngine(context.Background()).NewStringColumn("season", seasons),
 	)
 	p := ggplot.New(ds, aes.X("day"), aes.Y("temp")).
 		Layer(geom.Line(geom.WithColor("#2ECC71"), geom.WithLineWidth(1.5))).
@@ -117,11 +117,11 @@ func facetGrid(dir string) {
 			}
 		}
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("month", xs),
-		memory.NewEngine().NewFloat64Column("sales", ys),
-		memory.NewEngine().NewStringColumn("region", regions),
-		memory.NewEngine().NewStringColumn("type", types),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("month", xs),
+		memory.NewEngine(context.Background()).NewFloat64Column("sales", ys),
+		memory.NewEngine(context.Background()).NewStringColumn("region", regions),
+		memory.NewEngine(context.Background()).NewStringColumn("type", types),
 	)
 	p := ggplot.New(ds, aes.X("month"), aes.Y("sales")).
 		Layer(geom.Point(geom.WithSize(2.5), geom.WithColor("#9B59B6"), geom.WithAlpha(0.7))).
@@ -140,7 +140,7 @@ func allThemes(dir string) {
 		xs[i] = float64(i) * 0.15
 		ys[i] = math.Sin(xs[i]) * 5
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 
 	for _, name := range []theme.Name{theme.Default, theme.Classic, theme.Minimal, theme.Dark, theme.BW} {
 		p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -165,10 +165,10 @@ func legendPositions(dir string) {
 			groups = append(groups, g)
 		}
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("x", xs),
-		memory.NewEngine().NewFloat64Column("y", ys),
-		memory.NewEngine().NewStringColumn("series", groups),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", xs),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", ys),
+		memory.NewEngine(context.Background()).NewStringColumn("series", groups),
 	)
 
 	for _, pos := range []ggplot.LegendPos{ggplot.LegendRight, ggplot.LegendLeft, ggplot.LegendTop, ggplot.LegendBottom, ggplot.LegendNone} {
@@ -200,10 +200,10 @@ func aestheticsShowcase(dir string) {
 			groups = append(groups, "Group C")
 		}
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("x", xs),
-		memory.NewEngine().NewFloat64Column("y", ys),
-		memory.NewEngine().NewStringColumn("group", groups),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", xs),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", ys),
+		memory.NewEngine(context.Background()).NewStringColumn("group", groups),
 	)
 	p := ggplot.New(ds,
 		aes.X("x"),

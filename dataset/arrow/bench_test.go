@@ -1,6 +1,7 @@
 package arrow_test
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -12,7 +13,7 @@ import (
 
 func makeBenchDS(b *testing.B, n int) dataset.Table {
 	b.Helper()
-	eng := arroweng.NewEngine(memory.DefaultAllocator)
+	eng := arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
 
 	rng := rand.New(rand.NewSource(42))
 	xs := make([]float64, n)
@@ -44,7 +45,7 @@ func makeBenchDS(b *testing.B, n int) dataset.Table {
 // makeBenchDSWithNulls creates a dataset where ~10% of float values are null.
 func makeBenchDSWithNulls(b *testing.B, n int) (dataset.Table, dataset.AnyColumn) {
 	b.Helper()
-	eng := arroweng.NewEngine(memory.DefaultAllocator)
+	eng := arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(dataset.FloatCol("x"))
 	builder := eng.NewBuilder(schema)
@@ -218,7 +219,7 @@ func BenchmarkArrowFillDown(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			_, col := makeBenchDSWithNulls(b, n)
-			eng := arroweng.NewEngine(memory.DefaultAllocator)
+			eng := arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
@@ -232,7 +233,7 @@ func BenchmarkArrowFillUp(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			_, col := makeBenchDSWithNulls(b, n)
-			eng := arroweng.NewEngine(memory.DefaultAllocator)
+			eng := arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
@@ -246,7 +247,7 @@ func BenchmarkArrowReplaceNA(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			_, col := makeBenchDSWithNulls(b, n)
-			eng := arroweng.NewEngine(memory.DefaultAllocator)
+			eng := arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {

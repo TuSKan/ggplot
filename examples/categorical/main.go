@@ -26,11 +26,11 @@ func main() {
 
 // categoricalBars demonstrates a bar chart with string categories on the X axis.
 func categoricalBars(dir string) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewStringColumn("city", []string{
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewStringColumn("city", []string{
 			"London", "Paris", "Berlin", "Madrid", "Rome",
 		}),
-		memory.NewEngine().NewFloat64Column("population", []float64{
+		memory.NewEngine(context.Background()).NewFloat64Column("population", []float64{
 			8.982, 2.161, 3.645, 3.223, 2.873,
 		}),
 	)
@@ -89,9 +89,9 @@ func boxplot(dir string) {
 		y[i] = math.Max(0, y[i])
 	}
 
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("group", x),
-		memory.NewEngine().NewFloat64Column("score", y),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("group", x),
+		memory.NewEngine(context.Background()).NewFloat64Column("score", y),
 	)
 
 	p := ggplot.New(ds, aes.X("group"), aes.Y("score")).

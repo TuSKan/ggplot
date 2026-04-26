@@ -28,7 +28,7 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg
 		return nil, fmt.Errorf("arrow: parquet reader: %w", err)
 	}
 
-	tbl, err := arrowRdr.ReadTable(context.Background())
+	tbl, err := arrowRdr.ReadTable(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("arrow: parquet read table: %w", err)
 	}

@@ -1,8 +1,11 @@
 package dataset
 
 import (
+	"encoding/binary"
 	"fmt"
-	"strings"
+	"hash/fnv"
+	"math"
+	"strconv"
 )
 
 // Frame is the fluent API for data manipulation. All verbs return a new Frame
@@ -339,10 +342,10 @@ func (f Dataset) Distinct(cols ...string) Dataset {
 	}
 
 	// Build unique row indices
-	seen := make(map[string]struct{})
+	seen := make(map[uint64]struct{}, int(f.tbl.NumRows())/2)
 	var indices []int
 	for row := 0; row < int(f.tbl.NumRows()); row++ {
-		key := rowKey(f.tbl, cols, row)
+		key := rowKeyHash(f.tbl, cols, row)
 		if _, exists := seen[key]; !exists {
 			seen[key] = struct{}{}
 			indices = append(indices, row)
@@ -620,19 +623,18 @@ func (gf GroupedFrame) Summarize(specs ...AggSpec) Dataset {
 
 	// Build group index: key → row indices
 	type group struct {
-		key     string
 		indices []int
 	}
-	seen := make(map[string]int) // key → index in groups
+	seen := make(map[uint64]int, int(f.tbl.NumRows())/2) // hash → index in groups
 	var groups []group
 
 	for row := 0; row < int(f.tbl.NumRows()); row++ {
-		key := rowKey(f.tbl, gf.groupCols, row)
+		key := rowKeyHash(f.tbl, gf.groupCols, row)
 		if idx, exists := seen[key]; exists {
 			groups[idx].indices = append(groups[idx].indices, row)
 		} else {
 			seen[key] = len(groups)
-			groups = append(groups, group{key: key, indices: []int{row}})
+			groups = append(groups, group{indices: []int{row}})
 		}
 	}
 
@@ -877,8 +879,42 @@ func applySlice(sel Selector, factory ColumnFactory, ds Table, start, end int) (
 	return factory.FromColumns(schema, columns...)
 }
 
+// rowKeyHash generates a uint64 hash key from the specified columns for a given row.
+// Uses FNV-1a hashing over raw binary data — zero fmt.Sprintf allocations.
+// Used by Distinct and GroupBy for deduplication/grouping.
+func rowKeyHash(ds Table, cols []string, row int) uint64 {
+	h := fnv.New64a()
+	var buf [8]byte
+	for _, name := range cols {
+		col, _ := ds.Column(name)
+		if col == nil {
+			h.Write([]byte{0xFF}) // sentinel for nil
+			continue
+		}
+		switch col.DType() {
+		case DTypeFloat64:
+			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(col.(Column[float64]).Values()[row]))
+			h.Write(buf[:])
+		case DTypeInt64, DTypeTimestamp:
+			binary.LittleEndian.PutUint64(buf[:], uint64(col.(Column[int64]).Values()[row]))
+			h.Write(buf[:])
+		case DTypeString:
+			s := col.(Column[string]).Values()[row]
+			h.Write([]byte(s))
+			h.Write([]byte{0}) // null terminator to separate fields
+		case DTypeBool:
+			if col.(Column[bool]).Values()[row] {
+				h.Write([]byte{1})
+			} else {
+				h.Write([]byte{0})
+			}
+		}
+	}
+	return h.Sum64()
+}
+
 // rowKey generates a string key from the specified columns for a given row.
-// Used by Distinct for deduplication.
+// Retained for debugging and display purposes.
 func rowKey(ds Table, cols []string, row int) string {
 	parts := make([]string, len(cols))
 	for i, name := range cols {
@@ -889,18 +925,37 @@ func rowKey(ds Table, cols []string, row int) string {
 		}
 		switch col.DType() {
 		case DTypeFloat64:
-			parts[i] = fmt.Sprintf("%v", col.(Column[float64]).Values()[row])
+			parts[i] = strconv.FormatFloat(col.(Column[float64]).Values()[row], 'g', -1, 64)
 		case DTypeInt64, DTypeTimestamp:
-			parts[i] = fmt.Sprintf("%v", col.(Column[int64]).Values()[row])
+			parts[i] = strconv.FormatInt(col.(Column[int64]).Values()[row], 10)
 		case DTypeString:
 			parts[i] = col.(Column[string]).Values()[row]
 		case DTypeBool:
-			parts[i] = fmt.Sprintf("%v", col.(Column[bool]).Values()[row])
+			parts[i] = strconv.FormatBool(col.(Column[bool]).Values()[row])
 		default:
 			parts[i] = "?"
 		}
 	}
-	return strings.Join(parts, "\x00")
+	return parts[0] + "\x00" + joinParts(parts[1:])
+}
+
+func joinParts(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	n := len(parts) - 1
+	for _, s := range parts {
+		n += len(s)
+	}
+	var b []byte
+	b = make([]byte, 0, n)
+	for i, s := range parts {
+		if i > 0 {
+			b = append(b, 0)
+		}
+		b = append(b, s...)
+	}
+	return string(b)
 }
 
 // renamedColumn wraps an AnyColumn with a different name.

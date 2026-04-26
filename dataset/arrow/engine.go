@@ -5,7 +5,7 @@
 //
 // Usage:
 //
-//	eng := arrow.NewEngine(memory.DefaultAllocator)
+//	eng := arrow.NewEngine(ctx, memory.DefaultAllocator)
 //	f := eng.(dataset.ColumnFactory)
 //	ds, _ := f.FromColumns(
 //	    dataset.NewSchema(dataset.FloatCol("x"), dataset.StringCol("label")),
@@ -32,15 +32,24 @@ import (
 // Engine is the Arrow compute backend.
 type Engine struct {
 	alloc memory.Allocator
+	ctx   context.Context
 }
 
-// NewEngine creates an Arrow engine with the given memory allocator.
-func NewEngine(alloc memory.Allocator) *Engine {
-	return &Engine{alloc: alloc}
+// NewEngine creates an Arrow engine with the given lifecycle context and memory allocator.
+func NewEngine(ctx context.Context, alloc memory.Allocator) *Engine {
+	return &Engine{ctx: ctx, alloc: alloc}
 }
 
 // Name returns "arrow".
 func (e *Engine) Name() string { return "arrow" }
+
+// Context returns the engine's lifecycle context.
+func (e *Engine) Context() context.Context {
+	if e.ctx == nil {
+		return context.Background()
+	}
+	return e.ctx
+}
 
 // Alloc returns the engine's memory allocator.
 func (e *Engine) Alloc() memory.Allocator { return e.alloc }
@@ -570,25 +579,25 @@ func (e *Engine) Select(col dataset.AnyColumn, indices []int) (dataset.AnyColumn
 
 	switch c := col.(type) {
 	case *arrowFloat64Column:
-		result, err := compute.TakeArray(context.Background(), c.arr, idxArr)
+		result, err := compute.TakeArray(e.Context(), c.arr, idxArr)
 		if err != nil {
 			return nil, fmt.Errorf("arrow: TakeArray float64: %w", err)
 		}
 		return &arrowFloat64Column{name: c.name, arr: result.(*array.Float64)}, nil
 	case *arrowInt64Column:
-		result, err := compute.TakeArray(context.Background(), c.arr, idxArr)
+		result, err := compute.TakeArray(e.Context(), c.arr, idxArr)
 		if err != nil {
 			return nil, fmt.Errorf("arrow: TakeArray int64: %w", err)
 		}
 		return &arrowInt64Column{name: c.name, arr: result.(*array.Int64), dtype: c.dtype}, nil
 	case *arrowStringColumn:
-		result, err := compute.TakeArray(context.Background(), c.arr, idxArr)
+		result, err := compute.TakeArray(e.Context(), c.arr, idxArr)
 		if err != nil {
 			return nil, fmt.Errorf("arrow: TakeArray string: %w", err)
 		}
 		return &arrowStringColumn{name: c.name, arr: result.(*array.String)}, nil
 	case *arrowBoolColumn:
-		result, err := compute.TakeArray(context.Background(), c.arr, idxArr)
+		result, err := compute.TakeArray(e.Context(), c.arr, idxArr)
 		if err != nil {
 			return nil, fmt.Errorf("arrow: TakeArray bool: %w", err)
 		}
@@ -634,7 +643,7 @@ func (e *Engine) SortIndices(col dataset.AnyColumn) ([]int, error) {
 		return nil, fmt.Errorf("arrow: SortIndices not supported for %T", col)
 	}
 
-	ctx := compute.WithAllocator(context.Background(), e.alloc)
+	ctx := compute.WithAllocator(e.Context(), e.alloc)
 	key := compute.DefaultSortKey()
 	result, err := compute.SortIndicesArray(ctx, arr, key)
 	if err != nil {
@@ -683,7 +692,7 @@ func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, e
 	fb.Release()
 	defer filterArr.Release()
 
-	ctx := context.Background()
+	ctx := e.Context()
 	schema := ds.Schema()
 	cols := make([]dataset.AnyColumn, schema.NumFields())
 	opts := compute.FilterOptions{}

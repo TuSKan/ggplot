@@ -178,6 +178,9 @@ func NewEngine(ctx context.Context, projectID string, opts ...Option) (*Engine, 
 // Name returns "bigquery".
 func (e *Engine) Name() string { return "bigquery" }
 
+// Context returns the engine's lifecycle context.
+func (e *Engine) Context() context.Context { return e.ctx }
+
 // Close releases all clients and cleans up temporary tables.
 func (e *Engine) Close() error {
 	e.mu.Lock()
@@ -253,7 +256,7 @@ func (e *Engine) nextTempID() int64 {
 // localEngine returns a cached Arrow engine for post-download local operations.
 func (e *Engine) localEngine() *arrowEngine.Engine {
 	e._localOnce.Do(func() {
-		e._local = arrowEngine.NewEngine(memory.DefaultAllocator)
+		e._local = arrowEngine.NewEngine(e.ctx, memory.DefaultAllocator)
 	})
 	return e._local
 }

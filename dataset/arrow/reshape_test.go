@@ -1,6 +1,7 @@
 package arrow
 
 import (
+	"context"
 	"testing"
 
 	"github.com/TuSKan/ggplot/dataset"
@@ -8,7 +9,7 @@ import (
 )
 
 func TestArrowPivotLonger(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
 		dataset.StringCol("id"),
@@ -62,7 +63,7 @@ func TestArrowPivotLonger(t *testing.T) {
 }
 
 func TestArrowPivotWider(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
 		dataset.StringCol("id"),
@@ -105,7 +106,7 @@ func TestArrowPivotWider(t *testing.T) {
 }
 
 func TestArrowPivotRoundTrip(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
 		dataset.StringCol("id"),
@@ -149,7 +150,7 @@ func TestArrowPivotRoundTrip(t *testing.T) {
 }
 
 func TestArrowSeparate(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(dataset.StringCol("date"), dataset.FloatCol("x"))
 	ds, _ := eng.FromColumns(schema,
@@ -182,7 +183,7 @@ func TestArrowSeparate(t *testing.T) {
 }
 
 func TestArrowConcatenate(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
 		dataset.StringCol("year"),
@@ -213,7 +214,7 @@ func TestArrowConcatenate(t *testing.T) {
 }
 
 func TestArrowSeparateConcatenateRoundTrip(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(dataset.StringCol("date"))
 	ds, _ := eng.FromColumns(schema,
@@ -230,7 +231,7 @@ func TestArrowSeparateConcatenateRoundTrip(t *testing.T) {
 }
 
 func TestArrowComplete(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
 		dataset.StringCol("group"),
@@ -253,7 +254,7 @@ func TestArrowComplete(t *testing.T) {
 }
 
 func TestArrowCompleteWithMissing(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
 		dataset.StringCol("group"),
@@ -290,7 +291,7 @@ func TestArrowCompleteWithMissing(t *testing.T) {
 }
 
 func TestArrowPivotLongerFrameAPI(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
 		dataset.StringCol("id"),

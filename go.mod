@@ -24,11 +24,14 @@ require (
 	github.com/apache/arrow/go/v15 v15.0.2 // indirect
 	github.com/apache/thrift v0.22.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/coregx/gxpdf v0.2.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-text/typesetting v0.3.4 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
+	github.com/gogpu/gg-pdf v0.1.0 // indirect
+	github.com/gogpu/gg-svg v0.1.0 // indirect
 	github.com/gogpu/gpucontext v0.15.0 // indirect
 	github.com/gogpu/gputypes v0.5.0 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect

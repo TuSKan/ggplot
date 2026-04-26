@@ -31,9 +31,13 @@ import (
 //   - [ParquetWriter]   — write Parquet to io.Writer
 
 // Engine is the marker interface that all compute backends implement.
+// Every engine carries a context.Context that governs its lifecycle.
+// Long-running operations should check Context().Err() for cancellation.
 type Engine interface {
 	// Name returns a human-readable identifier (e.g., "arrow", "memory", "sql").
 	Name() string
+	// Context returns the engine's lifecycle context.
+	Context() context.Context
 }
 
 // HasEngine is implemented by datasets that carry an engine reference.

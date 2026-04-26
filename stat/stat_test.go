@@ -27,8 +27,8 @@ func TestLookup_Unknown_ReturnsError(t *testing.T) {
 }
 
 func TestBinStat(t *testing.T) {
-	ds, err := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +70,7 @@ func TestBinStat(t *testing.T) {
 }
 
 func TestBinStat_MissingX(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("y", []float64{1}))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{1}))
 	s, err := stat.Lookup(stat.Bin)
 	if err != nil {
 		t.Fatal(err)
@@ -82,8 +82,8 @@ func TestBinStat_MissingX(t *testing.T) {
 }
 
 func TestCountStat(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 2, 3, 3, 3}),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 2, 3, 3, 3}),
 	)
 
 	s, err := stat.Lookup(stat.Count)
@@ -110,7 +110,7 @@ func TestDensityStat(t *testing.T) {
 	for i := range xs {
 		xs[i] = float64(i)
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs))
 
 	s, err := stat.Lookup(stat.Density)
 	if err != nil {
@@ -137,9 +137,9 @@ func TestDensityStat(t *testing.T) {
 }
 
 func TestSmoothStat(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
-		memory.NewEngine().NewFloat64Column("y", []float64{2, 4, 6, 8, 10}),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{2, 4, 6, 8, 10}),
 	)
 
 	s, err := stat.Lookup(stat.Smooth)
@@ -172,9 +172,9 @@ func TestSmoothStat(t *testing.T) {
 }
 
 func TestSummaryStat(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("x", []float64{1, 1, 2, 2}),
-		memory.NewEngine().NewFloat64Column("y", []float64{10, 20, 30, 40}),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 1, 2, 2}),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{10, 20, 30, 40}),
 	)
 
 	s, err := stat.Lookup(stat.Summary)
@@ -198,7 +198,7 @@ func TestSummaryStat(t *testing.T) {
 }
 
 func TestIdentityStat(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 3}))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3}))
 	s, err := stat.Lookup(stat.Identity)
 	if err != nil {
 		t.Fatal(err)

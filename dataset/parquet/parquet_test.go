@@ -16,7 +16,7 @@ import (
 // --- Memory engine tests ---
 
 func TestRoundTripMemory(t *testing.T) {
-	eng := memEngine.NewEngine()
+	eng := memEngine.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
 		eng.NewStringColumn("city", []string{"SP", "RJ", "BH"}),
@@ -65,7 +65,7 @@ func TestRoundTripMemory(t *testing.T) {
 }
 
 func TestMemoryNullHandling(t *testing.T) {
-	eng := memEngine.NewEngine()
+	eng := memEngine.NewEngine(context.Background())
 
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("name", []string{"a", "b"}),
@@ -96,7 +96,7 @@ func TestMemoryNullHandling(t *testing.T) {
 // --- Arrow engine tests ---
 
 func TestRoundTripArrow(t *testing.T) {
-	eng := arrowEngine.NewEngine(memory.DefaultAllocator)
+	eng := arrowEngine.NewEngine(context.Background(), memory.DefaultAllocator)
 
 	ds, err := dataset.NewDataset(eng,
 		eng.NewStringColumn("city", []string{"SP", "RJ"}),
@@ -136,7 +136,7 @@ func TestRoundTripArrow(t *testing.T) {
 }
 
 func TestArrowNullHandling(t *testing.T) {
-	eng := arrowEngine.NewEngine(memory.DefaultAllocator)
+	eng := arrowEngine.NewEngine(context.Background(), memory.DefaultAllocator)
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{42.0, math.NaN(), 3.14}),
 	)
@@ -170,7 +170,7 @@ func TestArrowNullHandling(t *testing.T) {
 }
 
 func TestBoolRoundTrip(t *testing.T) {
-	eng := memEngine.NewEngine()
+	eng := memEngine.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewBoolColumn("flag", []bool{true, false, true}),
 	)
@@ -197,8 +197,8 @@ func TestBoolRoundTrip(t *testing.T) {
 
 func TestCrossEngineReadWrite(t *testing.T) {
 	// Write with memory, read with arrow.
-	memEng := memEngine.NewEngine()
-	arrowEng := arrowEngine.NewEngine(memory.DefaultAllocator)
+	memEng := memEngine.NewEngine(context.Background())
+	arrowEng := arrowEngine.NewEngine(context.Background(), memory.DefaultAllocator)
 
 	ds, _ := dataset.NewDataset(memEng,
 		memEng.NewStringColumn("name", []string{"a", "b", "c"}),
@@ -228,7 +228,7 @@ func TestCrossEngineReadWrite(t *testing.T) {
 }
 
 func TestWithCompression(t *testing.T) {
-	eng := memEngine.NewEngine()
+	eng := memEngine.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewInt64Column("x", []int64{1, 2, 3, 4, 5}),
 	)

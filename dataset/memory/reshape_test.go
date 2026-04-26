@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -8,7 +9,7 @@ import (
 )
 
 func TestPivotLonger(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	// Wide format: id, Q1, Q2, Q3
 	schema := dataset.NewSchema(
@@ -74,7 +75,7 @@ func TestPivotLonger(t *testing.T) {
 }
 
 func TestPivotWider(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	// Long format: id, quarter, revenue
 	schema := dataset.NewSchema(
@@ -129,7 +130,7 @@ func TestPivotWider(t *testing.T) {
 }
 
 func TestPivotRoundTrip(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	schema := dataset.NewSchema(
 		dataset.StringCol("id"),
@@ -175,7 +176,7 @@ func TestPivotRoundTrip(t *testing.T) {
 }
 
 func TestSeparate(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	schema := dataset.NewSchema(dataset.StringCol("date"), dataset.FloatCol("x"))
 	ds, _ := eng.FromColumns(schema,
@@ -209,7 +210,7 @@ func TestSeparate(t *testing.T) {
 }
 
 func TestConcatenate(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	schema := dataset.NewSchema(
 		dataset.StringCol("year"),
@@ -241,7 +242,7 @@ func TestConcatenate(t *testing.T) {
 }
 
 func TestSeparateConcatenateRoundTrip(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	schema := dataset.NewSchema(dataset.StringCol("date"))
 	ds, _ := eng.FromColumns(schema,
@@ -258,7 +259,7 @@ func TestSeparateConcatenateRoundTrip(t *testing.T) {
 }
 
 func TestComplete(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	// Missing combination: (A, 2025) is not present.
 	schema := dataset.NewSchema(
@@ -283,7 +284,7 @@ func TestComplete(t *testing.T) {
 }
 
 func TestCompleteWithMissing(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	// Missing combination: (B, 2025) is absent.
 	schema := dataset.NewSchema(
@@ -322,7 +323,7 @@ func TestCompleteWithMissing(t *testing.T) {
 }
 
 func TestPivotLongerFrameAPI(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	schema := dataset.NewSchema(
 		dataset.StringCol("id"),

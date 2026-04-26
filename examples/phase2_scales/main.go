@@ -42,7 +42,7 @@ func linearScale(dir string) {
 		xs[i] = float64(i)
 		ys[i] = float64(i) * 2.5
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#3498DB"), geom.WithLineWidth(2))).
 		Labs(ggplot.Title("Scale: Linear (default)"), ggplot.Subtitle("y = 2.5x")).
@@ -58,7 +58,7 @@ func log10Scale(dir string) {
 		xs[i] = float64(i + 1)
 		ys[i] = math.Pow(10, float64(i)*0.08)
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#E74C3C"), geom.WithLineWidth(2))).
 		Layer(geom.Point(geom.WithSize(2), geom.WithColor("#E74C3C"))).
@@ -76,7 +76,7 @@ func sqrtScale(dir string) {
 		xs[i] = float64(i)
 		ys[i] = float64(i * i)
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#27AE60"), geom.WithLineWidth(2))).
 		ScaleY("sqrt").
@@ -93,7 +93,7 @@ func reverseScale(dir string) {
 		xs[i] = float64(i)
 		ys[i] = math.Sin(float64(i) * 0.3)
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#F39C12"), geom.WithLineWidth(2))).
 		ScaleY("reverse").
@@ -104,9 +104,9 @@ func reverseScale(dir string) {
 
 // Discrete scale (categorical X)
 func discreteScale(dir string) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewStringColumn("language", []string{"Go", "Python", "Rust", "Java", "TypeScript", "C++"}),
-		memory.NewEngine().NewFloat64Column("stars", []float64{122, 215, 98, 178, 142, 67}),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewStringColumn("language", []string{"Go", "Python", "Rust", "Java", "TypeScript", "C++"}),
+		memory.NewEngine(context.Background()).NewFloat64Column("stars", []float64{122, 215, 98, 178, 142, 67}),
 	)
 	p := ggplot.New(ds, aes.X("language"), aes.Y("stars")).
 		Layer(geom.Col(geom.WithFill("#9B59B6"), geom.WithAlpha(0.85))).

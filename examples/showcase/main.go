@@ -58,10 +58,10 @@ func stepExample(dir string) {
 		labels = append(labels, "Sensor A", "Sensor B", "Sensor C")
 	}
 
-	ds, err := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("time", xs),
-		memory.NewEngine().NewFloat64Column("level", ys),
-		memory.NewEngine().NewStringColumn("sensor", labels),
+	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("time", xs),
+		memory.NewEngine(context.Background()).NewFloat64Column("level", ys),
+		memory.NewEngine(context.Background()).NewStringColumn("sensor", labels),
 	)
 	if err != nil {
 		log.Fatalln(err)
@@ -107,10 +107,10 @@ func limitsExample(dir string) {
 		}
 	}
 
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("x", xs),
-		memory.NewEngine().NewFloat64Column("y", ys),
-		memory.NewEngine().NewStringColumn("type", groups),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", xs),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", ys),
+		memory.NewEngine(context.Background()).NewStringColumn("type", groups),
 	)
 
 	p := ggplot.New(ds,
@@ -137,9 +137,9 @@ func limitsExample(dir string) {
 }
 
 func flipExample(dir string) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("category", []float64{1, 2, 3, 4, 5}),
-		memory.NewEngine().NewFloat64Column("value", []float64{42, 28, 65, 53, 37}),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("category", []float64{1, 2, 3, 4, 5}),
+		memory.NewEngine(context.Background()).NewFloat64Column("value", []float64{42, 28, 65, 53, 37}),
 	)
 
 	p := ggplot.New(ds,
@@ -181,10 +181,10 @@ func rugExample(dir string) {
 		}
 	}
 
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("x", xs),
-		memory.NewEngine().NewFloat64Column("y", ys),
-		memory.NewEngine().NewStringColumn("cluster", groups),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", xs),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", ys),
+		memory.NewEngine(context.Background()).NewStringColumn("cluster", groups),
 	)
 
 	p := ggplot.New(ds,

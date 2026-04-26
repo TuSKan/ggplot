@@ -51,7 +51,7 @@ func pointExample(dir string) {
 		xs[i] = rng.NormFloat64() * 5
 		ys[i] = xs[i]*0.6 + rng.NormFloat64()*2
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(3), geom.WithAlpha(0.7), geom.WithColor("#E74C3C"))).
 		Labs(ggplot.Title("geom.Point"), ggplot.Subtitle("Scatter plot with random data")).
@@ -68,7 +68,7 @@ func lineExample(dir string) {
 		xs[i] = t
 		ys[i] = math.Sin(t) * math.Exp(-t*0.1)
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("t", xs), memory.NewEngine().NewFloat64Column("amplitude", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("t", xs), memory.NewEngine(context.Background()).NewFloat64Column("amplitude", ys))
 	p := ggplot.New(ds, aes.X("t"), aes.Y("amplitude")).
 		Layer(geom.Line(geom.WithColor("#3498DB"), geom.WithLineWidth(2))).
 		Labs(ggplot.Title("geom.Line"), ggplot.Subtitle("Damped sine wave")).
@@ -84,7 +84,7 @@ func stepExample(dir string) {
 		xs[i] = float64(i)
 		ys[i] = math.Floor(math.Sin(float64(i)*0.3)*4) + 5
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("time", xs), memory.NewEngine().NewFloat64Column("level", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("time", xs), memory.NewEngine(context.Background()).NewFloat64Column("level", ys))
 	p := ggplot.New(ds, aes.X("time"), aes.Y("level")).
 		Layer(geom.Step(geom.WithColor("#2ECC71"), geom.WithLineWidth(2))).
 		Labs(ggplot.Title("geom.Step"), ggplot.Subtitle("Staircase function")).
@@ -94,9 +94,9 @@ func stepExample(dir string) {
 
 // --- Bar ---
 func barExample(dir string) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewStringColumn("fruit", []string{"Apple", "Banana", "Cherry", "Date", "Elderberry"}),
-		memory.NewEngine().NewFloat64Column("sales", []float64{45, 32, 58, 21, 39}),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewStringColumn("fruit", []string{"Apple", "Banana", "Cherry", "Date", "Elderberry"}),
+		memory.NewEngine(context.Background()).NewFloat64Column("sales", []float64{45, 32, 58, 21, 39}),
 	)
 	p := ggplot.New(ds, aes.X("fruit"), aes.Y("sales")).
 		Layer(geom.Col(geom.WithFill("#9B59B6"), geom.WithAlpha(0.85))).
@@ -113,7 +113,7 @@ func histogramExample(dir string) {
 	for i := range xs {
 		xs[i] = rng.NormFloat64()*15 + 50
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("score", xs))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("score", xs))
 	p := ggplot.New(ds, aes.X("score")).
 		Layer(geom.Histogram(geom.WithFill("#E67E22"), geom.WithAlpha(0.8))).
 		Labs(ggplot.Title("geom.Histogram"), ggplot.Subtitle("Distribution of test scores")).
@@ -130,7 +130,7 @@ func areaExample(dir string) {
 		xs[i] = t
 		ys[i] = math.Sin(t) * math.Sin(t) * 3
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Area(geom.WithFill("#1ABC9C"), geom.WithAlpha(0.6))).
 		Labs(ggplot.Title("geom.Area"), ggplot.Subtitle("Filled area under sin²(x)")).
@@ -150,7 +150,7 @@ func densityExample(dir string) {
 			xs[i] = rng.NormFloat64()*3 + 50
 		}
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("value", xs))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("value", xs))
 	p := ggplot.New(ds, aes.X("value")).
 		Layer(geom.Density(geom.WithFill("#3498DB"), geom.WithAlpha(0.5), geom.WithColor("#2C3E50"))).
 		Labs(ggplot.Title("geom.Density"), ggplot.Subtitle("Kernel density estimation of bimodal data")).
@@ -167,7 +167,7 @@ func rugExample(dir string) {
 		xs[i] = rng.Float64() * 10
 		ys[i] = math.Sin(xs[i]) + rng.NormFloat64()*0.3
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(2.5), geom.WithColor("#8E44AD"), geom.WithAlpha(0.6))).
 		Layer(geom.Rug(geom.WithAlpha(0.4), geom.WithColor("#8E44AD"))).
@@ -185,7 +185,7 @@ func hlineVlineExample(dir string) {
 		xs[i] = rng.Float64() * 20
 		ys[i] = xs[i]*1.5 + rng.NormFloat64()*5
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(2), geom.WithAlpha(0.6), geom.WithColor("#2980B9"))).
 		Layer(geom.HLine(geom.WithIntercept(15), geom.WithColor("#E74C3C"), geom.WithLineWidth(1.5))).
@@ -197,10 +197,10 @@ func hlineVlineExample(dir string) {
 
 // --- Text ---
 func textExample(dir string) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(),
-		memory.NewEngine().NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
-		memory.NewEngine().NewFloat64Column("y", []float64{2, 5, 3, 7, 4}),
-		memory.NewEngine().NewStringColumn("label", []string{"Alpha", "Beta", "Gamma", "Delta", "Epsilon"}),
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{2, 5, 3, 7, 4}),
+		memory.NewEngine(context.Background()).NewStringColumn("label", []string{"Alpha", "Beta", "Gamma", "Delta", "Epsilon"}),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Label("label")).
 		Layer(geom.Point(geom.WithSize(5), geom.WithColor("#E74C3C"))).
@@ -221,7 +221,7 @@ func boxplotExample(dir string) {
 			y = append(y, math.Max(0, m+rng.NormFloat64()*10))
 		}
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("group", x), memory.NewEngine().NewFloat64Column("score", y))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("group", x), memory.NewEngine(context.Background()).NewFloat64Column("score", y))
 	p := ggplot.New(ds, aes.X("group"), aes.Y("score")).
 		Layer(geom.Boxplot(geom.WithFill("#E8E8E8"), geom.WithColor("#2C3E50"), geom.WithWidth(0.6))).
 		Labs(ggplot.Title("geom.Boxplot"), ggplot.Subtitle("Three treatment groups")).
@@ -238,7 +238,7 @@ func smoothExample(dir string) {
 		xs[i] = float64(i) * 0.15
 		ys[i] = math.Sin(xs[i]) + rng.NormFloat64()*0.4
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(2), geom.WithAlpha(0.4), geom.WithColor("#BDC3C7"))).
 		Layer(geom.Smooth(geom.WithColor("#E74C3C"), geom.WithLineWidth(2.5))).

@@ -1,6 +1,7 @@
 package arrow_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/TuSKan/ggplot/dataset"
@@ -10,7 +11,7 @@ import (
 )
 
 func newEng() *arrow.Engine {
-	return arrow.NewEngine(arrowmem.DefaultAllocator)
+	return arrow.NewEngine(context.Background(), arrowmem.DefaultAllocator)
 }
 
 // --- ColumnFactory ---

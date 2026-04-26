@@ -4,7 +4,7 @@
 //
 // Usage:
 //
-//	eng := memory.NewEngine()
+//	eng := memory.NewEngine(context.Background())
 //	f := eng.(dataset.ColumnFactory)
 //	ds, _ := f.FromColumns(
 //	    dataset.NewSchema(dataset.FloatCol("x"), dataset.StringCol("label")),
@@ -14,6 +14,7 @@
 package memory
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"slices"
@@ -24,13 +25,23 @@ import (
 )
 
 // Engine is the Go-slice compute backend.
-type Engine struct{}
+type Engine struct {
+	ctx context.Context
+}
 
-// NewEngine creates a memory engine.
-func NewEngine() *Engine { return &Engine{} }
+// NewEngine creates a memory engine with the given lifecycle context.
+func NewEngine(ctx context.Context) *Engine { return &Engine{ctx: ctx} }
 
 // Name returns "memory".
 func (e *Engine) Name() string { return "memory" }
+
+// Context returns the engine's lifecycle context.
+func (e *Engine) Context() context.Context {
+	if e.ctx == nil {
+		return context.Background()
+	}
+	return e.ctx
+}
 
 // --- ColumnFactory ---
 

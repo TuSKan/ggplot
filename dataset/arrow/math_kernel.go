@@ -20,7 +20,7 @@ func (e *Engine) applyUnaryCompute(col dataset.AnyColumn, fn func(ctx context.Co
 	if !ok {
 		return nil, fmt.Errorf("arrow: MathKernel requires float64 column, got %T", col)
 	}
-	ctx := compute.WithAllocator(context.Background(), e.alloc)
+	ctx := compute.WithAllocator(e.Context(), e.alloc)
 	result, err := fn(ctx, compute.ArithmeticOptions{}, compute.NewDatum(c.arr))
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func (e *Engine) applyUnaryComputeNoOpts(col dataset.AnyColumn, fn func(ctx cont
 	if !ok {
 		return nil, fmt.Errorf("arrow: MathKernel requires float64 column, got %T", col)
 	}
-	ctx := compute.WithAllocator(context.Background(), e.alloc)
+	ctx := compute.WithAllocator(e.Context(), e.alloc)
 	result, err := fn(ctx, compute.NewDatum(c.arr))
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (e *Engine) applyBinaryCompute(a, b dataset.AnyColumn, fn func(ctx context.
 	if ca.arr.Len() != cb.arr.Len() {
 		return nil, fmt.Errorf("arrow: column length mismatch: %d vs %d", ca.arr.Len(), cb.arr.Len())
 	}
-	ctx := compute.WithAllocator(context.Background(), e.alloc)
+	ctx := compute.WithAllocator(e.Context(), e.alloc)
 	result, err := fn(ctx, compute.ArithmeticOptions{}, compute.NewDatum(ca.arr), compute.NewDatum(cb.arr))
 	if err != nil {
 		return nil, err
@@ -67,15 +67,29 @@ func (e *Engine) applyBinaryCompute(a, b dataset.AnyColumn, fn func(ctx context.
 }
 
 // applySliceTransform applies a highway (dst, src) transform, returning a new column.
+// Writes directly into an Arrow builder to avoid an intermediate Go-slice copy.
 func (e *Engine) applySliceTransform(col dataset.AnyColumn, fn func(dst, src []float64)) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowFloat64Column)
 	if !ok {
 		return nil, fmt.Errorf("arrow: MathKernel requires float64 column, got %T", col)
 	}
-	vals := c.arr.Float64Values()
-	out := make([]float64, len(vals))
-	fn(out, vals)
-	return e.NewFloat64Column(c.name, out), nil
+	src := c.arr.Float64Values()
+	n := len(src)
+
+	// Allocate the output buffer via Arrow builder (single allocation).
+	b := array.NewFloat64Builder(e.alloc)
+	b.Resize(n)
+	// Grow the builder's data buffer to n elements so we can write directly.
+	b.AppendValues(make([]float64, n), nil)
+	arr := b.NewFloat64Array()
+	b.Release()
+
+	// The Arrow buffer is mutable right after NewFloat64Array (refcount=1).
+	// Get a writable view of the underlying buffer.
+	dst := arr.Float64Values()
+	fn(dst, src)
+
+	return &arrowFloat64Column{name: c.name, arr: arr}, nil
 }
 
 // applyScalarFunc applies a scalar math.X function element-wise.
@@ -117,7 +131,7 @@ func (e *Engine) AddScalar(col dataset.AnyColumn, val float64) (dataset.AnyColum
 	if !ok {
 		return nil, fmt.Errorf("arrow: AddScalar requires float64 column, got %T", col)
 	}
-	ctx := compute.WithAllocator(context.Background(), e.alloc)
+	ctx := compute.WithAllocator(e.Context(), e.alloc)
 	result, err := compute.Add(ctx, compute.ArithmeticOptions{}, compute.NewDatum(c.arr), compute.NewDatum(val))
 	if err != nil {
 		return nil, err
@@ -131,7 +145,7 @@ func (e *Engine) MulScalar(col dataset.AnyColumn, val float64) (dataset.AnyColum
 	if !ok {
 		return nil, fmt.Errorf("arrow: MulScalar requires float64 column, got %T", col)
 	}
-	ctx := compute.WithAllocator(context.Background(), e.alloc)
+	ctx := compute.WithAllocator(e.Context(), e.alloc)
 	result, err := compute.Multiply(ctx, compute.ArithmeticOptions{}, compute.NewDatum(c.arr), compute.NewDatum(val))
 	if err != nil {
 		return nil, err
@@ -164,7 +178,7 @@ func (e *Engine) Pow(col dataset.AnyColumn, exp float64) (dataset.AnyColumn, err
 	if !ok {
 		return nil, fmt.Errorf("arrow: Pow requires float64 column, got %T", col)
 	}
-	ctx := compute.WithAllocator(context.Background(), e.alloc)
+	ctx := compute.WithAllocator(e.Context(), e.alloc)
 	result, err := compute.Power(ctx, compute.ArithmeticOptions{}, compute.NewDatum(c.arr), compute.NewDatum(exp))
 	if err != nil {
 		return nil, err
@@ -230,7 +244,7 @@ func (e *Engine) Atan2(y, x dataset.AnyColumn) (dataset.AnyColumn, error) {
 	if !ok {
 		return nil, fmt.Errorf("arrow: Atan2 requires float64 columns, got %T", x)
 	}
-	ctx := compute.WithAllocator(context.Background(), e.alloc)
+	ctx := compute.WithAllocator(e.Context(), e.alloc)
 	result, err := compute.Atan2(ctx, compute.NewDatum(cy.arr), compute.NewDatum(cx.arr))
 	if err != nil {
 		return nil, err

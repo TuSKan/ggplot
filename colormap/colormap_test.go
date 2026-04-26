@@ -1,6 +1,7 @@
 package colormap
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -162,7 +163,7 @@ func TestBoundaryNorm_Quantize(t *testing.T) {
 // --- Scale ---
 
 func TestScale_Continuous_Train(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("z", []float64{0, 5, 10})
 	s := NewContinuous(Viridis, nil)
 	if err := s.Train(col); err != nil {
@@ -180,7 +181,7 @@ func TestScale_Continuous_Train(t *testing.T) {
 }
 
 func TestScale_Discrete_Train(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	col := eng.NewStringColumn("g", []string{"a", "b", "a", "c", "b"})
 	s := NewDiscrete(Tab10)
 	if err := s.Train(col); err != nil {

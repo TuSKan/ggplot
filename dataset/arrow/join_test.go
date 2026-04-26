@@ -1,6 +1,7 @@
 package arrow
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -13,7 +14,7 @@ import (
 // right: id=[2,3,5]    y=[200,300,500]
 func makeJoinDatasets(t *testing.T) (*Engine, dataset.Table, dataset.Table) {
 	t.Helper()
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 	schema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
 	left, err := eng.FromColumns(schema,
 		eng.NewInt64Column("id", []int64{1, 2, 3, 4}),
@@ -238,7 +239,7 @@ func TestArrowAntiJoin(t *testing.T) {
 }
 
 func TestArrowJoinCompositeKey(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	lSchema := dataset.NewSchema(dataset.IntCol("year"), dataset.StringCol("month"), dataset.FloatCol("x"))
 	left, _ := eng.FromColumns(lSchema,
@@ -275,7 +276,7 @@ func TestArrowJoinCompositeKey(t *testing.T) {
 }
 
 func TestArrowJoinDuplicateKeys(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	lSchema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
 	left, _ := eng.FromColumns(lSchema,
@@ -303,7 +304,7 @@ func TestArrowJoinDuplicateKeys(t *testing.T) {
 }
 
 func TestArrowJoinNoMatch(t *testing.T) {
-	eng := NewEngine(memory.DefaultAllocator)
+	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	lSchema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
 	left, _ := eng.FromColumns(lSchema,

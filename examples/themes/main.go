@@ -30,7 +30,7 @@ func main() {
 		ys[i] = math.Sin(xs[i]) + rand.NormFloat64()*0.3
 	}
 
-	ds, err := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	if err != nil {
 		log.Fatalln(err)
 	}

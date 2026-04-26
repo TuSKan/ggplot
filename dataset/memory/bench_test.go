@@ -1,6 +1,7 @@
 package memory_test
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -11,7 +12,7 @@ import (
 
 func makeBenchDS(b *testing.B, n int) dataset.Table {
 	b.Helper()
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 
 	rng := rand.New(rand.NewSource(42))
 	xs := make([]float64, n)

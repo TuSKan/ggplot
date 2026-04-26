@@ -1,6 +1,7 @@
 package arrow_test
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -10,7 +11,7 @@ import (
 )
 
 func mathEngine() *arroweng.Engine {
-	return arroweng.NewEngine(memory.DefaultAllocator)
+	return arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
 }
 
 func mathCol(eng *arroweng.Engine, vals []float64) dataset.AnyColumn {

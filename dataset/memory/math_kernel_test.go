@@ -1,6 +1,7 @@
 package memory_test
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -8,7 +9,7 @@ import (
 	memeng "github.com/TuSKan/ggplot/dataset/memory"
 )
 
-func mathEngine() *memeng.Engine { return memeng.NewEngine() }
+func mathEngine() *memeng.Engine { return memeng.NewEngine(context.Background()) }
 
 func mathCol(eng *memeng.Engine, vals []float64) dataset.AnyColumn {
 	return eng.NewFloat64Column("x", vals)

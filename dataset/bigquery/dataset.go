@@ -289,7 +289,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 		return nil, fmt.Errorf("bigquery: CreateReadSession failed: %w", err)
 	}
 
-	eng := arrowEngine.NewEngine(memory.DefaultAllocator)
+	eng := arrowEngine.NewEngine(ctx, memory.DefaultAllocator)
 
 	if len(session.GetStreams()) == 0 {
 		return buildEmptyDataset(eng, src.schema)

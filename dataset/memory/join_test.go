@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -12,7 +13,7 @@ import (
 // right: id=[2,3,5]    y=[200,300,500]
 func makeJoinDatasets(t *testing.T) (dataset.Table, dataset.Table) {
 	t.Helper()
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 	schema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
 	left, err := eng.FromColumns(schema,
 		eng.NewInt64Column("id", []int64{1, 2, 3, 4}),
@@ -61,7 +62,7 @@ func getInt64Values(t *testing.T, ds dataset.Table, name string) []int64 {
 
 func TestInnerJoin(t *testing.T) {
 	left, right := makeJoinDatasets(t)
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinInner
@@ -93,7 +94,7 @@ func TestInnerJoin(t *testing.T) {
 
 func TestLeftJoin(t *testing.T) {
 	left, right := makeJoinDatasets(t)
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinLeft
@@ -126,7 +127,7 @@ func TestLeftJoin(t *testing.T) {
 
 func TestRightJoin(t *testing.T) {
 	left, right := makeJoinDatasets(t)
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinRight
@@ -157,7 +158,7 @@ func TestRightJoin(t *testing.T) {
 
 func TestFullJoin(t *testing.T) {
 	left, right := makeJoinDatasets(t)
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinFull
@@ -193,7 +194,7 @@ func TestFullJoin(t *testing.T) {
 
 func TestSemiJoin(t *testing.T) {
 	left, right := makeJoinDatasets(t)
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinSemi
@@ -220,7 +221,7 @@ func TestSemiJoin(t *testing.T) {
 
 func TestAntiJoin(t *testing.T) {
 	left, right := makeJoinDatasets(t)
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinAnti
@@ -245,7 +246,7 @@ func TestAntiJoin(t *testing.T) {
 }
 
 func TestJoinCompositeKey(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	lSchema := dataset.NewSchema(dataset.IntCol("year"), dataset.StringCol("month"), dataset.FloatCol("x"))
 	left, _ := eng.FromColumns(lSchema,
@@ -283,7 +284,7 @@ func TestJoinCompositeKey(t *testing.T) {
 }
 
 func TestJoinDuplicateKeys(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	lSchema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
 	left, _ := eng.FromColumns(lSchema,
@@ -311,7 +312,7 @@ func TestJoinDuplicateKeys(t *testing.T) {
 }
 
 func TestJoinNoMatch(t *testing.T) {
-	eng := NewEngine()
+	eng := NewEngine(context.Background())
 
 	lSchema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
 	left, _ := eng.FromColumns(lSchema,

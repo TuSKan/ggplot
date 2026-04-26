@@ -23,7 +23,7 @@ Charlie,35,NA,true
 // --- Memory engine tests ---
 
 func TestReadMemory(t *testing.T) {
-	eng := memEngine.NewEngine()
+	eng := memEngine.NewEngine(context.Background())
 	ds, err := Read(context.Background(), strings.NewReader(testCSV), eng)
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +70,7 @@ func TestReadMemory(t *testing.T) {
 
 func TestReadMemoryNoHeader(t *testing.T) {
 	csv := "Alice,30\nBob,25\n"
-	eng := memEngine.NewEngine()
+	eng := memEngine.NewEngine(context.Background())
 	ds, err := Read(context.Background(), strings.NewReader(csv), eng, WithHeader(false))
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestReadMemoryNoHeader(t *testing.T) {
 
 func TestReadMemoryTSV(t *testing.T) {
 	csv := "name\tage\nAlice\t30\nBob\t25\n"
-	eng := memEngine.NewEngine()
+	eng := memEngine.NewEngine(context.Background())
 	ds, err := Read(context.Background(), strings.NewReader(csv), eng, WithComma('\t'))
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +101,7 @@ func TestReadMemoryTSV(t *testing.T) {
 }
 
 func TestWriteMemory(t *testing.T) {
-	eng := memEngine.NewEngine()
+	eng := memEngine.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("name", []string{"Alice", "Bob"}),
 		eng.NewInt64Column("age", []int64{30, 25}),
@@ -127,7 +127,7 @@ func TestWriteMemory(t *testing.T) {
 }
 
 func TestRoundTripMemory(t *testing.T) {
-	eng := memEngine.NewEngine()
+	eng := memEngine.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("city", []string{"SP", "RJ", "BH"}),
 		eng.NewInt64Column("pop", []int64{12000000, 6700000, 2500000}),
@@ -164,7 +164,7 @@ func TestRoundTripMemory(t *testing.T) {
 // --- Arrow engine tests ---
 
 func TestReadArrow(t *testing.T) {
-	eng := arrowEngine.NewEngine(memory.DefaultAllocator)
+	eng := arrowEngine.NewEngine(context.Background(), memory.DefaultAllocator)
 	ds, err := Read(context.Background(), strings.NewReader(testCSV), eng)
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestReadArrow(t *testing.T) {
 }
 
 func TestWriteArrow(t *testing.T) {
-	eng := arrowEngine.NewEngine(memory.DefaultAllocator)
+	eng := arrowEngine.NewEngine(context.Background(), memory.DefaultAllocator)
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("x", []string{"a", "b"}),
 		eng.NewFloat64Column("y", []float64{1.5, 2.5}),
@@ -204,7 +204,7 @@ func TestWriteArrow(t *testing.T) {
 }
 
 func TestRoundTripArrow(t *testing.T) {
-	eng := arrowEngine.NewEngine(memory.DefaultAllocator)
+	eng := arrowEngine.NewEngine(context.Background(), memory.DefaultAllocator)
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("city", []string{"SP", "RJ"}),
 		eng.NewFloat64Column("pop", []float64{12.5, 6.7}),
@@ -226,7 +226,7 @@ func TestRoundTripArrow(t *testing.T) {
 }
 
 func TestHeaderOnlyCSV(t *testing.T) {
-	eng := memEngine.NewEngine()
+	eng := memEngine.NewEngine(context.Background())
 	ds, err := Read(context.Background(), strings.NewReader("name,age\n"), eng)
 	if err != nil {
 		t.Fatal(err)

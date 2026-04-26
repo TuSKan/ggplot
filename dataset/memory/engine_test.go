@@ -1,6 +1,7 @@
 package memory_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/TuSKan/ggplot/dataset"
@@ -8,7 +9,7 @@ import (
 )
 
 func TestColumnFactory(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.FloatCol("x"),
 		dataset.StringCol("label"),
@@ -58,7 +59,7 @@ func TestColumnFactory(t *testing.T) {
 }
 
 func TestAggregator(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	agg := eng
 	f := eng
 
@@ -119,7 +120,7 @@ func TestAggregator(t *testing.T) {
 }
 
 func TestBuilder(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.FloatCol("x"),
 		dataset.StringCol("label"),
@@ -157,7 +158,7 @@ func TestBuilder(t *testing.T) {
 
 func makeGroupDS(t testing.TB) dataset.Table {
 	t.Helper()
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.StringCol("group"),
 		dataset.FloatCol("x"),
@@ -296,7 +297,7 @@ func TestFullPipeline(t *testing.T) {
 
 func makeTestDS(t *testing.T) dataset.Table {
 	t.Helper()
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.FloatCol("x"),
 		dataset.StringCol("label"),
@@ -455,7 +456,7 @@ func TestFilterEmpty(t *testing.T) {
 }
 
 func TestDropNA(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.FloatCol("x"),
 		dataset.StringCol("label"),
@@ -498,7 +499,7 @@ func TestDropNA(t *testing.T) {
 }
 
 func TestFillDown(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(dataset.FloatCol("x"))
 	b := eng.NewBuilder(schema)
 	xApp := b.Float64("x")
@@ -525,7 +526,7 @@ func TestFillDown(t *testing.T) {
 }
 
 func TestReplaceNA(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(dataset.FloatCol("x"))
 	b := eng.NewBuilder(schema)
 	xApp := b.Float64("x")
@@ -549,7 +550,7 @@ func TestReplaceNA(t *testing.T) {
 }
 
 func TestStack(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.FloatCol("x"),
 		dataset.StringCol("label"),
@@ -585,7 +586,7 @@ func TestStack(t *testing.T) {
 }
 
 func TestCombine(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	ds1, _ := eng.FromColumns(
 		dataset.NewSchema(dataset.FloatCol("x")),
 		eng.NewFloat64Column("x", []float64{1, 2, 3}),
@@ -616,7 +617,7 @@ func TestCombine(t *testing.T) {
 // --- Windower ---
 
 func TestLagLead(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{10, 20, 30, 40, 50})
 
 	lag, err := eng.Lag(col, 2)
@@ -641,7 +642,7 @@ func TestLagLead(t *testing.T) {
 }
 
 func TestCumSum(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5})
 	cs, err := eng.CumSum(col)
 	if err != nil {
@@ -658,7 +659,7 @@ func TestCumSum(t *testing.T) {
 }
 
 func TestCumMaxMin(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{3, 1, 4, 1, 5})
 
 	mx, _ := eng.CumMax(col)
@@ -677,7 +678,7 @@ func TestCumMaxMin(t *testing.T) {
 }
 
 func TestRankDenseRank(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	// Values with ties: [10, 30, 20, 20, 40]
 	col := eng.NewFloat64Column("x", []float64{10, 30, 20, 20, 40})
 
@@ -706,7 +707,7 @@ func TestRankDenseRank(t *testing.T) {
 }
 
 func TestRowNumber(t *testing.T) {
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(context.Background())
 	rn, err := eng.RowNumber(5)
 	if err != nil {
 		t.Fatal(err)

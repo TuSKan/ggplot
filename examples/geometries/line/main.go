@@ -23,7 +23,7 @@ func main() {
 		ys[i] = xs[i]*0.3 + rand.NormFloat64()*1.5
 	}
 
-	ds, err := dataset.NewDataset(memory.NewEngine(), memory.NewEngine().NewFloat64Column("x", xs), memory.NewEngine().NewFloat64Column("y", ys))
+	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
 	if err != nil {
 		log.Fatalln(err)
 	}
