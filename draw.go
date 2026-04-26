@@ -5,30 +5,47 @@ package ggplot
 
 import (
 	"fmt"
-	"image/color"
 	"math"
 	"sort"
 
+	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/coord"
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/geom"
 	"github.com/TuSKan/ggplot/internal/canvas"
-	icolor "github.com/TuSKan/ggplot/internal/color"
 	"github.com/TuSKan/ggplot/internal/grammar"
+	"github.com/gogpu/gg"
 )
 
 // drawLayer dispatches rendering to the appropriate geom-specific draw function.
-// When groupColor is non-nil, it overrides the layer's Params.Color/Fill.
-// When continuousColor is non-empty, per-datum color gradient is applied.
-func drawLayer(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, g geom.Layer, mapping grammar.AesMap, groupColor color.Color, continuousColor string, w, h, xMin, xMax, yMin, yMax float64) {
+//
+// groupColor (when non-nil) overrides the layer's Params.Color/Fill — used for
+// categorical color groups where a single color applies to the whole layer.
+//
+// contColorCol (when non-empty) names a numeric column whose values feed into
+// contScale.At(v) to produce a per-datum color (continuous color mapping).
+// contScale must be non-nil if contColorCol is set.
+func drawLayer(
+	cv canvas.Canvas,
+	c coord.Coord,
+	ds dataset.Dataset,
+	g geom.Layer,
+	mapping grammar.AesMap,
+	groupColor *gg.RGBA,
+	contColorCol string,
+	contScale *colormap.Scale,
+	w, h, xMin, xMax, yMin, yMax float64,
+) {
 	xCol := mapping["x"]
 	yCol := mapping["y"]
 
 	// If a group colour was assigned, override the layer's fixed color.
 	params := g.Params
 	if groupColor != nil {
-		r, gg, b, _ := groupColor.RGBA()
-		hex := fmt.Sprintf("#%02X%02X%02X", uint8(r>>8), uint8(gg>>8), uint8(b>>8))
+		hex := fmt.Sprintf("#%02X%02X%02X",
+			uint8(groupColor.R*255+0.5),
+			uint8(groupColor.G*255+0.5),
+			uint8(groupColor.B*255+0.5))
 		params.Color = hex
 		if params.Fill == "" {
 			params.Fill = hex
@@ -37,9 +54,9 @@ func drawLayer(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, g geom.Layer
 
 	switch g.Geom {
 	case geom.TypePoint:
-		drawPoints(cv, c, ds, xCol, yCol, continuousColor, w, h, xMin, xMax, yMin, yMax, params)
+		drawPoints(cv, c, ds, xCol, yCol, contColorCol, contScale, w, h, xMin, xMax, yMin, yMax, params)
 	case geom.TypeLine, geom.TypeSmooth:
-		drawLine(cv, c, ds, xCol, yCol, continuousColor, w, h, xMin, xMax, yMin, yMax, params)
+		drawLine(cv, c, ds, xCol, yCol, contColorCol, contScale, w, h, xMin, xMax, yMin, yMax, params)
 	case geom.TypeStep:
 		drawStep(cv, c, ds, xCol, yCol, w, h, xMin, xMax, yMin, yMax, params)
 	case geom.TypeBar, geom.TypeHistogram:
@@ -61,7 +78,7 @@ func drawLayer(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, g geom.Layer
 	}
 }
 
-func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, continuousColor string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
+func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, contColorCol string, contScale *colormap.Scale, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
 	xVals := getFloat64Values(ds, xCol)
 	yVals := getFloat64Values(ds, yCol)
 	if xVals == nil || yVals == nil {
@@ -77,21 +94,8 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 		alpha = 1
 	}
 
-	// Continuous color: read z values and find range.
-	zVals := getFloat64Values(ds, continuousColor)
-	var zMin, zMax float64
-	if len(zVals) > 0 {
-		zMin, zMax = zVals[0], zVals[0]
-		for _, v := range zVals[1:] {
-			if v < zMin {
-				zMin = v
-			}
-			if v > zMax {
-				zMax = v
-			}
-		}
-	}
-
+	// Continuous color: read z values through the scale.
+	zVals := getFloat64Values(ds, contColorCol)
 	cr, cg, cb := resolveColor(p.Color, 0.3, 0.5, 0.8)
 
 	n := len(xVals)
@@ -103,11 +107,9 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 		ny := normalize(yVals[i], yMin, yMax)
 		px, py := c.Transform(nx, ny, w, h)
 
-		if i < len(zVals) && zMax > zMin {
-			t := (zVals[i] - zMin) / (zMax - zMin)
-			gc := icolor.Viridis(t)
-			rv, gv, bv, _ := gc.RGBA()
-			cv.SetRGBA(float64(rv)/65535.0, float64(gv)/65535.0, float64(bv)/65535.0, alpha)
+		if i < len(zVals) && contScale != nil {
+			gc := contScale.At(zVals[i])
+			cv.SetRGBA(gc.R, gc.G, gc.B, alpha)
 		} else {
 			cv.SetRGBA(cr, cg, cb, alpha)
 		}
@@ -116,7 +118,7 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 	}
 }
 
-func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, continuousColor string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
+func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, contColorCol string, contScale *colormap.Scale, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
 	xVals := getFloat64Values(ds, xCol)
 	yVals := getFloat64Values(ds, yCol)
 	if xVals == nil || yVals == nil {
@@ -146,24 +148,12 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 		return
 	}
 
-	// Continuous color: read z values and find range.
-	zVals := getFloat64Values(ds, continuousColor)
-	var zMin, zMax float64
-	if len(zVals) > 0 {
-		zMin, zMax = zVals[0], zVals[0]
-		for _, v := range zVals[1:] {
-			if v < zMin {
-				zMin = v
-			}
-			if v > zMax {
-				zMax = v
-			}
-		}
-	}
+	// Continuous color samples the scale at each segment midpoint.
+	zVals := getFloat64Values(ds, contColorCol)
 
 	cv.SetLineWidth(lw)
 
-	if len(zVals) >= len(pts) && zMax > zMin {
+	if len(zVals) >= len(pts) && contScale != nil {
 		// Per-segment gradient coloring.
 		for i := 1; i < len(pts); i++ {
 			nx0 := normalize(pts[i-1].x, xMin, xMax)
@@ -173,11 +163,9 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 			px0, py0 := c.Transform(nx0, ny0, w, h)
 			px1, py1 := c.Transform(nx1, ny1, w, h)
 
-			// Color from midpoint of segment's z range.
-			t := ((zVals[i-1]+zVals[i])/2 - zMin) / (zMax - zMin)
-			gc := icolor.Viridis(t)
-			rv, gv, bv, _ := gc.RGBA()
-			cv.SetRGBA(float64(rv)/65535.0, float64(gv)/65535.0, float64(bv)/65535.0, alpha)
+			zMid := (zVals[i-1] + zVals[i]) / 2
+			gc := contScale.At(zMid)
+			cv.SetRGBA(gc.R, gc.G, gc.B, alpha)
 			cv.DrawLine(px0, py0, px1, py1)
 			cv.Stroke()
 		}

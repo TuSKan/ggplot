@@ -279,19 +279,24 @@ var _ dataset.AnyColumn       = (*arrowFloat64Column)(nil)
 var _ dataset.Column[float64] = (*arrowFloat64Column)(nil)
 ```
 
-### Dataset (`dataset.go`)
+### Table (`dataset.go`)
+
+The core data interface is `Table`. The `Dataset` type (defined in `frame.go`)
+is a fluent wrapper around a `Table` that carries a deferred error; engine
+sub-interfaces always operate on `Table`.
 
 ```go
-type Dataset interface {
+type Table interface {
     Schema() *Schema
     Column(name string) (AnyColumn, error)
-    Len() int
+    NumRows() int64
+    NumCols() int64
 }
 
 // Free functions:
-func Names(ds Dataset) []string     // extract column names from schema
-func Close(ds Dataset) error        // release resources if Closer
-func GetEngine(ds Dataset) Engine   // extract engine if HasEngine
+func Names(ds Table) []string     // extract column names from schema
+func Close(ds Table) error        // release resources if Closer
+func GetEngine(ds Table) Engine   // extract engine if HasEngine
 ```
 
 ---
@@ -312,14 +317,14 @@ type Engine interface {
 
 ```go
 type HasEngine interface {
-    Dataset
+    Table
     Engine() Engine
 }
 
-// When transformations produce new datasets, they carry the engine forward.
-// stat packages and ggplot can produce new datasets using the same engine
+// When transformations produce new tables, they carry the engine forward.
+// stat packages and ggplot can produce new tables using the same engine
 // without importing engine-specific packages.
-func GetEngine(ds Dataset) Engine   // nil if dataset has no engine
+func GetEngine(ds Table) Engine   // nil if dataset has no engine
 ```
 
 ### Data Construction
@@ -335,7 +340,7 @@ type ColumnFactory interface {
     NewStringColumn(name string, data []string) AnyColumn
     NewBoolColumn(name string, data []bool) AnyColumn
     NewTimestampColumn(name string, data []int64) AnyColumn
-    FromColumns(schema *Schema, cols ...AnyColumn) (Dataset, error)
+    FromColumns(schema *Schema, cols ...AnyColumn) (Table, error)
 }
 ```
 
@@ -354,7 +359,7 @@ type Builder interface {
     Int64(col string) Int64Appender
     String(col string) StringAppender
     Bool(col string) BoolAppender
-    Build() (Dataset, error)
+    Build() (Table, error)
 }
 
 // Each appender is typed — no boxing, no interface{} per row:
@@ -378,14 +383,14 @@ Engine-native row manipulation — scatter-gather, slicing, sort permutation.
 
 ```go
 type Selector interface {
-    Take(col AnyColumn, indices []int) (AnyColumn, error)   // scatter-gather
-    SliceColumn(col AnyColumn, start, end int) (AnyColumn, error) // sub-range
-    SortIndices(col AnyColumn) ([]int, error)               // sort permutation
-    FilterIndices(mask []bool) []int                        // mask → indices
+    Select(col AnyColumn, indices []int) (AnyColumn, error)   // scatter-gather (Arrow "Take")
+    Slice(col AnyColumn, start, end int) (AnyColumn, error)   // sub-range
+    SortIndices(col AnyColumn) ([]int, error)                  // sort permutation
+    FilterIndices(mask []bool) []int                           // mask → indices
 }
 
 // memory: direct slice ops, slices.SortFunc
-// arrow: array.NewSlice (zero-copy), builder-based Take
+// arrow: array.NewSlice (zero-copy), builder-based Select
 ```
 
 #### Aggregator
@@ -395,21 +400,20 @@ Arrow compute kernel type rules:
 
 ```go
 type Aggregator interface {
-    Sum(col AnyColumn) (AnyColumn, error)       // numeric → same type
-    Mean(col AnyColumn) (AnyColumn, error)      // numeric → float64
-    Min(col AnyColumn) (AnyColumn, error)       // any ordered type
-    Max(col AnyColumn) (AnyColumn, error)       // any ordered type
-    Count(col AnyColumn) (AnyColumn, error)     // any → int64
-    Median(col AnyColumn) (AnyColumn, error)    // numeric → float64
-    Variance(col AnyColumn) (AnyColumn, error)  // numeric → float64
+    Sum(col AnyColumn) (AnyColumn, error)                                 // numeric → same type
+    Mean(col AnyColumn) (AnyColumn, error)                                // numeric → float64
+    MinMax(col AnyColumn) (min AnyColumn, max AnyColumn, err error)       // any ordered type, single pass
+    Count(col AnyColumn) (AnyColumn, error)                               // any → int64
+    Median(col AnyColumn) (AnyColumn, error)                              // numeric → float64
+    Variance(col AnyColumn) (AnyColumn, error)                            // numeric → float64
 }
 
 // Type preservation examples:
-//   Sum(float64 col) → AnyColumn wrapping float64
-//   Sum(int64 col)   → AnyColumn wrapping int64
-//   Min(string col)  → AnyColumn wrapping string (lexicographic)
-//   Min(timestamp)   → AnyColumn wrapping int64 (earliest)
-//   Count(any col)   → AnyColumn wrapping int64
+//   Sum(float64 col)    → AnyColumn wrapping float64
+//   Sum(int64 col)      → AnyColumn wrapping int64
+//   MinMax(string col)  → (min, max) AnyColumns wrapping string (lexicographic)
+//   MinMax(timestamp)   → (min, max) AnyColumns wrapping int64 (earliest, latest)
+//   Count(any col)      → AnyColumn wrapping int64
 ```
 
 #### Caster
@@ -440,7 +444,7 @@ type Windower interface {
 
 ```go
 type Joiner interface {
-    Join(left, right Dataset, spec JoinSpec) (Dataset, error)
+    Join(left, right Table, spec JoinSpec) (Table, error)
 }
 ```
 
@@ -448,11 +452,11 @@ type Joiner interface {
 
 ```go
 type Reshaper interface {
-    PivotLonger(ds Dataset, spec PivotLongerSpec) (Dataset, error)
-    PivotWider(ds Dataset, spec PivotWiderSpec) (Dataset, error)
-    Separate(ds Dataset, col string, into []string, sep string) (Dataset, error)
-    Concatenate(ds Dataset, col string, from []string, sep string) (Dataset, error)
-    Complete(ds Dataset, cols ...string) (Dataset, error)
+    PivotLonger(ds Table, spec PivotLongerSpec) (Table, error)
+    PivotWider(ds Table, spec PivotWiderSpec) (Table, error)
+    Separate(ds Table, col string, into []string, sep string) (Table, error)
+    Concatenate(ds Table, col string, from []string, sep string) (Table, error)
+    Complete(ds Table, cols ...string) (Table, error)
 }
 ```
 
@@ -460,18 +464,18 @@ type Reshaper interface {
 
 ```go
 type Filterer interface {
-    Filter(ds Dataset, mask Masker) (Dataset, error)
+    Filter(ds Table, mask Masker) (Table, error)
 }
 
 type Filler interface {
     Fill(col AnyColumn, dir FillDirection) (AnyColumn, error)
-    DropNA(ds Dataset, cols ...string) (Dataset, error)
+    DropNA(ds Table, cols ...string) (Table, error)
     ReplaceNA(col AnyColumn, defaultVal float64) (AnyColumn, error)
 }
 
 type Composer interface {
-    Stack(datasets ...Dataset) (Dataset, error)
-    Combine(datasets ...Dataset) (Dataset, error)
+    Stack(datasets ...Table) (Table, error)
+    Combine(datasets ...Table) (Table, error)
 }
 ```
 
@@ -732,20 +736,26 @@ dataset.From(names).Combine(scores, ranks)
 
 ## Utility Packages
 
+> **Status (2026-04):** of the packages below, only `csv/` and `parquet/` exist
+> on disk. `ipc/`, `json/`, `apply/`, `strings/`, `factor/`, and `datetime/` are
+> design sketches for the Phase 6 work in `docs/IMPROVEMENTS.md` — the import
+> paths shown will not compile yet. The end-to-end example at the bottom of
+> this file uses several of these and is therefore aspirational.
+
 ### Data Import/Export
 
 ```go
 import (
     "github.com/TuSKan/ggplot/dataset/csv"
     "github.com/TuSKan/ggplot/dataset/parquet"
-    "github.com/TuSKan/ggplot/dataset/ipc"
-    "github.com/TuSKan/ggplot/dataset/json"
+    "github.com/TuSKan/ggplot/dataset/ipc"   // planned
+    "github.com/TuSKan/ggplot/dataset/json"  // planned
 )
 
 ds, _ := csv.Read("flights.csv", csv.WithEngine(eng))
 ds, _ := parquet.Read("big_table.parquet", parquet.WithEngine(eng))
-ds, _ := ipc.Read("data.arrow", ipc.WithEngine(eng))
-ds, _ := json.Read("records.jsonl", json.WithEngine(eng))
+ds, _ := ipc.Read("data.arrow", ipc.WithEngine(eng))     // planned
+ds, _ := json.Read("records.jsonl", json.WithEngine(eng)) // planned
 
 csv.Write(ds, "output.csv")
 parquet.Write(ds, "output.parquet")

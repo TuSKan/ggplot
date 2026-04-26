@@ -4,6 +4,7 @@ import (
 	"maps"
 
 	"github.com/TuSKan/ggplot/aes"
+	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/coord"
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/facet"
@@ -28,6 +29,12 @@ type PlotSpec struct {
 	// ScaleOverrides holds user-specified scale configurations, keyed by
 	// aesthetic channel ("x", "y", "color", etc.).
 	ScaleOverrides map[string]ScaleOverride
+
+	// ColorScales holds user-specified color/fill scales, keyed by
+	// aesthetic channel ("color" or "fill"). nil entries fall back to
+	// the auto-detected default ([colormap.Viridis] for continuous data,
+	// [colormap.Tab10] for discrete data).
+	ColorScales map[string]*colormap.Scale
 
 	// Coord defines the coordinate system (default: Cartesian).
 	Coord coord.Coord

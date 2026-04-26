@@ -13,8 +13,12 @@
 PlotSpec → Facet Split → Stat Transform → Scale Training → Layout → Render
 ```
 
-All data flows through the `dataset.Dataset` abstraction, which provides a columnar,
-iterator-based interface backed by either native Go slices or Apache Arrow arrays.
+All data flows through the `dataset.Table` abstraction, which provides a columnar,
+iterator-based interface. Three engine backends implement it: native Go slices
+(`dataset/memory`), Apache Arrow arrays (`dataset/arrow`), and BigQuery SQL
+pushdown (`dataset/bigquery`). Frame verbs (defined on `dataset.Dataset`,
+the fluent wrapper) execute eagerly on memory/arrow; BigQuery accumulates SQL
+internally before materializing via the Storage Read API.
 
 ---
 

@@ -6,10 +6,10 @@ require (
 	cloud.google.com/go/bigquery v1.76.0
 	github.com/ajroetker/go-highway v0.0.12
 	github.com/apache/arrow-go/v18 v18.5.3-0.20260421173032-c5f094327715
-	github.com/gogpu/gg v0.38.1
+	github.com/gogpu/gg v0.43.2
 	github.com/nnnkkk7/go-simdcsv v0.1.0
 	github.com/parquet-go/parquet-go v0.29.0
-	golang.org/x/image v0.37.0
+	golang.org/x/image v0.39.0
 	google.golang.org/api v0.276.0
 	google.golang.org/protobuf v1.36.11
 )
@@ -29,8 +29,8 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-text/typesetting v0.3.4 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
-	github.com/gogpu/gpucontext v0.11.0 // indirect
-	github.com/gogpu/gputypes v0.3.0 // indirect
+	github.com/gogpu/gpucontext v0.15.0 // indirect
+	github.com/gogpu/gputypes v0.5.0 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -58,7 +58,7 @@ require (
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260311193753-579e4da9a98c // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.43.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect

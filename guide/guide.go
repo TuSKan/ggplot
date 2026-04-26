@@ -8,10 +8,11 @@ import (
 	"image/color"
 	"math"
 
+	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/internal/canvas"
-	icolor "github.com/TuSKan/ggplot/internal/color"
 	"github.com/TuSKan/ggplot/scale"
 	"github.com/TuSKan/ggplot/theme"
+	"github.com/gogpu/gg"
 )
 
 // DrawXAxis renders a horizontal axis at the bottom of the data area.
@@ -150,7 +151,7 @@ func DrawGrid(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h float64, 
 // LegendEntry describes one item in the legend.
 type LegendEntry struct {
 	Label string
-	Color color.Color
+	Color gg.RGBA
 }
 
 // DrawLegend renders a categorical legend to the right of the data area.
@@ -172,7 +173,7 @@ func DrawLegend(cv canvas.Canvas, title string, entries []LegendEntry, x, y floa
 	}
 
 	for _, e := range entries {
-		cv.SetColor(e.Color)
+		cv.SetRGBA(e.Color.R, e.Color.G, e.Color.B, e.Color.A)
 		cv.DrawRectangle(x, curY-swatchSize/2, swatchSize, swatchSize)
 		cv.Fill()
 
@@ -186,11 +187,14 @@ func DrawLegend(cv canvas.Canvas, title string, entries []LegendEntry, x, y floa
 }
 
 // ColorBarSpec describes a continuous color bar legend.
+//
+// Cmap and Norm replace the previous opaque ColorFunc field: the bar walks
+// Cmap.At directly across the [0,1] range, and Norm provides the data-space
+// labels at the endpoints (and any future intermediate ticks).
 type ColorBarSpec struct {
-	Title    string
-	Min, Max float64
-	// ColorFunc maps [0,1] → color.Color. If nil, Viridis is used.
-	ColorFunc func(float64) color.Color
+	Title string
+	Cmap  colormap.Cmap
+	Norm  colormap.Norm
 }
 
 // DrawColorBar renders a continuous color bar legend at the given position.
@@ -207,9 +211,9 @@ func DrawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th th
 		y += th.Text.Legend.Size + 6
 	}
 
-	colorFn := spec.ColorFunc
-	if colorFn == nil {
-		colorFn = defaultViridis
+	cm := spec.Cmap
+	if cm == nil {
+		cm = colormap.Viridis
 	}
 
 	// Draw gradient bar as thin horizontal strips (top = max, bottom = min).
@@ -221,8 +225,8 @@ func DrawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th th
 	for i := 0; i < nStrips; i++ {
 		// t=1 at top (max), t=0 at bottom (min).
 		t := 1.0 - float64(i)/float64(nStrips-1)
-		c := colorFn(t)
-		cv.SetColor(c)
+		c := cm.At(t)
+		cv.SetRGBA(c.R, c.G, c.B, c.A)
 		cv.DrawRectangle(x, y+float64(i)*stripH, barW, stripH+0.5)
 		cv.Fill()
 	}
@@ -233,12 +237,19 @@ func DrawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th th
 	cv.DrawRectangle(x, y, barW, barH)
 	cv.Stroke()
 
-	// Max label (top) and Min label (bottom).
+	// Max label (top) and Min label (bottom). Use the Norm's data-space
+	// bounds when available; otherwise fall back to "high" / "low".
 	cv.SetRGBA(tr, tg, tb, 1)
 	cv.SetFontSize(th.Text.Legend.Size * 0.9)
 	labelX := x + barW + 4
-	cv.DrawStringAnchored(formatNum(spec.Max), labelX, y+4, 0, 0.5)
-	cv.DrawStringAnchored(formatNum(spec.Min), labelX, y+barH-4, 0, 0.5)
+	hi, lo := "high", "low"
+	if spec.Norm != nil {
+		vmin, vmax := spec.Norm.Bounds()
+		hi = formatNum(vmax)
+		lo = formatNum(vmin)
+	}
+	cv.DrawStringAnchored(hi, labelX, y+4, 0, 0.5)
+	cv.DrawStringAnchored(lo, labelX, y+barH-4, 0, 0.5)
 }
 
 func formatNum(v float64) string {
@@ -271,7 +282,7 @@ func DrawLegendHorizontal(cv canvas.Canvas, title string, entries []LegendEntry,
 		if curX > x+maxW {
 			break
 		}
-		cv.SetColor(e.Color)
+		cv.SetRGBA(e.Color.R, e.Color.G, e.Color.B, e.Color.A)
 		cv.DrawRectangle(curX, y-swatchSize/2, swatchSize, swatchSize)
 		cv.Fill()
 
@@ -299,9 +310,9 @@ func DrawColorBarHorizontal(cv canvas.Canvas, spec ColorBarSpec, x, y, barW floa
 		startX += tw + 8
 	}
 
-	colorFn := spec.ColorFunc
-	if colorFn == nil {
-		colorFn = defaultViridis
+	cm := spec.Cmap
+	if cm == nil {
+		cm = colormap.Viridis
 	}
 
 	availW := barW - (startX - x)
@@ -317,8 +328,8 @@ func DrawColorBarHorizontal(cv canvas.Canvas, spec ColorBarSpec, x, y, barW floa
 	stripW := availW / float64(nStrips)
 	for i := 0; i < nStrips; i++ {
 		t := float64(i) / float64(nStrips-1)
-		c := colorFn(t)
-		cv.SetColor(c)
+		c := cm.At(t)
+		cv.SetRGBA(c.R, c.G, c.B, c.A)
 		cv.DrawRectangle(startX+float64(i)*stripW, y, stripW+0.5, barH)
 		cv.Fill()
 	}
@@ -332,8 +343,14 @@ func DrawColorBarHorizontal(cv canvas.Canvas, spec ColorBarSpec, x, y, barW floa
 	// Min / Max labels.
 	cv.SetRGBA(tr, tg, tb, 1)
 	cv.SetFontSize(th.Text.Legend.Size * 0.85)
-	cv.DrawStringAnchored(formatNum(spec.Min), startX, y+barH+10, 0.5, 0.5)
-	cv.DrawStringAnchored(formatNum(spec.Max), startX+availW, y+barH+10, 0.5, 0.5)
+	lo, hi := "low", "high"
+	if spec.Norm != nil {
+		vmin, vmax := spec.Norm.Bounds()
+		lo = formatNum(vmin)
+		hi = formatNum(vmax)
+	}
+	cv.DrawStringAnchored(lo, startX, y+barH+10, 0.5, 0.5)
+	cv.DrawStringAnchored(hi, startX+availW, y+barH+10, 0.5, 0.5)
 }
 
 // --- Helpers ---
@@ -344,8 +361,4 @@ func rgbaOf(c color.Color) (float64, float64, float64, float64) {
 	}
 	r, g, b, a := c.RGBA()
 	return float64(r) / 65535.0, float64(g) / 65535.0, float64(b) / 65535.0, float64(a) / 65535.0
-}
-
-func defaultViridis(t float64) color.Color {
-	return icolor.Viridis(t)
 }

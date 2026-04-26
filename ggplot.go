@@ -32,22 +32,22 @@ package ggplot
 import (
 	"context"
 	"fmt"
-	"image/color"
 	"io"
 	"math"
 
 	"github.com/TuSKan/ggplot/aes"
+	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/coord"
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
 	"github.com/TuSKan/ggplot/guide"
 	"github.com/TuSKan/ggplot/internal/canvas"
-	icolor "github.com/TuSKan/ggplot/internal/color"
 	"github.com/TuSKan/ggplot/internal/grammar"
 	"github.com/TuSKan/ggplot/scale"
 	"github.com/TuSKan/ggplot/stat"
 	"github.com/TuSKan/ggplot/theme"
+	"github.com/gogpu/gg"
 )
 
 // Plot is the immutable, declarative plot builder. Every method returns a new
@@ -106,12 +106,24 @@ func (p *Plot) clone() *Plot {
 		scales[k] = grammar.ScaleOverride{Type: v.Type, Params: params}
 	}
 
+	// ColorScales hold pointer values; clone the map but share the pointed-to
+	// Scale (Scale itself is treated as user-supplied — replacing the entry
+	// for an aesthetic always installs a fresh value).
+	var colorScales map[string]*colormap.Scale
+	if len(p.spec.ColorScales) > 0 {
+		colorScales = make(map[string]*colormap.Scale, len(p.spec.ColorScales))
+		for k, v := range p.spec.ColorScales {
+			colorScales[k] = v
+		}
+	}
+
 	return &Plot{
 		spec: grammar.PlotSpec{
 			Dataset:        p.spec.Dataset,
 			GlobalMapping:  p.spec.GlobalMapping.Merge(nil),
 			Layers:         layers,
 			ScaleOverrides: scales,
+			ColorScales:    colorScales,
 			Coord:          p.spec.Coord,
 			Facet:          p.spec.Facet,
 			ThemeName:      p.spec.ThemeName,
@@ -121,6 +133,69 @@ func (p *Plot) clone() *Plot {
 			LegendPosition: p.spec.LegendPosition,
 		},
 	}
+}
+
+// ScaleColor configures the color aesthetic to use the given colormap.
+// The cmap is composed with a default LinearNorm for continuous data, or
+// used as a Listed palette for discrete data. Pass nil to clear an existing
+// override and fall back to defaults.
+func (p *Plot) ScaleColor(c colormap.Cmap) *Plot {
+	cloned := p.clone()
+	if cloned.spec.ColorScales == nil {
+		cloned.spec.ColorScales = make(map[string]*colormap.Scale)
+	}
+	if c == nil {
+		delete(cloned.spec.ColorScales, "color")
+		return cloned
+	}
+	if _, ok := c.(*colormap.ListedCmap); ok {
+		cloned.spec.ColorScales["color"] = colormap.NewDiscrete(c)
+	} else {
+		cloned.spec.ColorScales["color"] = colormap.NewContinuous(c, nil)
+	}
+	return cloned
+}
+
+// ScaleFill is the fill-aesthetic counterpart of [Plot.ScaleColor].
+func (p *Plot) ScaleFill(c colormap.Cmap) *Plot {
+	cloned := p.clone()
+	if cloned.spec.ColorScales == nil {
+		cloned.spec.ColorScales = make(map[string]*colormap.Scale)
+	}
+	if c == nil {
+		delete(cloned.spec.ColorScales, "fill")
+		return cloned
+	}
+	if _, ok := c.(*colormap.ListedCmap); ok {
+		cloned.spec.ColorScales["fill"] = colormap.NewDiscrete(c)
+	} else {
+		cloned.spec.ColorScales["fill"] = colormap.NewContinuous(c, nil)
+	}
+	return cloned
+}
+
+// ScaleColorManual maps category labels to specific colors. Categories not
+// in m fall back to the default Tab10 palette in the order they are
+// encountered during dataset training.
+func (p *Plot) ScaleColorManual(m map[string]colormap.Color) *Plot {
+	cloned := p.clone()
+	if cloned.spec.ColorScales == nil {
+		cloned.spec.ColorScales = make(map[string]*colormap.Scale)
+	}
+	cloned.spec.ColorScales["color"] = colormap.NewManual(m)
+	return cloned
+}
+
+// ScaleColorContinuous installs an explicit continuous color scale composed
+// of the given Cmap and Norm. Use this to control LogNorm / TwoSlopeNorm /
+// PowerNorm / data-range limits beyond the simple [Plot.ScaleColor] form.
+func (p *Plot) ScaleColorContinuous(c colormap.Cmap, n colormap.Norm) *Plot {
+	cloned := p.clone()
+	if cloned.spec.ColorScales == nil {
+		cloned.spec.ColorScales = make(map[string]*colormap.Scale)
+	}
+	cloned.spec.ColorScales["color"] = colormap.NewContinuous(c, n)
+	return cloned
 }
 
 // Layer adds a geometry layer to the plot with optional per-layer aesthetic overrides.
@@ -383,6 +458,16 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			}
 
 			if groupCol != "" {
+				// Resolve the discrete color scale: user override, else default Tab10.
+				colorScale := p.spec.ColorScales["color"]
+				if colorScale == nil {
+					colorScale = colormap.NewDiscrete(colormap.Tab10)
+				}
+				// Train on the group column so labels get a stable index.
+				if col, err := ds.Column(groupCol); err == nil {
+					_ = colorScale.Train(col)
+				}
+
 				// Split data by group, assign palette colours.
 				groups, subsets, err := groupByColumn(ds, groupCol)
 				if err != nil {
@@ -393,8 +478,9 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				}
 
 				for gi, grpLabel := range groups {
+					_ = gi // index unused now that color comes from the scale
 					grpDS := subsets[gi]
-					grpColor := icolor.Category10(gi)
+					grpRGBA := colorScale.At(grpLabel)
 
 					grpMerged := make(grammar.AesMap, len(merged))
 					for k, v := range merged {
@@ -423,11 +509,12 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 						}
 					}
 
+					grpColorCopy := grpRGBA
 					resolved = append(resolved, resolvedLayer{
 						geom:       layer.Geom,
 						ds:         grpDS,
 						mapping:    grpMerged,
-						groupColor: grpColor,
+						groupColor: &grpColorCopy,
 						groupLabel: grpLabel,
 					})
 
@@ -443,13 +530,14 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 						if !alreadyHas {
 							legendEntries = append(legendEntries, guide.LegendEntry{
 								Label: grpLabel,
-								Color: grpColor,
+								Color: grpRGBA,
 							})
 						}
 					}
 				}
 			} else {
-				// No grouping — single layer with optional fixed color.
+				// No grouping — single layer with optional fixed color or
+				// continuous color mapping.
 				if s.Name() != stat.Identity {
 					statMapping := make(map[string]string, len(merged))
 					for k, v := range merged {
@@ -469,38 +557,44 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 						merged = updateMappingForStat(statName, merged)
 					}
 				}
-				resolved = append(resolved, resolvedLayer{geom: layer.Geom, ds: ds, mapping: merged, continuousColor: continuousColorCol})
+
+				// Resolve and train the continuous color scale (if any).
+				var contScale *colormap.Scale
+				if continuousColorCol != "" {
+					contScale = p.spec.ColorScales["color"]
+					if contScale == nil {
+						contScale = colormap.NewContinuous(colormap.Viridis, nil)
+					}
+					if col, err := ds.Column(continuousColorCol); err == nil {
+						_ = contScale.Train(col)
+					}
+				}
+
+				resolved = append(resolved, resolvedLayer{
+					geom:         layer.Geom,
+					ds:           ds,
+					mapping:      merged,
+					contColCol:   continuousColorCol,
+					contColScale: contScale,
+				})
 
 				// Build continuous color bar legend spec.
-				if continuousColorCol != "" && colorBarSpec == nil && pi == 0 {
-					if col, err := ds.Column(continuousColorCol); err == nil {
-						if fc, ok := col.(dataset.Column[float64]); ok {
-							vals := fc.Values()
-							zMin, zMax := vals[0], vals[0]
-							for _, v := range vals[1:] {
-								if v < zMin {
-									zMin = v
-								}
-								if v > zMax {
-									zMax = v
-								}
-							}
-							colorBarSpec = &guide.ColorBarSpec{
-								Title: continuousColorCol,
-								Min:   zMin,
-								Max:   zMax,
-							}
-						}
+				if contScale != nil && colorBarSpec == nil && pi == 0 {
+					colorBarSpec = &guide.ColorBarSpec{
+						Title: continuousColorCol,
+						Cmap:  contScale.Cmap(),
+						Norm:  contScale.Norm(),
 					}
 				}
 
 				// Collect legend entry from explicitly labeled layers.
 				if layer.Geom.Params.Label != "" && layer.Geom.Params.Color != "" && pi == 0 {
-					c := icolor.Hex(layer.Geom.Params.Color)
-					legendEntries = append(legendEntries, guide.LegendEntry{
-						Label: layer.Geom.Params.Label,
-						Color: c,
-					})
+					if c, err := colormap.Parse(layer.Geom.Params.Color); err == nil {
+						legendEntries = append(legendEntries, guide.LegendEntry{
+							Label: layer.Geom.Params.Label,
+							Color: c,
+						})
+					}
 				}
 			}
 		}
@@ -759,8 +853,12 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				}
 				if colorBarSpec != nil {
 					cv.SetFontSize(th.Text.Legend.Size * 0.9)
-					maxLblW, _ := cv.MeasureString(fmt.Sprintf("%.4g", colorBarSpec.Max))
-					minLblW, _ := cv.MeasureString(fmt.Sprintf("%.4g", colorBarSpec.Min))
+					vmin, vmax := 0.0, 1.0
+					if colorBarSpec.Norm != nil {
+						vmin, vmax = colorBarSpec.Norm.Bounds()
+					}
+					maxLblW, _ := cv.MeasureString(fmt.Sprintf("%.4g", vmax))
+					minLblW, _ := cv.MeasureString(fmt.Sprintf("%.4g", vmin))
 					lblW := math.Max(maxLblW, minLblW)
 					legendW += 14 + lblW + 12
 				}
@@ -868,7 +966,9 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		xMin, xMax = xScale.Bounds()
 		yMin, yMax = yScale.Bounds()
 		for _, rl := range resolved {
-			drawLayer(cv, p.spec.Coord, rl.ds, rl.geom, rl.mapping, rl.groupColor, rl.continuousColor, cellW, cellH, xMin, xMax, yMin, yMax)
+			drawLayer(cv, p.spec.Coord, rl.ds, rl.geom, rl.mapping,
+				rl.groupColor, rl.contColCol, rl.contColScale,
+				cellW, cellH, xMin, xMax, yMin, yMax)
 		}
 		cv.Restore()
 
@@ -959,12 +1059,13 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 
 // resolvedLayer is a layer after stat transformation has been applied.
 type resolvedLayer struct {
-	geom            geom.Layer
-	ds              dataset.Dataset
-	mapping         grammar.AesMap
-	groupColor      color.Color // nil = use Params.Color; non-nil = assigned by colour aesthetic
-	groupLabel      string      // label for this group (used by legend)
-	continuousColor string      // non-empty = column name for continuous color mapping
+	geom         geom.Layer
+	ds           dataset.Dataset
+	mapping      grammar.AesMap
+	groupColor   *gg.RGBA        // nil = use Params.Color; non-nil = assigned by colour aesthetic
+	groupLabel   string          // label for this group (used by legend)
+	contColCol   string          // non-empty = column name for continuous color mapping
+	contColScale *colormap.Scale // resolved continuous color scale (nil = no continuous color)
 }
 
 // updateMappingForStat updates aesthetic mappings to point to the columns

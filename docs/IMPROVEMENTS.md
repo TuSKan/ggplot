@@ -645,8 +645,8 @@ type Options struct {
 }
 
 type Stat interface {
-    // ...
-    Compute(ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error)
+    // Compute performs the transformation.
+    Compute(ctx context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error)
 }
 ```
 

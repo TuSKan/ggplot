@@ -1,5 +1,8 @@
-// Package dataset provides zero-copy, lazy-evaluating columnar data abstractions
-// for the Grammar of Graphics pipeline.
+// Package dataset provides columnar data abstractions for the Grammar of
+// Graphics pipeline. Frame verbs execute eagerly via the dataset's engine
+// (memory and arrow backends materialize on each verb); the BigQuery engine
+// is the only backend with internal lazy SQL accumulation. Arrow IPC and
+// Parquet ingest paths support zero-copy reads.
 //
 // # Engine-First Architecture
 //
@@ -20,10 +23,11 @@ package dataset
 
 import "fmt"
 
-// Dataset represents an immutable, columnar data source.
+// Table represents an immutable, columnar data source.
 //
-// Implementations include in-memory frames, Arrow tables, and SQL-backed
-// remote tables. All ETL operations are available via [Frame].
+// Implementations include in-memory tables, Arrow tables, and BigQuery-backed
+// remote tables. ETL verbs are exposed by wrapping a Table in a [Dataset]
+// (the fluent API defined in frame.go) via [From].
 type Table interface {
 	// Schema returns the dataset's schema.
 	Schema() *Schema

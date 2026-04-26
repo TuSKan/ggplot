@@ -13,6 +13,7 @@ import (
 
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
+	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
@@ -68,9 +69,10 @@ func main() {
 		aes.Color("species"),
 	).
 		Layer(geom.Point(geom.WithSize(4), geom.WithAlpha(0.8))).
+		ScaleColor(colormap.Set1).
 		Labs(
 			ggplot.Title("Iris Sepal Dimensions"),
-			ggplot.Subtitle("Coloured by species"),
+			ggplot.Subtitle("Coloured by species (Set1 palette)"),
 			ggplot.XLab("Sepal Length (cm)"),
 			ggplot.YLab("Sepal Width (cm)"),
 		)

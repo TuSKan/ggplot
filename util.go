@@ -4,9 +4,9 @@ package ggplot
 import (
 	"image/color"
 
+	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/internal/canvas"
-	icolor "github.com/TuSKan/ggplot/internal/color"
 )
 
 // setColorFromTheme sets the canvas colour from a theme color.Color,
@@ -49,16 +49,17 @@ func normalize(v, min, max float64) float64 {
 	return (v - min) / (max - min)
 }
 
-// resolveColor parses a hex color string into normalized [0,1] RGB.
-// Falls back to defaults if hex is empty or invalid.
-func resolveColor(hex string, defR, defG, defB float64) (float64, float64, float64) {
-	if hex == "" {
+// resolveColor parses a color literal into normalized [0,1] RGB. Accepts hex
+// strings, CSS named colors, "tab:*" aliases, and rgb()/hsl() functional
+// forms via [colormap.Parse]. Falls back to defaults on empty or invalid
+// input.
+func resolveColor(spec string, defR, defG, defB float64) (float64, float64, float64) {
+	if spec == "" {
 		return defR, defG, defB
 	}
-	c := icolor.Hex(hex)
-	if c.A == 0 {
-		// Hex returns transparent on invalid input.
+	c, err := colormap.Parse(spec)
+	if err != nil {
 		return defR, defG, defB
 	}
-	return float64(c.R) / 255.0, float64(c.G) / 255.0, float64(c.B) / 255.0
+	return c.R, c.G, c.B
 }
