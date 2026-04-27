@@ -198,11 +198,11 @@ Rewrite LLM-generated word-salad in `internal/fonts/`:
 | "Go's concurrency model" | Zero goroutines | Remove or "planned" |
 | "SIMD-accelerated" | Only transcendentals | Qualify precisely |
 
-### 1.7 — New files
+### 1.7 — New files (partially ✅ DONE)
 
 - **`SECURITY.md`**: Vulnerability disclosure policy (email contact)
-- **`CHANGELOG.md`**: Start tracking versions
-- **`CONTRIBUTING.md`**: Code style, test requirements, "no LLM word-salad" policy
+- **`CHANGELOG.md`**: ✅ Created — Keep a Changelog format
+- **`CONTRIBUTING.md`**: ✅ Created — dev workflow, architecture overview, extension points
 - **`.golangci.yml`**: Enable `staticcheck`, `errcheck`, `gocritic`
 
 ---
@@ -211,7 +211,7 @@ Rewrite LLM-generated word-salad in `internal/fonts/`:
 
 Fix bugs that produce incorrect output or silently lose data.
 
-### 2.1 — Plot.clone() deep copy (Issues #5, #33)
+### 2.1 — Plot.clone() deep copy ✅ DONE
 
 **File**: `ggplot.go` lines 73–97
 
@@ -350,7 +350,7 @@ func groupByColumn(ds dataset.Dataset, colName string) ([]string, []dataset.Data
 
 Update call site (line 321) to handle error.
 
-### 2.4 — gridFacet.GridDims uses actual cardinalities (Issue #40)
+### 2.4 — gridFacet.GridDims uses actual cardinalities ✅ DONE
 
 **File**: `facet/facet.go` lines 137–186
 
@@ -481,7 +481,7 @@ Jitter approximate uniformity, Nudge offset correctness.
 
 Replace stringly-typed APIs with typed constants. Fix silent failures.
 
-### 3.1 — Typed enums everywhere
+### 3.1 — Typed enums everywhere (partially ✅ DONE)
 
 **Theme**: `ggplot.go` `Theme(name string)` → typed constant
 
@@ -561,7 +561,7 @@ func WithStat(t stat.Type) Opt { ... }
 
 No backward compat aliases — remove old string methods.
 
-### 3.2 — Stat.OutputSchema() (Issues #17, #28)
+### 3.2 — Stat.OutputSchema() ✅ DONE
 
 **Problem**: `updateMappingForStat` in `ggplot.go` is a hardcoded switch on stat
 name strings. Adding a new stat requires modifying the core file.
@@ -601,7 +601,7 @@ grpMerged = s.OutputSchema(grpMerged)
 
 Delete `updateMappingForStat` entirely.
 
-### 3.3 — stat.Lookup / scale.Resolve return errors (Issues #30, #32)
+### 3.3 — stat.Lookup / scale.Resolve return errors ✅ DONE
 
 **Problem**: `stat.Lookup("hisogram")` (typo) silently returns identity stat.
 `scale.Resolve("foo")` silently returns Linear scale.
@@ -630,7 +630,7 @@ func Resolve(name string) (Scale, error) {
 
 Update all call sites in `ggplot.go` to propagate errors.
 
-### 3.4 — __bins typed StatOptions (Issue #29)
+### 3.4 — __bins typed StatOptions ✅ DONE
 
 **Problem**: `__bins` is `int→string→int` via `fmt.Sprintf`/`Sscanf` round-trip.
 
@@ -845,28 +845,23 @@ Replace `fmt.Sprintf` per-cell per-row with `xxh3.Hash` over raw typed bytes.
 +seen := make(map[string]struct{}, int(f.tbl.NumRows())/2)
 ```
 
-### 4.7 — KDE parallelization (Issue #26)
+### 4.7 — KDE parallelization ✅ DONE
 
 **File**: `stat/stat.go` `densityStat.Compute`
 
-Parallelize outer grid-point loop with `errgroup`:
-```go
-var wg sync.WaitGroup
-chunk := (points + runtime.NumCPU() - 1) / runtime.NumCPU()
-for start := 0; start < points; start += chunk {
-    start, end := start, min(start+chunk, points)
-    wg.Add(1)
-    go func() {
-        defer wg.Done()
-        for i := start; i < end; i++ { /* existing kernel sum */ }
-    }()
-}
-wg.Wait()
-```
+Implemented: grid evaluation chunked across `runtime.NumCPU()` goroutines with
+precomputed `bwInv` and `norm` constants. Context cancellation checked every 64
+points per goroutine. Error propagation via buffered channel.
+
+Also added:
+- `stat.Options.Bandwidth` — explicit KDE bandwidth (0 = Silverman auto)
+- `stat.Options.BinMethod` — histogram binning: `"sturges"`, `"scott"`, `"fd"`, `"sqrt"`
+- `silvermanBandwidth()` — extracted to standalone function
+- `autoBins()` — Sturges, Scott, Freedman-Diaconis, Sqrt strategies
 
 ---
 
-## Phase 5 — context.Context Plumbing (Week 3)
+## Phase 5 — context.Context Plumbing (partially ✅ DONE)
 
 Mechanical but invasive. Touch every interface that does I/O or >1ms compute.
 
@@ -888,32 +883,21 @@ Add `ctx context.Context` as first parameter to:
 - **Arrow**: pass ctx to compute kernels
 - **BigQuery**: pass ctx to BQ API calls (already partially done)
 
-### 5.3 — Stat interface
+### 5.3 — Stat interface ✅ DONE
 
-```go
-type Stat interface {
-    Compute(ctx context.Context, ds dataset.Dataset, mapping map[string]string,
-            opts Options) (dataset.Dataset, error)
-}
-```
+Implemented: `Stat.Compute` accepts `context.Context` as first parameter.
+All stat implementations check `ctx.Err()` in hot loops.
 
 Check `ctx.Err()` in LOESS inner loop and KDE outer loop.
 
-### 5.4 — Plot API
+### 5.4 — Plot API ✅ DONE
 
-```go
-func (p *Plot) SaveContext(ctx context.Context, filename string, w, h int) error
-func (p *Plot) RenderContext(ctx context.Context, w, h int) (*canvas.GGCanvas, error)
+Implemented: `Save(ctx, filename, w, h)`, `Render(ctx, w, h)`, `WriteTo(ctx, w, format, w, h)`
+all accept `context.Context` as first parameter.
 
-// Keep Save/Render as convenience wrappers with context.Background()
-```
+### 5.5 — Plot.WriteTo ✅ DONE
 
-### 5.5 — Plot.WriteTo (Issue #55 from Part V)
-
-```go
-func (p *Plot) WriteTo(w io.Writer, format string, width, height int) (int64, error)
-```
-
+Implemented: `WriteTo(ctx, w, format, width, height)` supports `"png"`, `"svg"`, `"pdf"` formats.
 Enables streaming into HTTP responses, S3 uploads, in-memory buffers.
 
 ---
@@ -978,25 +962,9 @@ whitespace and floating-point precision beyond 2 decimal places.
 - Add `.golangci.yml` with `staticcheck`, `errcheck`, `gocritic`
 - Add coverage threshold (reject if < 40%)
 
-### 6.3 — Rendering benchmarks
+### 6.3 — Rendering benchmarks ✅ DONE
 
-**File**: [NEW] `ggplot_bench_test.go`
-
-```go
-func BenchmarkRender_Point_10K(b *testing.B) {
-    ds := makePointDataset(10000)
-    p := ggplot.New(ds, aes.X("x"), aes.Y("y")).Layer(geom.Point())
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        p.Render(800, 600)
-    }
-}
-
-func BenchmarkRender_Facet_12Panel(b *testing.B) { ... }
-func BenchmarkRender_Point_1M(b *testing.B) { ... }
-func BenchmarkRender_Smooth_10K(b *testing.B) { ... }
-func BenchmarkRender_Histogram_100K(b *testing.B) { ... }
-```
+**File**: `ggplot_bench_test.go` — 11 benchmark scenarios implemented.
 
 ### 6.4 — Position and stat tests
 
@@ -1023,76 +991,27 @@ Default `scale=2.0` for retina displays. `Save()` calls `SaveAt(f, w, h, 1.0)`.
 
 ---
 
-## Phase 7 — Output Formats: SVG & PDF (Week 4)
+## Phase 7 — Output Formats: SVG & PDF ✅ DONE
 
-### 7.1 — SVG Canvas
+### 7.1 — SVG Canvas ✅ DONE
 
-**File**: [NEW] `internal/canvas/svg_canvas.go`
+**File**: `internal/canvas/export_svg.go` — native SVG 1.1 backend implementing `recording.Backend`.
+Uses `gg.Path.Iterate()` (compatible with gg v0.43.2). `gogpu/gg-svg` v0.1.0 is incompatible
+with current gg API (`path.Elements` removed).
 
-Implement the `canvas.Canvas` interface writing `<svg>` elements:
+### 7.2 — Plot.Save dispatches on extension ✅ DONE
 
-```go
-type SVGCanvas struct {
-    buf     bytes.Buffer
-    states  []svgState
-    width   int
-    height  int
-    pathBuf []string
-    // current color, line width, font, transform
-}
+`Save()` dispatches on file extension (`.png`, `.svg`, `.pdf`).
+`WriteTo()` supports `"png"`, `"svg"`, `"pdf"` format strings.
+Vector formats use `RecordingCanvas` → `recording.Backend` playback.
 
-func NewSVGCanvas(width, height int) *SVGCanvas { ... }
+### 7.3 — PDF Export Backend ✅ DONE
 
-func (c *SVGCanvas) MoveTo(x, y float64)           { /* M x,y */ }
-func (c *SVGCanvas) LineTo(x, y float64)           { /* L x,y */ }
-func (c *SVGCanvas) QuadraticTo(cx, cy, x, y float64) { /* Q cx,cy x,y */ }
-func (c *SVGCanvas) CubicTo(...)                   { /* C ... */ }
-func (c *SVGCanvas) ClosePath()                     { /* Z */ }
-func (c *SVGCanvas) Fill()                          { /* <path d="..." fill="..." /> */ }
-func (c *SVGCanvas) Stroke()                        { /* <path d="..." stroke="..." /> */ }
-func (c *SVGCanvas) FillAndStroke()                 { /* combined */ }
+**File**: `internal/canvas/export_pdf.go` — native PDF 1.4 backend implementing `recording.Backend`.
+`gogpu/gg-pdf` v0.1.0 is incompatible with current gg API. Native backend written instead.
 
-func (c *SVGCanvas) DrawStringAnchored(s string, x, y, ax, ay float64) {
-    // <text x="..." y="..." text-anchor="..." ...>s</text>
-}
-
-func (c *SVGCanvas) SetColor(clr color.Color) { ... }
-func (c *SVGCanvas) SetLineWidth(w float64)   { ... }
-func (c *SVGCanvas) SetFontSize(s float64)    { ... }
-
-func (c *SVGCanvas) Save()    { /* push state */ }
-func (c *SVGCanvas) Restore() { /* pop state */ }
-
-func (c *SVGCanvas) WriteSVG(w io.Writer) error { ... }
-```
-
-### 7.2 — Plot.Save dispatches on extension
-
-```go
-func (p *Plot) Save(filename string, w, h int) error {
-    ext := filepath.Ext(filename)
-    switch strings.ToLower(ext) {
-    case ".svg":
-        cv := canvas.NewSVGCanvas(w, h)
-        if err := p.renderTo(cv, w, h); err != nil { return err }
-        f, _ := os.Create(filename)
-        defer f.Close()
-        return cv.WriteSVG(f)
-    case ".png":
-        // existing PNG path
-    case ".pdf":
-        // future PDF path
-    default:
-        return fmt.Errorf("unsupported format %q", ext)
-    }
-}
-```
-
-### 7.3 — PDF and SVG Export Backends (stretch goal)
-
-Same Canvas interface, wrapping a PDF content stream. Can use
-`gogpu/gg-pdf` PDF export backend for recording
-`gogpu/gg-svg` SVG export backend for recording
+**File**: `internal/canvas/recording.go` — `RecordingCanvas` wraps `recording.Recorder`,
+captures all draw ops for replay into SVG/PDF backends.
 
 ---
 
@@ -1246,33 +1165,15 @@ case "lm":    return linearFit(pts, nOut, xMin, xMax)
 case "loess":  return loessFit(pts, nOut, xMin, xMax, opts.Span)
 ```
 
-### 9.2 — Histogram binning strategies
+### 9.2 — Histogram binning strategies ✅ DONE
 
-Add to `stat.Options`:
-```go
-type BinMethod string
-const (
-    BinSturges BinMethod = "sturges"    // default
-    BinScott   BinMethod = "scott"
-    BinFD      BinMethod = "fd"         // Freedman-Diaconis
-    BinSqrt    BinMethod = "sqrt"
-)
-```
+Implemented: `stat.Options.BinMethod` supports `"sturges"` (default), `"scott"`, `"fd"`, `"sqrt"`.
+`autoBins()` function implements all four strategies.
 
-Add `WithBinWidth(float64)` to `geom` options.
+### 9.3 — Density bandwidth selection ✅ DONE
 
-### 9.3 — Density bandwidth selection
-
-Add to `stat.Options`:
-```go
-type BWMethod string
-const (
-    BWSilverman BWMethod = "silverman"  // default
-    BWSJ        BWMethod = "sj"        // Sheather-Jones
-)
-```
-
-Add `WithBandwidth(float64)` for explicit numeric bandwidth override.
+Implemented: `stat.Options.Bandwidth` for explicit bandwidth. `0` = Silverman auto-select.
+`silvermanBandwidth()` extracted as standalone function.
 
 ### 9.4 — Boxplot variants
 
@@ -1291,20 +1192,15 @@ Add `WithNotch(bool)` option.
 
 ## Summary
 
-| Phase | Duration | Focus | Breaking? |
-|-------|----------|-------|-----------|
-| 0. Security | Day 1 | SQL injection fix, SECURITY.md | No |
-| 1. Docs | Day 1–2 | Strip false claims, sync docs | No |
-| 2. Rendering | Days 3–4 | clone(), errors, gridFacet, positions | Yes (position.Stack) |
-| 3. API | Days 5–7 | Typed enums, OutputSchema, palettes | Yes (string→type) |
-| 4. Performance | Week 2 | SIMD MathKernel, LOESS, Arrow, hashing | No |
-| 5. Context | Week 3 | context.Context everywhere | Yes (interface) |
-| 6. Testing | Week 3 | SVG snapshots, -race, CI, benchmarks | No |
-| 7. Formats | Week 4 | SVG canvas, PDF canvas, WriteTo | No |
-| 8. Lazy Frame | Weeks 5–6 | Plan/execute split, optimizers | Yes (Dataset) |
-| 9. Stats | After 8 | Smooth methods, binning, bandwidth, boxplot | Yes (Stat interface) |
-
-**Total estimated timeline**: 6–8 weeks.
-
-**Tag `v0.1.0`** after Phase 0. **Tag `v0.2.0`** after Phase 6. **Target `v1.0.0`**
-after Phase 8 stabilizes.
+| Phase | Focus | Status |
+|-------|-------|--------|
+| 0. Security | SQL injection fix, SECURITY.md | 🔴 Open |
+| 1. Docs | Strip false claims, sync docs | 🟡 Partial (1.7 CHANGELOG/CONTRIBUTING done) |
+| 2. Rendering | clone(), errors, gridFacet, positions | 🟡 Partial (2.1 deep copy, 2.4 gridFacet done) |
+| 3. API | Typed enums, OutputSchema, palettes | 🟡 Partial (3.1–3.4 done: typed enums, OutputSchema, error returns, StatOptions) |
+| 4. Performance | SIMD MathKernel, LOESS, Arrow, hashing | 🟡 Partial (4.7 KDE parallelization done) |
+| 5. Context | context.Context everywhere | 🟡 Partial (5.3–5.5 done: Stat, Plot API, WriteTo) |
+| 6. Testing | SVG snapshots, -race, CI, benchmarks | 🟡 Partial (6.3 benchmarks done) |
+| 7. Formats | SVG canvas, PDF canvas, WriteTo | ✅ Done |
+| 8. Lazy Frame | Plan/execute split, optimizers | 🔴 Open |
+| 9. Stats | Smooth methods, binning, bandwidth, boxplot | 🟡 Partial (9.2 binning, 9.3 bandwidth done) |

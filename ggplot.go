@@ -326,15 +326,52 @@ func YLab(text string) LabOpt { return func(l *grammar.Labels) { l.Y = text } }
 // Caption sets the plot caption.
 func Caption(text string) LabOpt { return func(l *grammar.Labels) { l.Caption = text } }
 
-// Save renders the plot to a PNG file at the given dimensions.
+// Save renders the plot to a file at the given dimensions.
+// The output format is inferred from the file extension:
+//
+//	.png — raster PNG (default)
+//	.svg — SVG 1.1 vector
+//	.pdf — PDF 1.4 vector
 func (p *Plot) Save(ctx context.Context, filename string, width, height int) error {
-	cv := canvas.NewGGCanvas(width, height)
+	ext := fileExt(filename)
+	switch ext {
+	case ".svg", ".pdf":
+		return p.saveVector(ctx, filename, ext, width, height)
+	default:
+		return p.saveRaster(ctx, filename, width, height)
+	}
+}
 
+// saveRaster renders to PNG via GGCanvas.
+func (p *Plot) saveRaster(ctx context.Context, filename string, width, height int) error {
+	cv := canvas.NewGGCanvas(width, height)
 	if err := p.renderTo(ctx, cv, width, height); err != nil {
 		return err
 	}
-
 	return cv.SavePNG(filename)
+}
+
+// saveVector renders via RecordingCanvas and exports to SVG or PDF.
+func (p *Plot) saveVector(ctx context.Context, filename, ext string, width, height int) error {
+	cv := canvas.NewRecordingCanvas(width, height)
+	if err := p.renderTo(ctx, cv, width, height); err != nil {
+		return err
+	}
+	rec := cv.FinishRecording()
+
+	f, err := createFile(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	switch ext {
+	case ".svg":
+		_, err = canvas.ExportSVG(rec, f)
+	case ".pdf":
+		_, err = canvas.ExportPDF(rec, f)
+	}
+	return err
 }
 
 // Render produces the rendered canvas for further processing.
@@ -347,22 +384,43 @@ func (p *Plot) Render(ctx context.Context, width, height int) (*canvas.GGCanvas,
 }
 
 // WriteTo renders the plot and writes the output to w in the given format.
-// Supported formats: "png". Returns the number of bytes written.
+// Supported formats: "png" (default), "svg", "pdf".
+// Returns the number of bytes written.
 func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, height int) (int64, error) {
-	cv := canvas.NewGGCanvas(width, height)
-	if err := p.renderTo(ctx, cv, width, height); err != nil {
-		return 0, err
-	}
-
-	cw := &countWriter{w: w}
 	switch format {
+	case "svg":
+		return p.writeVector(ctx, w, format, width, height)
+	case "pdf":
+		return p.writeVector(ctx, w, format, width, height)
 	case "png", "":
+		cv := canvas.NewGGCanvas(width, height)
+		if err := p.renderTo(ctx, cv, width, height); err != nil {
+			return 0, err
+		}
+		cw := &countWriter{w: w}
 		if err := cv.EncodePNG(cw); err != nil {
 			return cw.n, err
 		}
 		return cw.n, nil
 	default:
-		return 0, fmt.Errorf("ggplot: unsupported format %q", format)
+		return 0, fmt.Errorf("ggplot: unsupported format %q (supported: png, svg, pdf)", format)
+	}
+}
+
+func (p *Plot) writeVector(ctx context.Context, w io.Writer, format string, width, height int) (int64, error) {
+	cv := canvas.NewRecordingCanvas(width, height)
+	if err := p.renderTo(ctx, cv, width, height); err != nil {
+		return 0, err
+	}
+	rec := cv.FinishRecording()
+
+	switch format {
+	case "svg":
+		return canvas.ExportSVG(rec, w)
+	case "pdf":
+		return canvas.ExportPDF(rec, w)
+	default:
+		return 0, fmt.Errorf("ggplot: unsupported vector format %q", format)
 	}
 }
 

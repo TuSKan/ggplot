@@ -1,11 +1,13 @@
 package ggplot_test
 
 import (
+	"bytes"
 	"context"
 	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/TuSKan/ggplot"
@@ -933,5 +935,111 @@ func TestRender_Boxplot_SingleGroup(t *testing.T) {
 	_, err := p.Render(context.Background(), 400, 400)
 	if err != nil {
 		t.Fatalf("Single-group boxplot render failed: %v", err)
+	}
+}
+
+// --- SVG/PDF output tests ---
+
+func TestSave_SVG(t *testing.T) {
+	ds, _ := dataset.NewDataset(
+		memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4}),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{10, 20, 15, 25}),
+	)
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line())
+
+	outPath := filepath.Join(t.TempDir(), "test_output.svg")
+	if err := p.Save(context.Background(), outPath, 400, 300); err != nil {
+		t.Fatalf("SVG Save failed: %v", err)
+	}
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("SVG file read failed: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "<svg") {
+		t.Error("SVG output missing <svg> root element")
+	}
+	if !strings.Contains(content, "</svg>") {
+		t.Error("SVG output missing </svg> closing tag")
+	}
+	if len(data) < 100 {
+		t.Errorf("SVG output suspiciously small: %d bytes", len(data))
+	}
+}
+
+func TestSave_PDF(t *testing.T) {
+	ds, _ := dataset.NewDataset(
+		memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4}),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{10, 20, 15, 25}),
+	)
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line())
+
+	outPath := filepath.Join(t.TempDir(), "test_output.pdf")
+	if err := p.Save(context.Background(), outPath, 400, 300); err != nil {
+		t.Fatalf("PDF Save failed: %v", err)
+	}
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("PDF file read failed: %v", err)
+	}
+	content := string(data)
+	if !strings.HasPrefix(content, "%PDF-") {
+		t.Error("PDF output missing PDF header")
+	}
+	if !strings.Contains(content, "%%EOF") {
+		t.Error("PDF output missing EOF trailer")
+	}
+	if len(data) < 100 {
+		t.Errorf("PDF output suspiciously small: %d bytes", len(data))
+	}
+}
+
+func TestWriteTo_SVG(t *testing.T) {
+	ds, _ := dataset.NewDataset(
+		memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3}),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{5, 10, 15}),
+	)
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point())
+
+	var buf bytes.Buffer
+	n, err := p.WriteTo(context.Background(), &buf, "svg", 300, 200)
+	if err != nil {
+		t.Fatalf("WriteTo SVG failed: %v", err)
+	}
+	if n == 0 {
+		t.Error("WriteTo SVG wrote 0 bytes")
+	}
+	if !strings.Contains(buf.String(), "<svg") {
+		t.Error("WriteTo SVG output missing <svg> element")
+	}
+}
+
+func TestWriteTo_PDF(t *testing.T) {
+	ds, _ := dataset.NewDataset(
+		memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3}),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{5, 10, 15}),
+	)
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point())
+
+	var buf bytes.Buffer
+	n, err := p.WriteTo(context.Background(), &buf, "pdf", 300, 200)
+	if err != nil {
+		t.Fatalf("WriteTo PDF failed: %v", err)
+	}
+	if n == 0 {
+		t.Error("WriteTo PDF wrote 0 bytes")
+	}
+	if !strings.HasPrefix(buf.String(), "%PDF-") {
+		t.Error("WriteTo PDF output missing %PDF- header")
 	}
 }

@@ -10,7 +10,9 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"runtime"
 	"sort"
+	"sync"
 
 	"github.com/TuSKan/ggplot/dataset"
 )
@@ -31,9 +33,11 @@ const (
 // Options holds typed parameters for stat computations,
 // replacing magic string keys like "__bins".
 type Options struct {
-	Bins   int    // number of bins (histogram/bin stat)
-	Method string // smoothing method: "lm", "loess"
-	Points int    // number of output grid points
+	Bins      int     // number of bins (histogram/bin stat); 0 = auto
+	BinMethod string  // binning strategy: "sturges" (default), "scott", "fd", "sqrt"
+	Method    string  // smoothing method: "lm", "loess"
+	Points    int     // number of output grid points
+	Bandwidth float64 // KDE bandwidth; 0 = Silverman auto-select
 }
 
 // Stat computes a statistical transformation on a dataset, producing a
@@ -109,11 +113,10 @@ func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string
 		return dataset.Dataset{}, err
 	}
 
-	// Determine number of bins: explicit opts.Bins > Sturges' rule.
+	// Determine number of bins: explicit opts.Bins, else use BinMethod.
 	nBins := opts.Bins
 	if nBins <= 0 {
-		// Sturges' rule: k = ceil(1 + log2(n))
-		nBins = int(math.Ceil(1.0 + math.Log2(float64(len(vals)))))
+		nBins = autoBins(vals, opts.BinMethod)
 	}
 	if nBins <= 0 {
 		nBins = 1
@@ -228,7 +231,83 @@ func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[
 		return newFloat64Dataset(ds, map[string][]float64{"x": {}, "density": {}})
 	}
 
-	// Silverman's rule-of-thumb bandwidth.
+	// Bandwidth selection.
+	bandwidth := opts.Bandwidth
+	if bandwidth <= 0 {
+		bandwidth = silvermanBandwidth(vals)
+	}
+
+	// Grid size: honour opts.Points if set.
+	points := 512
+	if opts.Points > 0 {
+		points = opts.Points
+	}
+
+	xmin, xmax := vals[0]-3*bandwidth, vals[n-1]+3*bandwidth
+	step := (xmax - xmin) / float64(points-1)
+
+	xs := make([]float64, points)
+	ys := make([]float64, points)
+
+	// Fill xs.
+	for i := range xs {
+		xs[i] = xmin + float64(i)*step
+	}
+
+	// Parallel KDE evaluation: chunk by CPU count.
+	nCPU := runtime.NumCPU()
+	if nCPU > points {
+		nCPU = points
+	}
+	chunk := (points + nCPU - 1) / nCPU
+	var wg sync.WaitGroup
+	errCh := make(chan error, 1)
+
+	for c := 0; c < nCPU; c++ {
+		start := c * chunk
+		end := start + chunk
+		if end > points {
+			end = points
+		}
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
+			bwInv := 1.0 / bandwidth
+			norm := 1.0 / (bandwidth * math.Sqrt(2*math.Pi) * float64(n))
+			for i := start; i < end; i++ {
+				if i%64 == 0 {
+					if err := ctx.Err(); err != nil {
+						select {
+						case errCh <- err:
+						default:
+						}
+						return
+					}
+				}
+				x := xs[i]
+				density := 0.0
+				for _, v := range vals {
+					z := (x - v) * bwInv
+					density += math.Exp(-0.5 * z * z)
+				}
+				ys[i] = density * norm
+			}
+		}(start, end)
+	}
+	wg.Wait()
+
+	select {
+	case err := <-errCh:
+		return dataset.Dataset{}, err
+	default:
+	}
+
+	return newFloat64Dataset(ds, map[string][]float64{"x": xs, "density": ys})
+}
+
+// silvermanBandwidth computes Silverman's rule-of-thumb bandwidth.
+func silvermanBandwidth(vals []float64) float64 {
+	n := len(vals)
 	mean := 0.0
 	for _, v := range vals {
 		mean += v
@@ -245,33 +324,7 @@ func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[
 	if sd == 0 {
 		sd = 1
 	}
-	bandwidth := 1.06 * sd * math.Pow(float64(n), -0.2)
-
-	// Evaluate KDE.
-	points := 512
-	xmin, xmax := vals[0]-3*bandwidth, vals[n-1]+3*bandwidth
-	step := (xmax - xmin) / float64(points-1)
-
-	xs := make([]float64, points)
-	ys := make([]float64, points)
-
-	for i := 0; i < points; i++ {
-		if i%64 == 0 {
-			if err := ctx.Err(); err != nil {
-				return dataset.Dataset{}, err
-			}
-		}
-		x := xmin + float64(i)*step
-		xs[i] = x
-		density := 0.0
-		for _, v := range vals {
-			z := (x - v) / bandwidth
-			density += math.Exp(-0.5*z*z) / (bandwidth * math.Sqrt(2*math.Pi))
-		}
-		ys[i] = density / float64(n)
-	}
-
-	return newFloat64Dataset(ds, map[string][]float64{"x": xs, "density": ys})
+	return 1.06 * sd * math.Pow(float64(n), -0.2)
 }
 
 // --- Smooth ---
@@ -622,4 +675,70 @@ func quantile(sorted []float64, p float64) float64 {
 	}
 	frac := idx - float64(lo)
 	return sorted[lo]*(1-frac) + sorted[hi]*frac
+}
+
+// autoBins selects the number of bins using the given method.
+// Supported methods: "sturges" (default), "scott", "fd" (Freedman-Diaconis), "sqrt".
+func autoBins(vals []float64, method string) int {
+	n := len(vals)
+	if n <= 1 {
+		return 1
+	}
+	sorted := make([]float64, n)
+	copy(sorted, vals)
+	sort.Float64s(sorted)
+
+	vMin, vMax := sorted[0], sorted[n-1]
+	span := vMax - vMin
+	if span <= 0 {
+		return 1
+	}
+
+	switch method {
+	case "scott":
+		// Scott's rule: h = 3.49 * σ * n^(-1/3)
+		sd := stddev(sorted)
+		if sd == 0 {
+			return 1
+		}
+		h := 3.49 * sd * math.Pow(float64(n), -1.0/3.0)
+		return int(math.Ceil(span / h))
+
+	case "fd":
+		// Freedman-Diaconis: h = 2 * IQR * n^(-1/3)
+		q1 := quantile(sorted, 0.25)
+		q3 := quantile(sorted, 0.75)
+		iqr := q3 - q1
+		if iqr <= 0 {
+			// Fall back to Sturges.
+			return int(math.Ceil(1.0 + math.Log2(float64(n))))
+		}
+		h := 2.0 * iqr * math.Pow(float64(n), -1.0/3.0)
+		return int(math.Ceil(span / h))
+
+	case "sqrt":
+		return int(math.Ceil(math.Sqrt(float64(n))))
+
+	default: // "sturges" or ""
+		return int(math.Ceil(1.0 + math.Log2(float64(n))))
+	}
+}
+
+// stddev computes the population standard deviation.
+func stddev(vals []float64) float64 {
+	n := len(vals)
+	if n == 0 {
+		return 0
+	}
+	mean := 0.0
+	for _, v := range vals {
+		mean += v
+	}
+	mean /= float64(n)
+	variance := 0.0
+	for _, v := range vals {
+		d := v - mean
+		variance += d * d
+	}
+	return math.Sqrt(variance / float64(n))
 }

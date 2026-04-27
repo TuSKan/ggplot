@@ -3,11 +3,24 @@ package ggplot
 
 import (
 	"image/color"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/internal/canvas"
 )
+
+// fileExt returns the lowercased file extension including the dot.
+func fileExt(filename string) string {
+	return strings.ToLower(filepath.Ext(filename))
+}
+
+// createFile creates or truncates a file for writing.
+func createFile(filename string) (*os.File, error) {
+	return os.Create(filename)
+}
 
 // setColorFromTheme sets the canvas colour from a theme color.Color,
 // handling nil (defaults to black).
