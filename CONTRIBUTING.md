@@ -4,8 +4,9 @@ Thank you for your interest in contributing! This document explains how to set u
 
 ## Prerequisites
 
-- **Go 1.22+** (module-aware)
+- **Go 1.26+** (module-aware) GOEXPERIMENT=simd`
 - **Git** for version control
+- **golangci-lint** (recommended) for lint checks
 
 ## Getting Started
 
@@ -26,6 +27,7 @@ go test ./...
    go build ./...
    go test ./...
    go vet ./...
+   golangci-lint run
    ```
 5. **Submit a pull request** against `main`.
 
@@ -61,9 +63,9 @@ Key packages:
 
 ## Adding a New Geometry
 
-1. Define the geometry in `geom/geom.go` with appropriate `StatName`.
-2. Register a `Drawer` in `geom/registry.go` via `init()`.
-3. The drawer receives a `DrawContext` with canvas, data, and layout info.
+1. Define the geometry type in `geom/geom.go` with appropriate `StatName` and register option flags in `paramRelevance`.
+2. Add a `draw*` function in `draw.go` that handles the geometry rendering.
+3. Wire the dispatch in the `switch` statement inside `drawLayer` in `draw.go`.
 4. Add tests in `ggplot_test.go`.
 
 ## Adding a New Stat

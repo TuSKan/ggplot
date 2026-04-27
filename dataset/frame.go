@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
-	"strconv"
 )
 
 // Frame is the fluent API for data manipulation. All verbs return a new Frame
@@ -911,51 +910,6 @@ func rowKeyHash(ds Table, cols []string, row int) uint64 {
 		}
 	}
 	return h.Sum64()
-}
-
-// rowKey generates a string key from the specified columns for a given row.
-// Retained for debugging and display purposes.
-func rowKey(ds Table, cols []string, row int) string {
-	parts := make([]string, len(cols))
-	for i, name := range cols {
-		col, _ := ds.Column(name)
-		if col == nil {
-			parts[i] = "<nil>"
-			continue
-		}
-		switch col.DType() {
-		case DTypeFloat64:
-			parts[i] = strconv.FormatFloat(col.(Column[float64]).Values()[row], 'g', -1, 64)
-		case DTypeInt64, DTypeTimestamp:
-			parts[i] = strconv.FormatInt(col.(Column[int64]).Values()[row], 10)
-		case DTypeString:
-			parts[i] = col.(Column[string]).Values()[row]
-		case DTypeBool:
-			parts[i] = strconv.FormatBool(col.(Column[bool]).Values()[row])
-		default:
-			parts[i] = "?"
-		}
-	}
-	return parts[0] + "\x00" + joinParts(parts[1:])
-}
-
-func joinParts(parts []string) string {
-	if len(parts) == 0 {
-		return ""
-	}
-	n := len(parts) - 1
-	for _, s := range parts {
-		n += len(s)
-	}
-	var b []byte
-	b = make([]byte, 0, n)
-	for i, s := range parts {
-		if i > 0 {
-			b = append(b, 0)
-		}
-		b = append(b, s...)
-	}
-	return string(b)
 }
 
 // renamedColumn wraps an AnyColumn with a different name.

@@ -20,10 +20,12 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 | Capability | Supported Features |
 |---|---|
 | **Geometries** | Point, Line, Path, Step, Bar, Histogram, Area, Density, Rug, HLine, VLine, Text, BoxPlot, Smooth |
-| **Statistics** | Identity, Bin/Count, Density (KDE), Smooth (LOESS), Summary, BoxPlot (Tukey 1.5×IQR) |
+| **Statistics** | Identity, Bin/Count, Density (KDE), Smooth (LOESS + lm), Summary, BoxPlot (Tukey/range whiskers, notch CI) |
 | **Scales** | Linear, Log10, Sqrt, Reverse, Discrete |
+| **Color Palettes** | Viridis, ColorBrewer (sequential, diverging, qualitative), manual, continuous |
 | **Faceting** | Grid (row ~ col), Wrap (NCols/NRows) |
-| **Data Backends** | Native Memory, Apache Arrow IPC/Parquet, BigQuery |
+| **Data Backends** | Native Memory, Apache Arrow IPC/Parquet, BigQuery SQL pushdown |
+| **Output** | PNG, SVG 1.1, PDF 1.4, HiDPI via `WithScale()` |
 | **Theming** | Default, Classic, Minimal, Dark, BW |
 
 ---
@@ -47,7 +49,7 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 Data science in Go often suffers from fragmented or overly imperative plotting APIs. `ggplot` solves this by introducing:
 - **Declarative Compositions** — Build complex charts by layering geometries and statistics instead of drawing pixels.
 - **Provider-Agnostic Engines** — Swap out the underlying dataset execution engine (`memory` vs `arrow`) without changing a single line of your plotting code.
-- **Publication-Ready Outputs** — Anti-aliased 2D vector rendering powered by `gogpu/gg`, saving to high-DPI PNGs or in-memory canvases.
+- **Publication-Ready Outputs** — Anti-aliased 2D vector rendering powered by `gogpu/gg`, saving to PNG, SVG, or PDF at configurable DPI scales.
 
 ## Quick Start
 
@@ -63,6 +65,7 @@ go get github.com/TuSKan/ggplot
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/TuSKan/ggplot"
@@ -73,8 +76,9 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
 	// Initialize a memory engine and construct columns explicitly.
-	eng := memory.NewEngine()
+	eng := memory.NewEngine(ctx)
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
 		eng.NewFloat64Column("y", []float64{2, 4, 5, 4, 6, 8, 7, 9, 10, 11}),
@@ -89,7 +93,7 @@ func main() {
 		Layer(geom.Smooth()).
 		Labs(ggplot.Title("Quick Start"), ggplot.XLab("X"), ggplot.YLab("Y")).
 		Theme("minimal").
-		Save("scatter.png", 800, 500)
+		Save(ctx, "scatter.png", 800, 500)
 }
 ```
 
@@ -101,7 +105,7 @@ ggplot.New(ds, aes.X("day"), aes.Y("temp")).
     FacetWrap("season", 2, 0).
     Labs(ggplot.Title("Temperature by Season")).
     Theme("dark").
-    Save("facets.png", 900, 600)
+    Save(ctx, "facets.png", 900, 600)
 ```
 
 ### 3. Box Plot with Groups
@@ -111,7 +115,7 @@ ggplot.New(ds, aes.X("group"), aes.Y("value")).
     Layer(geom.BoxPlot(geom.WithFill("lightyellow"), geom.WithAlpha(0.8))).
     Labs(ggplot.Title("Distribution by Group")).
     Theme("classic").
-    Save("boxplot.png", 800, 500)
+    Save(ctx, "boxplot.png", 800, 500)
 ```
 
 ---
@@ -132,7 +136,9 @@ ggplot.New(ds, aes.X("group"), aes.Y("value")).
 |---|---|
 | [DATASET.md](docs/DATASET.md) | Deep dive into the Engine abstraction, Memory, and Arrow backends |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Package map, rendering pipeline, design decisions |
-| [ROADMAP.md](docs/ROADMAP.md) | 19-phase development plan aligned with the ggplot2 book (3e) |
+| [ROADMAP.md](docs/ROADMAP.md) | Development plan aligned with the ggplot2 book (3e) |
+| [BENCHMARK.md](docs/BENCHMARK.md) | Arrow vs Memory engine performance benchmarks |
+| [LAZY_FRAME.md](docs/LAZY_FRAME.md) | Spec for lazy plan/execute Dataset architecture |
 
 ---
 

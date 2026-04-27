@@ -31,9 +31,9 @@ type DrawContext struct {
 	Params       geom.Params
 	ContColorCol string          // continuous color column (empty if none)
 	ContScale    *colormap.Scale // continuous color scale (nil if none)
-	W, H         float64        // panel size in pixels
-	XMin, XMax   float64        // data domain bounds
-	YMin, YMax   float64        // data domain bounds
+	W, H         float64         // panel size in pixels
+	XMin, XMax   float64         // data domain bounds
+	YMin, YMax   float64         // data domain bounds
 }
 
 // Drawer renders a geometry type onto the canvas. Implementations are

@@ -10,11 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **SVG/PDF output**: `Save()` now dispatches on file extension (`.svg`, `.pdf`, `.png`).
   - `WriteTo()` supports `"svg"`, `"pdf"`, and `"png"` format strings.
   - Native SVG 1.1 and PDF 1.4 backends via `recording.Backend` interface.
+- **HiDPI rendering**: `Save()` and `WriteTo()` accept `WithScale(s)` option for retina output.
 - **Recording canvas**: `RecordingCanvas` wraps `recording.Recorder` for vector-format rendering.
 - **KDE parallelization**: Density stat uses `runtime.NumCPU()` goroutines for kernel evaluation.
 - **Bandwidth selection**: `stat.Options.Bandwidth` allows explicit KDE bandwidth; `0` auto-selects via Silverman's rule.
 - **Histogram binning strategies**: `stat.Options.BinMethod` supports `"sturges"` (default), `"scott"`, `"fd"` (Freedman-Diaconis), `"sqrt"`.
-- **Extensible geometry dispatch**: Registry-based `Drawer` interface for third-party geometry rendering.
+- **Smooth lm method**: `stat.Options.Method = "lm"` for simple linear regression alongside LOESS.
+- **Boxplot variants**: `stat.Options.Whisker` (`"tukey"` / `"range"`), `stat.Options.Notch` (95% CI). New output columns: `notch_lower`, `notch_upper`.
+- **Boxplot geom options**: `geom.WithWhisker(rule)`, `geom.WithNotch(enabled)` option constructors.
 - **Binary hashing**: FNV-1a row key generation in `dataset.frame` for zero-allocation GroupBy/Distinct.
 - **Map capacity hints**: Pre-sized maps in `Distinct()` and `GroupBy()` to reduce rehash pressure.
 - **Benchmark suite**: `ggplot_bench_test.go` covering 11 rendering scenarios.
@@ -32,6 +35,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - Shallow-copy corruption in `Plot.clone()` when deriving plots.
 - Facet grid layout miscalculation for non-square cardinalities.
+- Silent nil-table drops in stat transforms now return proper errors.
+- Unused `rowKey`/`joinParts` dead code removed (`dataset/frame.go`).
+- All `errcheck` lint warnings resolved in benchmark suite.
 
 ## [0.1.0] — Initial Release
 

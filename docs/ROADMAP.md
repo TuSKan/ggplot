@@ -43,11 +43,11 @@
 - [x] `BoundsSetter` implemented on all scale types (Linear, Log10, Sqrt, Reverse, Discrete)
 - [x] Compile-time interface checks for all scale types
 - [x] 70+ tests passing across all packages
-- [ ] Deep clone safety (`Plot.clone` shares `LayerSpec.Mapping` maps)
-- [ ] Error propagation in `renderTo` (swallowed stat errors)
-- [ ] `context.Context` support in engine interfaces
-- [ ] Real SIMD execution (currently scalar fallback)
-- [ ] SQL injection hardened (BigQuery filter escaping) ✅ fixed
+- [x] Deep clone safety (`Plot.clone` deep-copies all spec fields)
+- [x] Error propagation in `renderTo` (nil-table → error)
+- [ ] `context.Context` support in engine sub-interfaces (deferred to Lazy Frame)
+- [ ] Real SIMD execution (currently scalar fallback; AVX-512 via `GOEXPERIMENT=simd`)
+- [x] SQL injection hardened (BigQuery filter escaping)
 
 ---
 
@@ -199,11 +199,12 @@
 
 > Beyond book scope — Go-specific extensions
 
-- [ ] **SVG Output** — `output.SVG()` backend for web-embeddable vector graphics
-- [ ] **PDF Output** — `output.PDF()` for print-quality publication figures
+- [x] **SVG Output** — `canvas.ExportSVG()` via RecordingCanvas
+- [x] **PDF Output** — `canvas.ExportPDF()` via RecordingCanvas
 - [ ] **HTML Output** — interactive plots with hover tooltips via embedded SVG + JavaScript
 - [ ] **Animated GIF** — frame-by-frame rendering for time-series animations
 - [ ] **Live Preview** — `p.Show()` opens a native window with hot-reload on data changes
+- [x] **HiDPI Output** — `Save(ctx, file, w, h, WithScale(2.0))` and `WriteTo` with `RenderOpt`
 
 ## 🔲 Phase 19 — Documentation & Ecosystem
 

@@ -325,6 +325,7 @@ func YLab(text string) LabOpt { return func(l *grammar.Labels) { l.Y = text } }
 
 // Caption sets the plot caption.
 func Caption(text string) LabOpt { return func(l *grammar.Labels) { l.Caption = text } }
+
 // RenderOpt configures rendering output (scale, DPI, etc.).
 type RenderOpt func(*renderConfig)
 

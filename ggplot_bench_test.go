@@ -13,6 +13,8 @@ import (
 	"github.com/TuSKan/ggplot/geom"
 )
 
+var benchSink any // prevent compiler from optimizing away Render calls
+
 // --- Helpers ---
 
 func benchEng() *memory.Engine {
@@ -77,7 +79,7 @@ func BenchmarkRender_Point_1K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }
 
@@ -88,7 +90,7 @@ func BenchmarkRender_Point_10K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }
 
@@ -99,7 +101,7 @@ func BenchmarkRender_Point_100K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }
 
@@ -110,7 +112,7 @@ func BenchmarkRender_Line_10K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }
 
@@ -121,7 +123,7 @@ func BenchmarkRender_Histogram_10K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }
 
@@ -132,7 +134,7 @@ func BenchmarkRender_Histogram_100K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }
 
@@ -143,7 +145,7 @@ func BenchmarkRender_Smooth_1K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }
 
@@ -154,7 +156,7 @@ func BenchmarkRender_Smooth_10K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }
 
@@ -165,7 +167,7 @@ func BenchmarkRender_ColorGrouped_Point_10K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }
 
@@ -176,7 +178,7 @@ func BenchmarkRender_Density_10K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }
 
@@ -189,6 +191,6 @@ func BenchmarkRender_MultiLayer_10K(b *testing.B) {
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		p.Render(ctx, 800, 600)
+		benchSink, _ = p.Render(ctx, 800, 600)
 	}
 }

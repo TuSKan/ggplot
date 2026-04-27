@@ -738,9 +738,9 @@ dataset.From(names).Combine(scores, ranks)
 
 > **Status (2026-04):** of the packages below, only `csv/` and `parquet/` exist
 > on disk. `ipc/`, `json/`, `apply/`, `strings/`, `factor/`, and `datetime/` are
-> design sketches for the Phase 6 work in `docs/IMPROVEMENTS.md` — the import
-> paths shown will not compile yet. The end-to-end example at the bottom of
-> this file uses several of these and is therefore aspirational.
+> design sketches — the import paths shown will not compile yet. The end-to-end
+> example at the bottom of this file uses several of these and is therefore
+> aspirational.
 
 ### Data Import/Export
 

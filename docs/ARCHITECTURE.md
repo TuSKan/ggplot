@@ -36,7 +36,7 @@ github.com/TuSKan/ggplot
 │   └── geom.go          #   Point, Line, Step, Bar, Histogram, Area, Density, Rug,
 │                        #   HLine, VLine, Text, BoxPlot, Smooth + functional options
 ├── stat/                # Statistical transformations
-│   └── stat.go          #   Identity, Bin, Density (KDE), Smooth (LOESS), Summary, BoxPlot
+│   └── stat.go          #   Identity, Bin, Density (KDE), Smooth (LOESS + lm), Summary, BoxPlot
 ├── scale/               # Scale types + Resolve factory
 │   └── scale.go         #   Linear, Log10, Sqrt, Reverse, Discrete + NiceSequence, FormatNumber
 ├── coord/               # Coordinate systems
@@ -47,8 +47,9 @@ github.com/TuSKan/ggplot
 │   └── theme.go         #   Default, Classic, Minimal, Dark, BW
 ├── guide/               # Axis, legend, grid, and color bar rendering
 │   └── guide.go         #   DrawXAxis, DrawYAxis, DrawGrid, DrawLegend, DrawColorBar
-├── position/            # Position adjustments (dodge, stack — scaffolded)
-├── output/              # Output format helpers (SVG — scaffolded)
+├── position/            # Position adjustments: Identity, Dodge, Stack, Jitter, Nudge
+├── colormap/            # Color palettes: Viridis, ColorBrewer, discrete/continuous/manual scales
+├── output/              # Output format helpers (SVG, PDF via RecordingCanvas)
 │
 ├── dataset/             # Columnar data abstraction, see docs/DATASET.md
 │
@@ -70,7 +71,10 @@ github.com/TuSKan/ggplot
 │
 └── docs/
     ├── ARCHITECTURE.md  # (this file)
-    └── ROADMAP.md       # 19-phase development plan aligned with ggplot2-book (3e)
+    ├── ROADMAP.md       # Development plan aligned with ggplot2-book (3e)
+    ├── DATASET.md       # Deep dive on dataset/engine architecture
+    ├── BENCHMARK.md     # Benchmark results (Arrow vs Memory, SIMD)
+    └── LAZY_FRAME.md    # Spec for Phase 8: lazy plan/execute model
 ```
 
 ---
@@ -103,7 +107,8 @@ before stat computation, producing one resolved layer per group.
 
 X and Y scales are trained on resolved data columns. For discrete X data,
 a `DiscreteScale` is used with automatic string→float64 position mapping.
-For boxplots, the Y scale additionally trains on `lower`, `q1`, `middle`, `q3`, `upper`.
+For boxplots, the Y scale additionally trains on `lower`, `q1`, `middle`, `q3`, `upper`,
+`notch_lower`, `notch_upper`.
 
 Padding is applied: 5% of range for continuous, plus extra half-bin for bars/histograms.
 
@@ -156,7 +161,7 @@ For an in-depth look at how the execution engines (Memory, Arrow, BigQuery) oper
 Scales implement:
 ```go
 type Scale interface {
-    Train(col Column) error    // expand domain to include data
+    Train(col AnyColumn) error // expand domain to include data
     Map(v float64) float64     // data → [0,1]
     Inverse(v float64) float64 // [0,1] → data
     Ticks(n int) []float64     // nice tick positions in data-space
@@ -173,8 +178,8 @@ concrete scale types, used by the `.ScaleX()` / `.ScaleY()` builder API.
 Stats are registered at init-time and looked up by name:
 ```go
 stat.Register(binStat{})      // "bin"
-stat.Register(smoothStat{})   // "smooth" — LOESS with tri-cube kernel
-stat.Register(boxplotStat{})  // "boxplot" — 5-number summary with 1.5×IQR fences
+stat.Register(smoothStat{})   // "smooth" — LOESS with tri-cube kernel + lm (OLS)
+stat.Register(boxplotStat{})  // "boxplot" — 5-number summary + notch CI + tukey/range whiskers
 ```
 
 Each geom declares its default stat via `geom.Layer.StatName`.
