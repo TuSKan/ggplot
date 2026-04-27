@@ -90,6 +90,10 @@ type Params struct {
 	Span   float64 // loess span
 	Points int     // number of interpolation points
 
+	// Boxplot-specific
+	Whisker string // whisker rule: "tukey" (default, 1.5×IQR), "range" (min-max)
+	Notch   bool   // if true, compute notch confidence interval around median
+
 	// Legend
 	Label string // legend label for this layer (used with manual colors)
 
@@ -117,6 +121,8 @@ const (
 	optMethod                         // smooth
 	optSpan                           // smooth
 	optPoints                         // smooth, density
+	optWhisker                        // boxplot
+	optNotch                          // boxplot
 )
 
 // paramRelevance maps geometry types to what parameters are meaningful for them.
@@ -132,7 +138,7 @@ var paramRelevance = map[Type]optFlag{
 	TypeText:      optColor | optAlpha | optFontSize | optFontFamily | optAngle,
 	TypeStep:      optColor | optAlpha | optLineWidth | optSize,
 	TypeRug:       optColor | optAlpha | optLineWidth,
-	TypeBoxPlot:   optColor | optFill | optAlpha | optWidth | optLineWidth,
+	TypeBoxPlot:   optColor | optFill | optAlpha | optWidth | optLineWidth | optWhisker | optNotch,
 	TypeErrorBar:  optColor | optAlpha | optLineWidth | optWidth,
 	TypeSegment:   optColor | optAlpha | optLineWidth,
 	TypeTile:      optColor | optFill | optAlpha,
@@ -299,6 +305,16 @@ func WithFontFamily(family string) Opt {
 // WithAngle sets the text rotation angle in degrees.
 func WithAngle(deg float64) Opt {
 	return func(l *Layer) { l.Params.Angle = deg; l.setFlags |= optAngle }
+}
+
+// WithWhisker sets the boxplot whisker rule: "tukey" (1.5×IQR, default) or "range" (min-max).
+func WithWhisker(rule string) Opt {
+	return func(l *Layer) { l.Params.Whisker = rule; l.setFlags |= optWhisker }
+}
+
+// WithNotch enables notched boxplots that show the 95% confidence interval around the median.
+func WithNotch(enabled bool) Opt {
+	return func(l *Layer) { l.Params.Notch = enabled; l.setFlags |= optNotch }
 }
 
 // WithLabel sets a legend label for this layer. When used together with

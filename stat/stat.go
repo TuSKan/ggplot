@@ -38,6 +38,8 @@ type Options struct {
 	Method    string  // smoothing method: "lm", "loess"
 	Points    int     // number of output grid points
 	Bandwidth float64 // KDE bandwidth; 0 = Silverman auto-select
+	Whisker   string  // boxplot whisker rule: "tukey" (default 1.5×IQR), "range" (min-max)
+	Notch     bool    // boxplot: compute notch confidence interval around median
 }
 
 // Stat computes a statistical transformation on a dataset, producing a
@@ -360,22 +362,13 @@ func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[s
 	}
 
 	// Sort by X for consistent ordering.
-	type xy struct{ x, y float64 }
-	pts := make([]xy, n)
+	pts := make([]xyPair, n)
 	for i := range xData {
-		pts[i] = xy{xData[i], yData[i]}
+		pts[i] = xyPair{xData[i], yData[i]}
 	}
 	sort.Slice(pts, func(i, j int) bool { return pts[i].x < pts[j].x })
 
 	xMin, xMax := pts[0].x, pts[n-1].x
-
-	// LOESS parameters.
-	alpha := 0.3 // bandwidth: fraction of data used per local fit
-	if n < 20 {
-		alpha = 0.75
-	} else if n < 50 {
-		alpha = 0.5
-	}
 
 	// Number of output points (from opts or default 80).
 	nOut := opts.Points
@@ -385,6 +378,64 @@ func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[s
 	if nOut > n {
 		nOut = n
 	}
+
+	// Dispatch on method.
+	method := opts.Method
+	if method == "" {
+		method = "loess"
+	}
+
+	switch method {
+	case "lm":
+		return linearFit(ds, pts, nOut, xMin, xMax)
+	default:
+		return loessFit(ctx, ds, pts, n, nOut, xMin, xMax, opts)
+	}
+}
+
+// xyPair is a sorted (x, y) data point used by smooth methods.
+type xyPair struct{ x, y float64 }
+
+// linearFit performs simple OLS linear regression: y = a + b*x.
+func linearFit(ds dataset.Dataset, pts []xyPair, nOut int, xMin, xMax float64) (dataset.Dataset, error) {
+	n := float64(len(pts))
+	var sx, sy, sxx, sxy float64
+	for _, p := range pts {
+		sx += p.x
+		sy += p.y
+		sxx += p.x * p.x
+		sxy += p.x * p.y
+	}
+	det := n*sxx - sx*sx
+	var a, b float64
+	if math.Abs(det) < 1e-15 {
+		a = sy / n
+		b = 0
+	} else {
+		b = (n*sxy - sx*sy) / det
+		a = (sy - b*sx) / n
+	}
+
+	step := (xMax - xMin) / float64(nOut-1)
+	xs := make([]float64, nOut)
+	ys := make([]float64, nOut)
+	for i := 0; i < nOut; i++ {
+		xs[i] = xMin + float64(i)*step
+		ys[i] = a + b*xs[i]
+	}
+	return newFloat64Dataset(ds, map[string][]float64{"x": xs, "y": ys})
+}
+
+// loessFit performs locally weighted regression with sliding window.
+func loessFit(ctx context.Context, ds dataset.Dataset, pts []xyPair, n, nOut int, xMin, xMax float64, opts Options) (dataset.Dataset, error) {
+	// LOESS parameters.
+	alpha := 0.3 // bandwidth: fraction of data used per local fit
+	if n < 20 {
+		alpha = 0.75
+	} else if n < 50 {
+		alpha = 0.5
+	}
+
 	step := (xMax - xMin) / float64(nOut-1)
 
 	xs := make([]float64, nOut)
@@ -559,12 +610,14 @@ type boxplotStat struct{}
 func (boxplotStat) Name() Name            { return Boxplot }
 func (boxplotStat) RequiredAes() []string { return []string{"y"} }
 func (boxplotStat) OutputSchema() []string {
-	return []string{"x", "lower", "q1", "middle", "q3", "upper"}
+	return []string{"x", "lower", "q1", "middle", "q3", "upper", "notch_lower", "notch_upper"}
 }
 
 // Compute produces the five-number summary for each unique X value (group).
 // Output columns: x, lower, q1, middle, q3, upper.
-func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, _ Options) (dataset.Dataset, error) {
+// With Notch=true: also notch_lower, notch_upper (95% CI around median).
+// Whisker="range" uses min-max; default "tukey" uses 1.5×IQR.
+func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	yCol := mapping["y"]
 	if yCol == "" {
 		return dataset.Dataset{}, fmt.Errorf("stat_boxplot: missing 'y' aesthetic")
@@ -618,6 +671,13 @@ func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 	median := make([]float64, len(groups))
 	q3 := make([]float64, len(groups))
 	upper := make([]float64, len(groups))
+	notchLo := make([]float64, len(groups))
+	notchHi := make([]float64, len(groups))
+
+	whiskerRule := opts.Whisker
+	if whiskerRule == "" {
+		whiskerRule = "tukey"
+	}
 
 	for i, g := range groups {
 		sort.Float64s(g.yAll)
@@ -627,34 +687,54 @@ func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 		q1[i] = quantile(g.yAll, 0.25)
 		q3[i] = quantile(g.yAll, 0.75)
 
-		// Whiskers: extend to most extreme data point within 1.5*IQR.
 		iqr := q3[i] - q1[i]
-		lowerFence := q1[i] - 1.5*iqr
-		upperFence := q3[i] + 1.5*iqr
 
-		lower[i] = q1[i] // start at Q1, search downward
-		for j := 0; j < n; j++ {
-			if g.yAll[j] >= lowerFence {
-				lower[i] = g.yAll[j]
-				break
+		switch whiskerRule {
+		case "range":
+			// Whiskers extend to min/max.
+			lower[i] = g.yAll[0]
+			upper[i] = g.yAll[n-1]
+		default: // "tukey"
+			// Whiskers extend to most extreme data point within 1.5×IQR.
+			lowerFence := q1[i] - 1.5*iqr
+			upperFence := q3[i] + 1.5*iqr
+
+			lower[i] = q1[i]
+			for j := 0; j < n; j++ {
+				if g.yAll[j] >= lowerFence {
+					lower[i] = g.yAll[j]
+					break
+				}
+			}
+			upper[i] = q3[i]
+			for j := n - 1; j >= 0; j-- {
+				if g.yAll[j] <= upperFence {
+					upper[i] = g.yAll[j]
+					break
+				}
 			}
 		}
-		upper[i] = q3[i] // start at Q3, search upward
-		for j := n - 1; j >= 0; j-- {
-			if g.yAll[j] <= upperFence {
-				upper[i] = g.yAll[j]
-				break
-			}
+
+		// Notch: 95% CI = median ± 1.58 × IQR / √n
+		if opts.Notch && n > 0 {
+			ci := 1.58 * iqr / math.Sqrt(float64(n))
+			notchLo[i] = median[i] - ci
+			notchHi[i] = median[i] + ci
+		} else {
+			notchLo[i] = median[i]
+			notchHi[i] = median[i]
 		}
 	}
 
 	return newFloat64Dataset(ds, map[string][]float64{
-		"x":      xs,
-		"lower":  lower,
-		"q1":     q1,
-		"middle": median,
-		"q3":     q3,
-		"upper":  upper,
+		"x":           xs,
+		"lower":       lower,
+		"q1":          q1,
+		"middle":      median,
+		"q3":          q3,
+		"upper":       upper,
+		"notch_lower": notchLo,
+		"notch_upper": notchHi,
 	})
 }
 

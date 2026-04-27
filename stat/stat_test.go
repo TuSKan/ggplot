@@ -223,7 +223,7 @@ func TestOutputSchema(t *testing.T) {
 		{stat.Density, []string{"x", "density"}},
 		{stat.Smooth, []string{"x", "y"}},
 		{stat.Summary, []string{"x", "y"}},
-		{stat.Boxplot, []string{"x", "lower", "q1", "middle", "q3", "upper"}},
+		{stat.Boxplot, []string{"x", "lower", "q1", "middle", "q3", "upper", "notch_lower", "notch_upper"}},
 	}
 	for _, tc := range tests {
 		s, err := stat.Lookup(tc.name)

@@ -5,12 +5,12 @@ package fonts
 type Resolver struct {
 	registry    *Registry
 	config      FallbackConfig
-	fontCache   *FontCache   // Handles query logic caching.
-	faceCache   *FaceCache   // Bridges targeted explicit size bindings externally mapping.
-	sourceCache *SourceCache // Tracks heavy `gogpu/gg/text` instances across massive loaded files.
+	fontCache   *FontCache   // Caches resolved Font pointers by query.
+	faceCache   *FaceCache   // Caches FaceHandle results by request parameters.
+	sourceCache *SourceCache // Caches loaded text.FontSource instances to avoid re-parsing.
 }
 
-// NewResolver connects a targeted explicit fallback configuration string dictionary against a runtime indexing database.
+// NewResolver creates a Resolver backed by the given font registry and fallback configuration.
 func NewResolver(registry *Registry, config FallbackConfig) *Resolver {
 	return &Resolver{
 		registry:    registry,
@@ -24,7 +24,7 @@ func NewResolver(registry *Registry, config FallbackConfig) *Resolver {
 // LoadFace returns a font.Face for the given family, size, weight, and style.
 // Results are cached; concurrent calls for the same parameters share one Face.
 func (r *Resolver) LoadFace(req FaceRequest) (*FaceHandle, error) {
-	// 1. Thread-safe lock checked quickly bypassing expensive loops identically.
+	// Fast path: return cached result.
 	if handle, ok := r.faceCache.Get(req); ok {
 		if handle == nil {
 			return nil, ErrFontNotFound
@@ -32,12 +32,12 @@ func (r *Resolver) LoadFace(req FaceRequest) (*FaceHandle, error) {
 		return handle, nil
 	}
 
-	// 2. translate upstream explicit metrics routing.
+	// Build a query from the request and resolve via cascade.
 	query := req.toQuery()
 	best := r.Resolve(query)
 
 	if best == nil {
-		// Strict bounds blocked elements resulting missing maps globally terminating.
+		// Cache the miss to avoid repeated lookups.
 		r.faceCache.Set(req, nil)
 		return nil, ErrFontNotFound
 	}
@@ -46,16 +46,16 @@ func (r *Resolver) LoadFace(req FaceRequest) (*FaceHandle, error) {
 		Font:    best,
 		Size:    req.Size,
 		DPI:     req.DPI,
-		sources: r.sourceCache, // Passing generic source limits tracking over cached limits.
+		sources: r.sourceCache,
 	}
 
-	// Bounds generated identical metrics mapping globally.
+	// Cache the successful result.
 	r.faceCache.Set(req, handle)
 
 	return handle, nil
 }
 
-// Resolve analyzes the configuration array applying bounded logic rules evaluating arrays step logic preventing infinite recursive spirals.
+// Resolve finds the best font for the given query, using the cached result if available.
 func (r *Resolver) Resolve(q Query) *Font {
 	if f, ok := r.fontCache.Get(q); ok {
 		return f
@@ -70,10 +70,10 @@ func (r *Resolver) Resolve(q Query) *Font {
 func (r *Resolver) resolveCascade(q Query) *Font {
 	normTarget := normalizeFamily(q.Family)
 
-	// Phase 1: Straight explicit native search logic
+	// Phase 1: Direct registry search.
 	best := r.registry.Match(q)
 
-	// Perfect mapped exact string overrides generic bounds constraints returning instantly
+	// Exact family match — return immediately.
 	if best != nil && q.Family != "" && normalizeFamily(best.Family) == normTarget {
 		return best
 	}
@@ -91,7 +91,7 @@ func (r *Resolver) resolveCascade(q Query) *Font {
 		}
 	}
 
-	// Blocking logic returning out when native maps fail exactly.
+	// No fallback allowed — strict mode.
 	if !q.AllowFallback {
 		return nil
 	}
@@ -106,13 +106,13 @@ func (r *Resolver) resolveCascade(q Query) *Font {
 	} else if isEmojiSub(normTarget) {
 		cascade = r.config.Emoji
 	} else {
-		// General universal standard defaults arrays
+		// Default: sans-serif cascade.
 		cascade = r.config.SansSerif
 	}
 
 	for _, fb := range cascade {
 		if normalizeFamily(fb) == normTarget {
-			continue // prevents cyclic local blocks testing the element already tested completely.
+			continue // Skip already-tested family.
 		}
 
 		fbQuery := q
@@ -125,8 +125,7 @@ func (r *Resolver) resolveCascade(q Query) *Font {
 		}
 	}
 
-	// Phase 4: Final Generic Fallback Catchall
-	// Simply yields the highest generated physical mapping returning the physical pointer rather than a system nil panic.
+	// Phase 4: Return the best match found in Phase 1 (may be a loose match).
 	if best != nil {
 		return best
 	}
@@ -134,7 +133,7 @@ func (r *Resolver) resolveCascade(q Query) *Font {
 	return nil
 }
 
-// Subsystem category generic parsing
+// Category helpers for font classification.
 func isMonoSub(f string) bool {
 	return f == "monospace" || f == "mono"
 }

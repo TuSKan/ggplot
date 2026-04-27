@@ -32,7 +32,7 @@ func (r *Registry) Match(q Query) *Font {
 			bestScore = s
 			best = f
 		} else if s == bestScore && best != nil {
-			// stable tie-breaking logic returning identical alphabetical deterministic strings uniformly
+			// Tie-breaking: prefer alphabetically earlier name, then path, then index.
 			if f.FullName != best.FullName {
 				if f.FullName < best.FullName {
 					bestScore = s
@@ -54,7 +54,7 @@ func (r *Registry) Match(q Query) *Font {
 	return best
 }
 
-// Fonts fetches explicit lists parsed internally loaded saving allocations queries.
+// Fonts returns all discovered fonts in the registry.
 func (r *Registry) Fonts() []Font {
 	return r.fonts
 }

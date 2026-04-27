@@ -325,6 +325,26 @@ func YLab(text string) LabOpt { return func(l *grammar.Labels) { l.Y = text } }
 
 // Caption sets the plot caption.
 func Caption(text string) LabOpt { return func(l *grammar.Labels) { l.Caption = text } }
+// RenderOpt configures rendering output (scale, DPI, etc.).
+type RenderOpt func(*renderConfig)
+
+type renderConfig struct {
+	scale float64
+}
+
+func defaultRenderConfig() renderConfig {
+	return renderConfig{scale: 1.0}
+}
+
+// WithScale sets the DPI scale factor for rendering.
+// scale=2.0 produces retina-resolution output (2× pixel density).
+func WithScale(s float64) RenderOpt {
+	return func(c *renderConfig) {
+		if s > 0 {
+			c.scale = s
+		}
+	}
+}
 
 // Save renders the plot to a file at the given dimensions.
 // The output format is inferred from the file extension:
@@ -332,13 +352,20 @@ func Caption(text string) LabOpt { return func(l *grammar.Labels) { l.Caption = 
 //	.png — raster PNG (default)
 //	.svg — SVG 1.1 vector
 //	.pdf — PDF 1.4 vector
-func (p *Plot) Save(ctx context.Context, filename string, width, height int) error {
+//
+// Options: [WithScale] for HiDPI output.
+func (p *Plot) Save(ctx context.Context, filename string, width, height int, opts ...RenderOpt) error {
+	cfg := defaultRenderConfig()
+	for _, o := range opts {
+		o(&cfg)
+	}
+	sw, sh := int(float64(width)*cfg.scale), int(float64(height)*cfg.scale)
 	ext := fileExt(filename)
 	switch ext {
 	case ".svg", ".pdf":
-		return p.saveVector(ctx, filename, ext, width, height)
+		return p.saveVector(ctx, filename, ext, sw, sh)
 	default:
-		return p.saveRaster(ctx, filename, width, height)
+		return p.saveRaster(ctx, filename, sw, sh)
 	}
 }
 
@@ -385,16 +412,22 @@ func (p *Plot) Render(ctx context.Context, width, height int) (*canvas.GGCanvas,
 
 // WriteTo renders the plot and writes the output to w in the given format.
 // Supported formats: "png" (default), "svg", "pdf".
+// Options: [WithScale] for HiDPI output.
 // Returns the number of bytes written.
-func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, height int) (int64, error) {
+func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, height int, opts ...RenderOpt) (int64, error) {
+	cfg := defaultRenderConfig()
+	for _, o := range opts {
+		o(&cfg)
+	}
+	sw, sh := int(float64(width)*cfg.scale), int(float64(height)*cfg.scale)
 	switch format {
 	case "svg":
-		return p.writeVector(ctx, w, format, width, height)
+		return p.writeVector(ctx, w, format, sw, sh)
 	case "pdf":
-		return p.writeVector(ctx, w, format, width, height)
+		return p.writeVector(ctx, w, format, sw, sh)
 	case "png", "":
-		cv := canvas.NewGGCanvas(width, height)
-		if err := p.renderTo(ctx, cv, width, height); err != nil {
+		cv := canvas.NewGGCanvas(sw, sh)
+		if err := p.renderTo(ctx, cv, sw, sh); err != nil {
 			return 0, err
 		}
 		cw := &countWriter{w: w}
@@ -552,19 +585,23 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 							statMapping[k] = v
 						}
 						opts := stat.Options{
-							Bins:   layer.Geom.Params.Bins,
-							Method: layer.Geom.Params.Method,
-							Points: layer.Geom.Params.Points,
+							Bins:    layer.Geom.Params.Bins,
+							Method:  layer.Geom.Params.Method,
+							Points:  layer.Geom.Params.Points,
+							Whisker: layer.Geom.Params.Whisker,
+							Notch:   layer.Geom.Params.Notch,
 						}
 						transformed, err := s.Compute(ctx, grpDS, statMapping, opts)
 						if err != nil {
 							return fmt.Errorf("ggplot: stat %q failed for group %q: %w",
 								statName, grpLabel, err)
 						}
-						if transformed.Table() != nil {
-							grpDS = transformed
-							grpMerged = updateMappingForStat(statName, grpMerged)
+						if transformed.Table() == nil {
+							return fmt.Errorf("ggplot: stat %q produced nil table for group %q",
+								statName, grpLabel)
 						}
+						grpDS = transformed
+						grpMerged = updateMappingForStat(statName, grpMerged)
 					}
 
 					grpColorCopy := grpRGBA
@@ -602,18 +639,21 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 						statMapping[k] = v
 					}
 					opts := stat.Options{
-						Bins:   layer.Geom.Params.Bins,
-						Method: layer.Geom.Params.Method,
-						Points: layer.Geom.Params.Points,
+						Bins:    layer.Geom.Params.Bins,
+						Method:  layer.Geom.Params.Method,
+						Points:  layer.Geom.Params.Points,
+						Whisker: layer.Geom.Params.Whisker,
+						Notch:   layer.Geom.Params.Notch,
 					}
 					transformed, err := s.Compute(ctx, ds, statMapping, opts)
 					if err != nil {
 						return fmt.Errorf("ggplot: stat %q failed: %w", statName, err)
 					}
-					if transformed.Table() != nil {
-						ds = transformed
-						merged = updateMappingForStat(statName, merged)
+					if transformed.Table() == nil {
+						return fmt.Errorf("ggplot: stat %q produced nil table", statName)
 					}
+					ds = transformed
+					merged = updateMappingForStat(statName, merged)
 				}
 
 				// Resolve and train the continuous color scale (if any).
