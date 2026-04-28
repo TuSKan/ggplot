@@ -34,6 +34,9 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/colormap"
@@ -269,10 +272,14 @@ func (p *Plot) YLim(min, max float64) *Plot {
 	return cloned
 }
 
-// CoordFlip swaps the x and y axes.
+// CoordFlip swaps the x and y axes. This is sugar for setting
+// [geom.Horizontal] orientation on all layers and swapping the axis labels.
 func (p *Plot) CoordFlip() *Plot {
 	cloned := p.clone()
-	cloned.spec.Coord = coord.Flip()
+	for i := range cloned.spec.Layers {
+		cloned.spec.Layers[i].Geom.Params.Orientation = geom.Horizontal
+	}
+	cloned.spec.Labels.X, cloned.spec.Labels.Y = cloned.spec.Labels.Y, cloned.spec.Labels.X
 	return cloned
 }
 
@@ -361,7 +368,7 @@ func (p *Plot) Save(ctx context.Context, filename string, width, height int, opt
 		o(&cfg)
 	}
 	sw, sh := int(float64(width)*cfg.scale), int(float64(height)*cfg.scale)
-	ext := fileExt(filename)
+	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
 	case ".svg", ".pdf":
 		return p.saveVector(ctx, filename, ext, sw, sh)
@@ -387,7 +394,7 @@ func (p *Plot) saveVector(ctx context.Context, filename, ext string, width, heig
 	}
 	rec := cv.FinishRecording()
 
-	f, err := createFile(filename)
+	f, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
@@ -887,9 +894,9 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		}
 
 		// 2c. Layout: measure Y tick labels for left margin.
-		// When flipped, the left axis shows the X scale ticks.
+		// When all layers are horizontal, the left axis shows the X scale ticks.
 		leftAxisScale := yScale
-		if p.spec.Coord.IsFlipped() {
+		if allLayersHorizontal(p.spec.Layers) {
 			leftAxisScale = xScale
 		}
 		yTicks := leftAxisScale.Ticks(6)
@@ -1024,21 +1031,20 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			cv.DrawRectangle(dataX, dataY, cellW, stripH)
 			cv.Fill()
 			// Strip text.
-			setColorFromTheme(cv, th.Text.AxisTitle.Color)
+			cv.SetColor(th.Text.AxisTitle.Color)
 			cv.SetFontSize(th.Text.TickLabel.Size)
 			cv.DrawStringAnchored(panel.Label, dataX+cellW/2, dataY+stripH/2, 0.5, 0.5)
 		}
 		dataY += stripH
 		cellH -= stripH
 
-		// 2d. When the coord is flipped, swap scales and labels so that
-		// the X axis displays what was Y and vice versa. The coord.Transform
-		// handles the pixel mapping; we handle the scale/label swap.
+		// 2d. When all layers are horizontal, swap scales and labels so that
+		// the X axis displays what was Y and vice versa.
 		renderXScale := xScale
 		renderYScale := yScale
 		renderXLabel := p.spec.Labels.X
 		renderYLabel := p.spec.Labels.Y
-		if p.spec.Coord.IsFlipped() {
+		if allLayersHorizontal(p.spec.Layers) {
 			renderXScale, renderYScale = yScale, xScale
 			renderXLabel, renderYLabel = renderYLabel, renderXLabel
 		}
@@ -1047,11 +1053,11 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		guide.DrawGrid(cv, renderXScale, renderYScale, dataX, dataY, cellW, cellH, th)
 
 		// 2e. Panel background and border.
-		setColorFromTheme(cv, th.Panel.Background)
+		cv.SetColor(th.Panel.Background)
 		// (already drawn by grid background — skip duplicate fill)
 
 		if th.Panel.BorderWidth > 0 {
-			setColorFromTheme(cv, th.Panel.Border)
+			cv.SetColor(th.Panel.Border)
 			cv.SetLineWidth(th.Panel.BorderWidth)
 			cv.DrawRectangle(dataX, dataY, cellW, cellH)
 			cv.Stroke()
@@ -1137,18 +1143,18 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 	centerX := float64(width) / 2
 	titleY := 10.0
 	if p.spec.Labels.Title != "" {
-		setColorFromTheme(cv, th.Text.Title.Color)
+		cv.SetColor(th.Text.Title.Color)
 		cv.SetFontSize(th.Text.Title.Size)
 		cv.DrawStringAnchored(p.spec.Labels.Title, centerX, titleY+th.Text.Title.Size/2, 0.5, 0.5)
 		titleY += th.Text.Title.Size + 8
 	}
 	if p.spec.Labels.Subtitle != "" {
-		setColorFromTheme(cv, th.Text.Subtitle.Color)
+		cv.SetColor(th.Text.Subtitle.Color)
 		cv.SetFontSize(th.Text.Subtitle.Size)
 		cv.DrawStringAnchored(p.spec.Labels.Subtitle, centerX, titleY+th.Text.Subtitle.Size/2, 0.5, 0.5)
 	}
 	if p.spec.Labels.Caption != "" {
-		setColorFromTheme(cv, th.Text.TickLabel.Color)
+		cv.SetColor(th.Text.TickLabel.Color)
 		cv.SetFontSize(th.Text.TickLabel.Size)
 		cv.DrawStringAnchored(p.spec.Labels.Caption, float64(width)-40, float64(height)-4, 1.0, 1.0)
 	}
@@ -1254,4 +1260,18 @@ func groupByColumn(ds dataset.Dataset, colName string) ([]string, []dataset.Data
 		subsets[i] = filtered
 	}
 	return order, subsets, nil
+}
+
+// allLayersHorizontal returns true if every layer in the list has
+// Orientation == geom.Horizontal. Returns false for empty lists.
+func allLayersHorizontal(layers []grammar.LayerSpec) bool {
+	if len(layers) == 0 {
+		return false
+	}
+	for _, l := range layers {
+		if l.Geom.Params.Orientation != geom.Horizontal {
+			return false
+		}
+	}
+	return true
 }

@@ -79,7 +79,12 @@ func (c *GGCanvas) ClosePath()                               { c.ctx.ClosePath()
 func (c *GGCanvas) ClearPath()                               { c.ctx.ClearPath() }
 
 // --- Drawing ---
-func (c *GGCanvas) SetColor(col color.Color) { c.ctx.SetColor(col) }
+func (c *GGCanvas) SetColor(col color.Color) {
+	if col == nil {
+		col = color.Black
+	}
+	c.ctx.SetColor(col)
+}
 func (c *GGCanvas) SetRGBA(r, g, b, a float64) {
 	c.ctx.SetRGBA(r, g, b, a)
 }

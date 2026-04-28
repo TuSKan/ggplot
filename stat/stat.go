@@ -556,8 +556,6 @@ func (summaryStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 
 // --- Helpers ---
 
-
-
 // newFloat64Dataset creates a Dataset from float64 columns using the engine
 // from the source dataset. Never imports a specific engine.
 func newFloat64Dataset(ds dataset.Dataset, cols map[string][]float64) (dataset.Dataset, error) {

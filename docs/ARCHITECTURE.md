@@ -40,7 +40,7 @@ github.com/TuSKan/ggplot
 ├── scale/               # Scale types + Resolve factory
 │   └── scale.go         #   Linear, Log10, Sqrt, Reverse, Discrete + NiceSequence, FormatNumber
 ├── coord/               # Coordinate systems
-│   └── coord.go         #   Cartesian, Flipped (CoordFlip)
+│   └── coord.go         #   Cartesian, Polar
 ├── facet/               # Faceting strategies
 │   └── facet.go         #   None, Wrap (NCols/NRows), Grid (row ~ col)
 ├── theme/               # Theme definitions

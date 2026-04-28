@@ -34,8 +34,8 @@ func (b *pdfBackend) Begin(width, height int) error {
 }
 
 func (b *pdfBackend) End() error { return nil }
-func (b *pdfBackend) Save()     { b.streams = append(b.streams, "q\n") }
-func (b *pdfBackend) Restore()  { b.streams = append(b.streams, "Q\n") }
+func (b *pdfBackend) Save()      { b.streams = append(b.streams, "q\n") }
+func (b *pdfBackend) Restore()   { b.streams = append(b.streams, "Q\n") }
 
 func (b *pdfBackend) SetTransform(m recording.Matrix) {
 	b.streams = append(b.streams, fmt.Sprintf("%.4f %.4f %.4f %.4f %.4f %.4f cm\n",

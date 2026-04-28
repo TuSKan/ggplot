@@ -41,15 +41,20 @@ func (c *RecordingCanvas) Rotate(angle float64)     { c.rec.Rotate(angle) }
 func (c *RecordingCanvas) ScaleXY(sx, sy float64)   { c.rec.Scale(sx, sy) }
 
 // --- Path ---
-func (c *RecordingCanvas) MoveTo(x, y float64)                      { c.rec.MoveTo(x, y) }
-func (c *RecordingCanvas) LineTo(x, y float64)                      { c.rec.LineTo(x, y) }
-func (c *RecordingCanvas) QuadraticTo(cx, cy, x, y float64)         { c.rec.QuadraticTo(cx, cy, x, y) }
-func (c *RecordingCanvas) CubicTo(cx1, cy1, cx2, cy2, x, y float64) { c.rec.CubicTo(cx1, cy1, cx2, cy2, x, y) }
-func (c *RecordingCanvas) ClosePath()                               { c.rec.ClosePath() }
-func (c *RecordingCanvas) ClearPath()                               { c.rec.ClearPath() }
+func (c *RecordingCanvas) MoveTo(x, y float64)              { c.rec.MoveTo(x, y) }
+func (c *RecordingCanvas) LineTo(x, y float64)              { c.rec.LineTo(x, y) }
+func (c *RecordingCanvas) QuadraticTo(cx, cy, x, y float64) { c.rec.QuadraticTo(cx, cy, x, y) }
+func (c *RecordingCanvas) CubicTo(cx1, cy1, cx2, cy2, x, y float64) {
+	c.rec.CubicTo(cx1, cy1, cx2, cy2, x, y)
+}
+func (c *RecordingCanvas) ClosePath() { c.rec.ClosePath() }
+func (c *RecordingCanvas) ClearPath() { c.rec.ClearPath() }
 
 // --- Drawing ---
 func (c *RecordingCanvas) SetColor(col color.Color) {
+	if col == nil {
+		col = color.Black
+	}
 	r, g, b, a := col.RGBA()
 	c.rec.SetRGBA(
 		float64(r)/65535.0,
@@ -58,13 +63,13 @@ func (c *RecordingCanvas) SetColor(col color.Color) {
 		float64(a)/65535.0,
 	)
 }
-func (c *RecordingCanvas) SetRGBA(r, g, b, a float64) { c.rec.SetRGBA(r, g, b, a) }
-func (c *RecordingCanvas) SetLineWidth(w float64)      { c.rec.SetLineWidth(w) }
+func (c *RecordingCanvas) SetRGBA(r, g, b, a float64)     { c.rec.SetRGBA(r, g, b, a) }
+func (c *RecordingCanvas) SetLineWidth(w float64)         { c.rec.SetLineWidth(w) }
 func (c *RecordingCanvas) SetLineDash(pattern ...float64) { c.rec.SetDash(pattern...) }
-func (c *RecordingCanvas) Fill()                        { c.rec.Fill() }
-func (c *RecordingCanvas) Stroke()                      { c.rec.Stroke() }
-func (c *RecordingCanvas) FillPreserve()                { c.rec.FillPreserve() }
-func (c *RecordingCanvas) Clip()                        { c.rec.Clip() }
+func (c *RecordingCanvas) Fill()                          { c.rec.Fill() }
+func (c *RecordingCanvas) Stroke()                        { c.rec.Stroke() }
+func (c *RecordingCanvas) FillPreserve()                  { c.rec.FillPreserve() }
+func (c *RecordingCanvas) Clip()                          { c.rec.Clip() }
 
 // --- Primitives ---
 func (c *RecordingCanvas) DrawCircle(cx, cy, r float64)     { c.rec.DrawCircle(cx, cy, r) }
@@ -142,4 +147,3 @@ func ExportSVG(r *recording.Recording, w io.Writer) (int64, error) {
 func ExportPDF(r *recording.Recording, w io.Writer) (int64, error) {
 	return exportPDF(r, w)
 }
-

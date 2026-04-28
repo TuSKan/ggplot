@@ -71,6 +71,19 @@ func MustParse(s string) gg.RGBA {
 	return c
 }
 
+// ParseRGB parses a color spec and returns its normalized [0,1] RGB components.
+// On empty or invalid input, defR/defG/defB are returned unchanged.
+func ParseRGB(spec string, defR, defG, defB float64) (r, g, b float64) {
+	if spec == "" {
+		return defR, defG, defB
+	}
+	c, err := Parse(spec)
+	if err != nil {
+		return defR, defG, defB
+	}
+	return c.R, c.G, c.B
+}
+
 // isHexCandidate reports whether s could plausibly be a hex literal — used
 // to skip a futile gg.ParseHex call for obvious named colors.
 func isHexCandidate(s string) bool {

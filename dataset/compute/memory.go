@@ -36,4 +36,6 @@ func Load4[T Lanes](data []T) (a, b, c, d Vec[T]) { return hwy.Load4[T](data) }
 
 // CompressStore compresses elements based on a mask and stores them directly to a slice.
 // It returns the number of elements successfully stored.
-func CompressStore[T Lanes](v Vec[T], mask Mask[T], dst []T) int { return hwy.CompressStore(v, mask, dst) }
+func CompressStore[T Lanes](v Vec[T], mask Mask[T], dst []T) int {
+	return hwy.CompressStore(v, mask, dst)
+}

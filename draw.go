@@ -199,7 +199,7 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 	if contColorCol != "" {
 		zVals, _ = ds.Float64(contColorCol)
 	}
-	cr, cg, cb := resolveColor(p.Color, 0.3, 0.5, 0.8)
+	cr, cg, cb := colormap.ParseRGB(p.Color, 0.3, 0.5, 0.8)
 
 	n := len(xVals)
 	if len(yVals) < n {
@@ -208,7 +208,7 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 	for i := 0; i < n; i++ {
 		nx := normalize(xVals[i], xMin, xMax)
 		ny := normalize(yVals[i], yMin, yMax)
-		px, py := c.Transform(nx, ny, w, h)
+		px, py := orientedTransform(c, nx, ny, w, h, p.Orientation)
 
 		if i < len(zVals) && contScale != nil {
 			gc := contScale.At(zVals[i])
@@ -266,8 +266,8 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 			ny0 := normalize(pts[i-1].y, yMin, yMax)
 			nx1 := normalize(pts[i].x, xMin, xMax)
 			ny1 := normalize(pts[i].y, yMin, yMax)
-			px0, py0 := c.Transform(nx0, ny0, w, h)
-			px1, py1 := c.Transform(nx1, ny1, w, h)
+			px0, py0 := orientedTransform(c, nx0, ny0, w, h, p.Orientation)
+			px1, py1 := orientedTransform(c, nx1, ny1, w, h, p.Orientation)
 
 			zMid := (zVals[i-1] + zVals[i]) / 2
 			gc := contScale.At(zMid)
@@ -277,16 +277,16 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 		}
 	} else {
 		// Uniform color polyline.
-		cr, cg, cb := resolveColor(p.Color, 0.8, 0.2, 0.2)
+		cr, cg, cb := colormap.ParseRGB(p.Color, 0.8, 0.2, 0.2)
 		cv.SetRGBA(cr, cg, cb, alpha)
 		nx := normalize(pts[0].x, xMin, xMax)
 		ny := normalize(pts[0].y, yMin, yMax)
-		px, py := c.Transform(nx, ny, w, h)
+		px, py := orientedTransform(c, nx, ny, w, h, p.Orientation)
 		cv.MoveTo(px, py)
 		for i := 1; i < len(pts); i++ {
 			nx = normalize(pts[i].x, xMin, xMax)
 			ny = normalize(pts[i].y, yMin, yMax)
-			px, py = c.Transform(nx, ny, w, h)
+			px, py = orientedTransform(c, nx, ny, w, h, p.Orientation)
 			cv.LineTo(px, py)
 		}
 		cv.Stroke()
@@ -352,9 +352,9 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	}
 
 	// Convert spacing to pixels, apply relative width.
-	// When flipped, X data maps to vertical axis → use h instead of w.
+	// When horizontal, X data maps to vertical axis → use h instead of w.
 	barAxisLen := w
-	if c.IsFlipped() {
+	if p.Orientation == geom.Horizontal {
 		barAxisLen = h
 	}
 	pixPerUnit := barAxisLen / dataRange
@@ -367,9 +367,9 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	if alpha <= 0 {
 		alpha = 0.85
 	}
-	fr, fg, fb := resolveColor(p.Fill, 0.2, 0.4, 0.8)
+	fr, fg, fb := colormap.ParseRGB(p.Fill, 0.2, 0.4, 0.8)
 
-	// Baseline Y in normalized space (Y=0).
+	// Baseline in normalized space (value=0).
 	baseNy := normalize(0, yMin, yMax)
 
 	for _, pt := range pts {
@@ -377,19 +377,21 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 		ny := normalize(pt.y, yMin, yMax)
 
 		// Get center and baseline pixel positions via coord.Transform.
-		cx, cyVal := c.Transform(nx, ny, w, h)
-		cxBase, cyBase := c.Transform(nx, baseNy, w, h)
+		// orientedTransform swaps nx/ny when horizontal.
+		cx, cyVal := orientedTransform(c, nx, ny, w, h, p.Orientation)
+		cxBase, cyBase := orientedTransform(c, nx, baseNy, w, h, p.Orientation)
+		_ = cyBase
 
 		var rx, ry, rw, rh float64
-		if c.IsFlipped() {
-			// When flipped, X data maps to vertical axis.
-			// Bar width offset is vertical, bar length is horizontal.
+		if p.Orientation == geom.Horizontal {
+			// Horizontal: bar length is horizontal (value extent),
+			// bar thickness is vertical (category spacing).
 			rx = math.Min(cx, cxBase)
 			ry = cyVal - halfBarPx
 			rw = math.Abs(cx - cxBase)
 			rh = halfBarPx * 2
 		} else {
-			// Normal: bar width offset is horizontal.
+			// Vertical (default): bar width offset is horizontal.
 			rx = cx - halfBarPx
 			ry = math.Min(cyVal, cyBase)
 			rw = halfBarPx * 2
@@ -436,14 +438,14 @@ func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	baseNy := normalize(0, yMin, yMax)
 
 	// Build the polygon path: baseline start → data points → baseline end.
-	bx0, by0 := c.Transform(npts[0].nx, baseNy, w, h)
+	bx0, by0 := orientedTransform(c, npts[0].nx, baseNy, w, h, p.Orientation)
 	cv.MoveTo(bx0, by0)
 	for _, np := range npts {
-		px, py := c.Transform(np.nx, np.ny, w, h)
+		px, py := orientedTransform(c, np.nx, np.ny, w, h, p.Orientation)
 		cv.LineTo(px, py)
 	}
 	// Close back to baseline at the last X position.
-	bxN, byN := c.Transform(npts[len(npts)-1].nx, baseNy, w, h)
+	bxN, byN := orientedTransform(c, npts[len(npts)-1].nx, baseNy, w, h, p.Orientation)
 	cv.LineTo(bxN, byN)
 	cv.ClosePath()
 
@@ -451,11 +453,11 @@ func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	if alpha <= 0 {
 		alpha = 0.6
 	}
-	fr, fg, fb := resolveColor(p.Fill, 0.1, 0.7, 0.3)
+	fr, fg, fb := colormap.ParseRGB(p.Fill, 0.1, 0.7, 0.3)
 	cv.SetRGBA(fr, fg, fb, alpha)
 	cv.FillPreserve()
 
-	cr, cg, cb := resolveColor(p.Color, 0.0, 0.0, 0.0)
+	cr, cg, cb := colormap.ParseRGB(p.Color, 0.0, 0.0, 0.0)
 	cv.SetRGBA(cr, cg, cb, 1.0)
 	cv.SetLineWidth(1)
 	cv.Stroke()
@@ -476,7 +478,7 @@ func drawStep(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	if alpha <= 0 {
 		alpha = 1
 	}
-	cr, cg, cb := resolveColor(p.Color, 0.3, 0.5, 0.8)
+	cr, cg, cb := colormap.ParseRGB(p.Color, 0.3, 0.5, 0.8)
 
 	// Collect normalized data points.
 	type normPt struct{ nx, ny float64 }
@@ -501,14 +503,14 @@ func drawStep(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 
 	// Step function in normalized space: advance X to next point, keep old Y,
 	// then advance Y. Transform each intermediate point through coord.
-	px0, py0 := c.Transform(npts[0].nx, npts[0].ny, w, h)
+	px0, py0 := orientedTransform(c, npts[0].nx, npts[0].ny, w, h, p.Orientation)
 	cv.MoveTo(px0, py0)
 	for i := 1; i < len(npts); i++ {
 		// Horizontal step: move to next X, keep previous Y.
-		sx, sy := c.Transform(npts[i].nx, npts[i-1].ny, w, h)
+		sx, sy := orientedTransform(c, npts[i].nx, npts[i-1].ny, w, h, p.Orientation)
 		cv.LineTo(sx, sy)
 		// Vertical step: now move Y to current value.
-		vx, vy := c.Transform(npts[i].nx, npts[i].ny, w, h)
+		vx, vy := orientedTransform(c, npts[i].nx, npts[i].ny, w, h, p.Orientation)
 		cv.LineTo(vx, vy)
 	}
 	cv.Stroke()
@@ -523,7 +525,7 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 	if alpha <= 0 {
 		alpha = 0.5
 	}
-	cr, cg, cb := resolveColor(p.Color, 0.2, 0.2, 0.2)
+	cr, cg, cb := colormap.ParseRGB(p.Color, 0.2, 0.2, 0.2)
 
 	const rugFrac = 0.02 // 2% of panel extent
 
@@ -533,8 +535,8 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 		cv.SetLineWidth(lw)
 		for _, x := range xVals {
 			nx := normalize(x, xMin, xMax)
-			px1, py1 := c.Transform(nx, 0, w, h)
-			px2, py2 := c.Transform(nx, rugFrac, w, h)
+			px1, py1 := orientedTransform(c, nx, 0, w, h, p.Orientation)
+			px2, py2 := orientedTransform(c, nx, rugFrac, w, h, p.Orientation)
 			cv.MoveTo(px1, py1)
 			cv.LineTo(px2, py2)
 			cv.Stroke()
@@ -547,8 +549,8 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 		cv.SetLineWidth(lw)
 		for _, y := range yVals {
 			ny := normalize(y, yMin, yMax)
-			px1, py1 := c.Transform(0, ny, w, h)
-			px2, py2 := c.Transform(rugFrac, ny, w, h)
+			px1, py1 := orientedTransform(c, 0, ny, w, h, p.Orientation)
+			px2, py2 := orientedTransform(c, rugFrac, ny, w, h, p.Orientation)
 			cv.MoveTo(px1, py1)
 			cv.LineTo(px2, py2)
 			cv.Stroke()
@@ -570,11 +572,11 @@ func drawHLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax flo
 	if alpha <= 0 {
 		alpha = 0.8
 	}
-	cr, cg, cb := resolveColor(p.Color, 0.6, 0.1, 0.1)
+	cr, cg, cb := colormap.ParseRGB(p.Color, 0.6, 0.1, 0.1)
 
 	// Draw from left (X=0) to right (X=1) in normalized space.
-	px1, py1 := c.Transform(0, ny, w, h)
-	px2, py2 := c.Transform(1, ny, w, h)
+	px1, py1 := orientedTransform(c, 0, ny, w, h, p.Orientation)
+	px2, py2 := orientedTransform(c, 1, ny, w, h, p.Orientation)
 
 	cv.SetRGBA(cr, cg, cb, alpha)
 	cv.SetLineWidth(lw)
@@ -597,11 +599,11 @@ func drawVLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax flo
 	if alpha <= 0 {
 		alpha = 0.8
 	}
-	cr, cg, cb := resolveColor(p.Color, 0.1, 0.1, 0.6)
+	cr, cg, cb := colormap.ParseRGB(p.Color, 0.1, 0.1, 0.6)
 
 	// Draw from bottom (Y=0) to top (Y=1) in normalized space.
-	px1, py1 := c.Transform(nx, 0, w, h)
-	px2, py2 := c.Transform(nx, 1, w, h)
+	px1, py1 := orientedTransform(c, nx, 0, w, h, p.Orientation)
+	px2, py2 := orientedTransform(c, nx, 1, w, h, p.Orientation)
 
 	cv.SetRGBA(cr, cg, cb, alpha)
 	cv.SetLineWidth(lw)
@@ -637,7 +639,7 @@ func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	if alpha <= 0 {
 		alpha = 1
 	}
-	cr, cg, cb := resolveColor(p.Color, 0.1, 0.1, 0.1)
+	cr, cg, cb := colormap.ParseRGB(p.Color, 0.1, 0.1, 0.1)
 
 	cv.SetFontSize(fontSize)
 	cv.SetRGBA(cr, cg, cb, alpha)
@@ -649,7 +651,7 @@ func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	for i := 0; i < n; i++ {
 		nx := normalize(xVals[i], xMin, xMax)
 		ny := normalize(yVals[i], yMin, yMax)
-		px, py := c.Transform(nx, ny, w, h)
+		px, py := orientedTransform(c, nx, ny, w, h, p.Orientation)
 
 		var lbl string
 		if i < len(labels) {
@@ -687,8 +689,8 @@ func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin
 	if lw <= 0 {
 		lw = 1.5
 	}
-	fr, fg, fb := resolveColor(p.Fill, 0.9, 0.9, 0.9)
-	cr, cg, cb := resolveColor(p.Color, 0.2, 0.2, 0.2)
+	fr, fg, fb := colormap.ParseRGB(p.Fill, 0.9, 0.9, 0.9)
+	cr, cg, cb := colormap.ParseRGB(p.Color, 0.2, 0.2, 0.2)
 
 	// Compute half-box-width in pixel space.
 	xRange := xMax - xMin
@@ -721,56 +723,129 @@ func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin
 		nQ3 := normalize(q3Vals[i], yMin, yMax)
 		nHi := normalize(upperVals[i], yMin, yMax)
 
-		// Center X pixel and Y positions via coord.Transform.
-		cx, _ := c.Transform(nx, 0.5, w, h)
-		_, pyLo := c.Transform(nx, nLo, w, h)
-		_, pyQ1 := c.Transform(nx, nQ1, w, h)
-		_, pyMd := c.Transform(nx, nMd, w, h)
-		_, pyQ3 := c.Transform(nx, nQ3, w, h)
-		_, pyHi := c.Transform(nx, nHi, w, h)
+		// Use orientedTransform for all pixel positions.
+		// For vertical: cx = category center (x-axis), py* = value positions (y-axis)
+		// For horizontal: cx = category center (y-axis), px* = value positions (x-axis)
+		if p.Orientation == geom.Horizontal {
+			// Horizontal boxplot: category on Y axis, values on X axis.
+			_, cy := orientedTransform(c, nx, 0.5, w, h, p.Orientation)
+			pxLo, _ := orientedTransform(c, nx, nLo, w, h, p.Orientation)
+			pxQ1, _ := orientedTransform(c, nx, nQ1, w, h, p.Orientation)
+			pxMd, _ := orientedTransform(c, nx, nMd, w, h, p.Orientation)
+			pxQ3, _ := orientedTransform(c, nx, nQ3, w, h, p.Orientation)
+			pxHi, _ := orientedTransform(c, nx, nHi, w, h, p.Orientation)
 
-		// Box rectangle in pixel space.
-		rx := cx - halfPixel
-		ry := math.Min(pyQ1, pyQ3)
-		rw := halfPixel * 2
-		rh := math.Abs(pyQ3 - pyQ1)
+			// Box rectangle (horizontal orientation).
+			rx := math.Min(pxQ1, pxQ3)
+			ry := cy - halfPixel
+			rw := math.Abs(pxQ3 - pxQ1)
+			rh := halfPixel * 2
 
-		// Fill box.
-		cv.SetRGBA(fr, fg, fb, alpha)
-		cv.DrawRectangle(rx, ry, rw, rh)
-		cv.Fill()
+			cv.SetRGBA(fr, fg, fb, alpha)
+			cv.DrawRectangle(rx, ry, rw, rh)
+			cv.Fill()
 
-		// Box outline.
-		cv.SetRGBA(cr, cg, cb, 1.0)
-		cv.SetLineWidth(lw)
-		cv.DrawRectangle(rx, ry, rw, rh)
-		cv.Stroke()
+			cv.SetRGBA(cr, cg, cb, 1.0)
+			cv.SetLineWidth(lw)
+			cv.DrawRectangle(rx, ry, rw, rh)
+			cv.Stroke()
 
-		// Median line.
-		cv.SetLineWidth(lw * 1.5)
-		cv.MoveTo(cx-halfPixel, pyMd)
-		cv.LineTo(cx+halfPixel, pyMd)
-		cv.Stroke()
+			// Median line (vertical within box).
+			cv.SetLineWidth(lw * 1.5)
+			cv.MoveTo(pxMd, cy-halfPixel)
+			cv.LineTo(pxMd, cy+halfPixel)
+			cv.Stroke()
 
-		// Lower whisker: center line from lower to q1.
-		cv.SetLineWidth(lw)
-		cv.MoveTo(cx, pyLo)
-		cv.LineTo(cx, pyQ1)
-		cv.Stroke()
+			// Lower whisker.
+			cv.SetLineWidth(lw)
+			cv.MoveTo(pxLo, cy)
+			cv.LineTo(pxQ1, cy)
+			cv.Stroke()
 
-		// Upper whisker: center line from q3 to upper.
-		cv.MoveTo(cx, pyQ3)
-		cv.LineTo(cx, pyHi)
-		cv.Stroke()
+			// Upper whisker.
+			cv.MoveTo(pxQ3, cy)
+			cv.LineTo(pxHi, cy)
+			cv.Stroke()
 
-		// Whisker caps (horizontal bars at lower and upper).
-		capHalf := halfPixel * 0.4
-		cv.MoveTo(cx-capHalf, pyLo)
-		cv.LineTo(cx+capHalf, pyLo)
-		cv.Stroke()
+			// Whisker caps (vertical bars).
+			capHalf := halfPixel * 0.4
+			cv.MoveTo(pxLo, cy-capHalf)
+			cv.LineTo(pxLo, cy+capHalf)
+			cv.Stroke()
 
-		cv.MoveTo(cx-capHalf, pyHi)
-		cv.LineTo(cx+capHalf, pyHi)
-		cv.Stroke()
+			cv.MoveTo(pxHi, cy-capHalf)
+			cv.LineTo(pxHi, cy+capHalf)
+			cv.Stroke()
+		} else {
+			// Vertical boxplot (default): category on X axis, values on Y axis.
+			cx, _ := orientedTransform(c, nx, 0.5, w, h, p.Orientation)
+			_, pyLo := orientedTransform(c, nx, nLo, w, h, p.Orientation)
+			_, pyQ1 := orientedTransform(c, nx, nQ1, w, h, p.Orientation)
+			_, pyMd := orientedTransform(c, nx, nMd, w, h, p.Orientation)
+			_, pyQ3 := orientedTransform(c, nx, nQ3, w, h, p.Orientation)
+			_, pyHi := orientedTransform(c, nx, nHi, w, h, p.Orientation)
+
+			// Box rectangle in pixel space.
+			rx := cx - halfPixel
+			ry := math.Min(pyQ1, pyQ3)
+			rw := halfPixel * 2
+			rh := math.Abs(pyQ3 - pyQ1)
+
+			// Fill box.
+			cv.SetRGBA(fr, fg, fb, alpha)
+			cv.DrawRectangle(rx, ry, rw, rh)
+			cv.Fill()
+
+			// Box outline.
+			cv.SetRGBA(cr, cg, cb, 1.0)
+			cv.SetLineWidth(lw)
+			cv.DrawRectangle(rx, ry, rw, rh)
+			cv.Stroke()
+
+			// Median line.
+			cv.SetLineWidth(lw * 1.5)
+			cv.MoveTo(cx-halfPixel, pyMd)
+			cv.LineTo(cx+halfPixel, pyMd)
+			cv.Stroke()
+
+			// Lower whisker: center line from lower to q1.
+			cv.SetLineWidth(lw)
+			cv.MoveTo(cx, pyLo)
+			cv.LineTo(cx, pyQ1)
+			cv.Stroke()
+
+			// Upper whisker: center line from q3 to upper.
+			cv.MoveTo(cx, pyQ3)
+			cv.LineTo(cx, pyHi)
+			cv.Stroke()
+
+			// Whisker caps (horizontal bars at lower and upper).
+			capHalf := halfPixel * 0.4
+			cv.MoveTo(cx-capHalf, pyLo)
+			cv.LineTo(cx+capHalf, pyLo)
+			cv.Stroke()
+
+			cv.MoveTo(cx-capHalf, pyHi)
+			cv.LineTo(cx+capHalf, pyHi)
+			cv.Stroke()
+		}
 	}
+}
+
+// orientedTransform applies coord.Transform, swapping the normalized x/y
+// when the geom orientation is [geom.Horizontal]. This centralizes the
+// coordinate swap that was previously handled by the removed flippedCoord.
+func orientedTransform(c coord.Coord, nx, ny, w, h float64, o geom.Orientation) (px, py float64) {
+	if o == geom.Horizontal {
+		nx, ny = ny, nx
+	}
+	return c.Transform(nx, ny, w, h)
+}
+
+// normalize maps a value to [0, 1] within [min, max].
+func normalize(v, min, max float64) float64 {
+	if max == min {
+		return 0.5
+	}
+	return (v - min) / (max - min)
 }

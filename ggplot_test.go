@@ -261,7 +261,7 @@ func TestRender_CoordFlip(t *testing.T) {
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
-		Coord(coord.Flip())
+		CoordFlip()
 
 	_, err := p.Render(context.Background(), 800, 600)
 	if err != nil {
@@ -384,13 +384,6 @@ func TestCartesianTransform(t *testing.T) {
 	px, py := c.Transform(0.5, 0.5, 100, 100)
 	if px != 50 || py != 50 {
 		t.Errorf("Cartesian(0.5,0.5): expected (50,50), got (%v,%v)", px, py)
-	}
-}
-
-func TestFlipTransform(t *testing.T) {
-	c := coord.Flip()
-	if !c.IsFlipped() {
-		t.Error("Flip should report IsFlipped=true")
 	}
 }
 
@@ -602,7 +595,7 @@ func TestRender_XLim_NaN_PartialOverride(t *testing.T) {
 	}
 }
 
-// --- CoordFlip tests ---
+// --- CoordFlip / Orientation tests ---
 
 func TestRender_CoordFlip_Point(t *testing.T) {
 	ds := testDataset(t)
@@ -628,6 +621,41 @@ func TestRender_CoordFlip_Bar(t *testing.T) {
 	_, err := p.Render(context.Background(), 400, 300)
 	if err != nil {
 		t.Fatalf("CoordFlip bar render failed: %v", err)
+	}
+}
+
+func TestOrientation_HorizontalBar(t *testing.T) {
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{10, 25, 15, 30, 20}),
+	)
+	// Horizontal bar via explicit orientation (no CoordFlip)
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Bar(geom.WithOrientation(geom.Horizontal)))
+
+	_, err := p.Render(context.Background(), 400, 300)
+	if err != nil {
+		t.Fatalf("Horizontal bar render failed: %v", err)
+	}
+}
+
+func TestOrientation_HorizontalBoxplot(t *testing.T) {
+	var groups []string
+	var vals []float64
+	for i := 0; i < 30; i++ {
+		groups = append(groups, "A")
+		vals = append(vals, float64(i))
+	}
+	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
+		memory.NewEngine(context.Background()).NewStringColumn("g", groups),
+		memory.NewEngine(context.Background()).NewFloat64Column("v", vals),
+	)
+	p := ggplot.New(ds, aes.X("g"), aes.Y("v")).
+		Layer(geom.Boxplot(geom.WithOrientation(geom.Horizontal)))
+
+	_, err := p.Render(context.Background(), 400, 300)
+	if err != nil {
+		t.Fatalf("Horizontal boxplot render failed: %v", err)
 	}
 }
 

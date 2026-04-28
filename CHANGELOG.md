@@ -31,6 +31,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `gridFacet.GridDims()` uses actual row/col cardinalities from `Split()`, not `ceilSqrt`.
 - `coord.Transform` returns `(x, y float64)` instead of mutating in place.
 - Font loading uses `internal/fonts.Resolver` with system font registry and embedded fallback.
+- **Orientation-aware geoms**: `geom.Orientation` (`Vertical`/`Horizontal`) replaces `coord.Flip()`. Geoms now know their axis direction; the rendering pipeline swaps scales/labels automatically.
+- `CoordFlip()` is retained as sugar — it sets `Horizontal` on all layers and swaps labels.
+- Removed `coord.IsFlipped()` from `Coord` interface and `flippedCoord` type.
 
 ### Fixed
 - Shallow-copy corruption in `Plot.clone()` when deriving plots.

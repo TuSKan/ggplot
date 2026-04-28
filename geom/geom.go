@@ -61,6 +61,14 @@ const (
 	TypeVLine     Type = "vline"
 )
 
+// Orientation controls which axis a directional geom extends along.
+type Orientation string
+
+const (
+	Vertical   Orientation = "v" // default: bars grow upward, boxplots are vertical
+	Horizontal Orientation = "h" // bars grow rightward, boxplots are horizontal
+)
+
 // Params holds visual parameters for geometries. Not all fields apply to
 // every geometry type; unused fields are ignored during rendering but
 // [Layer.Validate] will emit warnings for irrelevant options.
@@ -94,6 +102,9 @@ type Params struct {
 	Whisker string // whisker rule: "tukey" (default, 1.5×IQR), "range" (min-max)
 	Notch   bool   // if true, compute notch confidence interval around median
 
+	// Orientation
+	Orientation Orientation // "v" (default) or "h" — controls axis extension direction
+
 	// Legend
 	Label string // legend label for this layer (used with manual colors)
 
@@ -107,38 +118,39 @@ type Params struct {
 type optFlag uint32
 
 const (
-	optColor      optFlag = 1 << iota // common
-	optFill                           // common
-	optAlpha                          // common
-	optLineWidth                      // common
-	optSize                           // point, (also sets LineWidth)
-	optShape                          // point
-	optWidth                          // bar, histogram
-	optBins                           // histogram
-	optFontSize                       // text
-	optFontFamily                     // text
-	optAngle                          // text
-	optMethod                         // smooth
-	optSpan                           // smooth
-	optPoints                         // smooth, density
-	optWhisker                        // boxplot
-	optNotch                          // boxplot
+	optColor       optFlag = 1 << iota // common
+	optFill                            // common
+	optAlpha                           // common
+	optLineWidth                       // common
+	optSize                            // point, (also sets LineWidth)
+	optShape                           // point
+	optWidth                           // bar, histogram
+	optBins                            // histogram
+	optFontSize                        // text
+	optFontFamily                      // text
+	optAngle                           // text
+	optMethod                          // smooth
+	optSpan                            // smooth
+	optPoints                          // smooth, density
+	optWhisker                         // boxplot
+	optNotch                           // boxplot
+	optOrientation                     // bar, histogram, boxplot, area, density, rug
 )
 
 // paramRelevance maps geometry types to what parameters are meaningful for them.
 var paramRelevance = map[Type]optFlag{
 	TypePoint:     optColor | optFill | optAlpha | optSize | optShape,
 	TypeLine:      optColor | optAlpha | optLineWidth | optSize, // Size → LineWidth
-	TypeBar:       optColor | optFill | optAlpha | optWidth | optLineWidth,
-	TypeHistogram: optColor | optFill | optAlpha | optWidth | optBins | optLineWidth,
-	TypeArea:      optColor | optFill | optAlpha | optLineWidth,
+	TypeBar:       optColor | optFill | optAlpha | optWidth | optLineWidth | optOrientation,
+	TypeHistogram: optColor | optFill | optAlpha | optWidth | optBins | optLineWidth | optOrientation,
+	TypeArea:      optColor | optFill | optAlpha | optLineWidth | optOrientation,
 	TypePolygon:   optColor | optFill | optAlpha | optLineWidth,
 	TypeSmooth:    optColor | optAlpha | optLineWidth | optSize | optMethod | optSpan | optPoints,
-	TypeDensity:   optColor | optFill | optAlpha | optLineWidth | optPoints,
+	TypeDensity:   optColor | optFill | optAlpha | optLineWidth | optPoints | optOrientation,
 	TypeText:      optColor | optAlpha | optFontSize | optFontFamily | optAngle,
 	TypeStep:      optColor | optAlpha | optLineWidth | optSize,
-	TypeRug:       optColor | optAlpha | optLineWidth,
-	TypeBoxPlot:   optColor | optFill | optAlpha | optWidth | optLineWidth | optWhisker | optNotch,
+	TypeRug:       optColor | optAlpha | optLineWidth | optOrientation,
+	TypeBoxPlot:   optColor | optFill | optAlpha | optWidth | optLineWidth | optWhisker | optNotch | optOrientation,
 	TypeErrorBar:  optColor | optAlpha | optLineWidth | optWidth,
 	TypeSegment:   optColor | optAlpha | optLineWidth,
 	TypeTile:      optColor | optFill | optAlpha,
@@ -148,20 +160,21 @@ var paramRelevance = map[Type]optFlag{
 
 // optName maps flags to human-readable names.
 var optName = map[optFlag]string{
-	optColor:      "WithColor",
-	optFill:       "WithFill",
-	optAlpha:      "WithAlpha",
-	optLineWidth:  "WithLineWidth",
-	optSize:       "WithSize",
-	optShape:      "WithShape",
-	optWidth:      "WithWidth",
-	optBins:       "WithBins",
-	optFontSize:   "WithFontSize",
-	optFontFamily: "WithFontFamily",
-	optAngle:      "WithAngle",
-	optMethod:     "WithMethod",
-	optSpan:       "WithSpan",
-	optPoints:     "WithPoints",
+	optColor:       "WithColor",
+	optFill:        "WithFill",
+	optAlpha:       "WithAlpha",
+	optLineWidth:   "WithLineWidth",
+	optSize:        "WithSize",
+	optShape:       "WithShape",
+	optWidth:       "WithWidth",
+	optBins:        "WithBins",
+	optFontSize:    "WithFontSize",
+	optFontFamily:  "WithFontFamily",
+	optAngle:       "WithAngle",
+	optMethod:      "WithMethod",
+	optSpan:        "WithSpan",
+	optPoints:      "WithPoints",
+	optOrientation: "WithOrientation",
 }
 
 // Validate checks if the configured params are meaningful for this geometry
@@ -315,6 +328,12 @@ func WithWhisker(rule string) Opt {
 // WithNotch enables notched boxplots that show the 95% confidence interval around the median.
 func WithNotch(enabled bool) Opt {
 	return func(l *Layer) { l.Params.Notch = enabled; l.setFlags |= optNotch }
+}
+
+// WithOrientation sets the axis extension direction for directional geoms.
+// [Horizontal] makes bars grow rightward, boxplots lay sideways, etc.
+func WithOrientation(o Orientation) Opt {
+	return func(l *Layer) { l.Params.Orientation = o; l.setFlags |= optOrientation }
 }
 
 // WithLabel sets a legend label for this layer. When used together with

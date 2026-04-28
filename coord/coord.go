@@ -11,9 +11,6 @@ type Coord interface {
 	// within the data area of dimensions (width, height).
 	Transform(x, y, width, height float64) (px, py float64)
 
-	// IsFlipped returns true if the axes are swapped (x↔y).
-	IsFlipped() bool
-
 	// String returns a human-readable label.
 	String() string
 }
@@ -27,19 +24,7 @@ type cartesianCoord struct{}
 func (cartesianCoord) Transform(x, y, w, h float64) (float64, float64) {
 	return x * w, h - y*h
 }
-func (cartesianCoord) IsFlipped() bool { return false }
-func (cartesianCoord) String() string  { return "cartesian" }
-
-// Flip returns a coordinate system that swaps the x and y axes.
-func Flip() Coord { return flippedCoord{} }
-
-type flippedCoord struct{}
-
-func (flippedCoord) Transform(x, y, w, h float64) (float64, float64) {
-	return y * w, h - x*h
-}
-func (flippedCoord) IsFlipped() bool { return true }
-func (flippedCoord) String() string  { return "flip" }
+func (cartesianCoord) String() string { return "cartesian" }
 
 // Polar returns a polar coordinate system where x maps to angle (theta,
 // 0→2π) and y maps to radius (0→1). Center is at (w/2, h/2).
@@ -57,5 +42,4 @@ func (polarCoord) Transform(x, y, w, h float64) (float64, float64) {
 	py := cy - r*math.Sin(theta) // y-inverted for screen coords
 	return px, py
 }
-func (polarCoord) IsFlipped() bool { return false }
-func (polarCoord) String() string  { return "polar" }
+func (polarCoord) String() string { return "polar" }

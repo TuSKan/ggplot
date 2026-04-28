@@ -22,7 +22,7 @@
 - [x] **Geometries**: Point, Line, Path, Step, Bar, Histogram, Area, Density, Rug, HLine, VLine, Text, BoxPlot, Smooth
 - [x] **Statistics**: Identity, Bin/Count, Density (KDE), Smooth (LOESS), Summary, BoxPlot
 - [x] **Scales**: Linear, Log10, Sqrt, Reverse, Discrete + `scale.Resolve(name)` factory
-- [x] **Coordinates**: Cartesian, Flipped (`CoordFlip`)
+- [x] **Coordinates**: Cartesian, Polar + geom-level Orientation (`Horizontal`/`Vertical`)
 - [x] **Faceting**: None, Wrap (with NCols/NRows), Grid (row ~ col), Strip Labels
 - [x] **Themes**: Default, Classic, Minimal, Dark, BW
 - [x] **Guides**: X/Y Axes, Grid, Categorical Legend, Continuous Color Bar (vertical + horizontal)
