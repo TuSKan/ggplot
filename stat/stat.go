@@ -110,7 +110,7 @@ func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string
 		return dataset.Dataset{}, fmt.Errorf("stat_bin: missing 'x' aesthetic")
 	}
 
-	vals, err := collectFloat64Column(ds, xCol)
+	vals, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
@@ -179,7 +179,7 @@ func (countStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[stri
 		return dataset.Dataset{}, fmt.Errorf("stat_count: missing 'x' aesthetic")
 	}
 
-	vals, err := collectFloat64Column(ds, xCol)
+	vals, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
@@ -222,7 +222,7 @@ func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[
 		return dataset.Dataset{}, fmt.Errorf("stat_density: missing 'x' aesthetic")
 	}
 
-	vals, err := collectFloat64Column(ds, xCol)
+	vals, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
@@ -344,11 +344,11 @@ func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[s
 		return dataset.Dataset{}, fmt.Errorf("stat_smooth: missing 'x' or 'y' aesthetic")
 	}
 
-	xData, err := collectFloat64Column(ds, xCol)
+	xData, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
-	yData, err := collectFloat64Column(ds, yCol)
+	yData, err := ds.Float64(yCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
@@ -521,11 +521,11 @@ func (summaryStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 		return dataset.Dataset{}, fmt.Errorf("stat_summary: missing 'x' or 'y' aesthetic")
 	}
 
-	xData, err := collectFloat64Column(ds, xCol)
+	xData, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
-	yData, err := collectFloat64Column(ds, yCol)
+	yData, err := ds.Float64(yCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
@@ -556,28 +556,7 @@ func (summaryStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 
 // --- Helpers ---
 
-func collectFloat64(col dataset.AnyColumn) ([]float64, error) {
-	fc, ok := col.(dataset.Column[float64])
-	if !ok {
-		return nil, fmt.Errorf("stat: column %q (%s) is not float64", col.Name(), col.DType())
-	}
-	vals := fc.Values()
-	out := make([]float64, 0, len(vals))
-	for _, v := range vals {
-		if !math.IsNaN(v) {
-			out = append(out, v)
-		}
-	}
-	return out, nil
-}
 
-func collectFloat64Column(ds dataset.Dataset, name string) ([]float64, error) {
-	col, err := ds.Column(name)
-	if err != nil {
-		return nil, err
-	}
-	return collectFloat64(col)
-}
 
 // newFloat64Dataset creates a Dataset from float64 columns using the engine
 // from the source dataset. Never imports a specific engine.
@@ -624,7 +603,7 @@ func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 	}
 
 	// Collect Y values, optionally grouped by X.
-	yVals, err := collectFloat64Column(ds, yCol)
+	yVals, err := ds.Float64(yCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
@@ -633,7 +612,7 @@ func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 	xCol := mapping["x"]
 	var xVals []float64
 	if xCol != "" {
-		xVals, _ = collectFloat64Column(ds, xCol)
+		xVals, _ = ds.Float64(xCol, dataset.Clean)
 	}
 
 	// Group Y values by X.

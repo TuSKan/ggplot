@@ -179,9 +179,9 @@ func drawBoxplotFn(dc DrawContext) {
 }
 
 func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, contColorCol string, contScale *colormap.Scale, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xVals := getFloat64Values(ds, xCol)
-	yVals := getFloat64Values(ds, yCol)
-	if xVals == nil || yVals == nil {
+	xVals, errX := ds.Float64(xCol)
+	yVals, errY := ds.Float64(yCol)
+	if errX != nil || errY != nil {
 		return
 	}
 
@@ -195,7 +195,10 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 	}
 
 	// Continuous color: read z values through the scale.
-	zVals := getFloat64Values(ds, contColorCol)
+	var zVals []float64
+	if contColorCol != "" {
+		zVals, _ = ds.Float64(contColorCol)
+	}
 	cr, cg, cb := resolveColor(p.Color, 0.3, 0.5, 0.8)
 
 	n := len(xVals)
@@ -219,9 +222,9 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 }
 
 func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, contColorCol string, contScale *colormap.Scale, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xVals := getFloat64Values(ds, xCol)
-	yVals := getFloat64Values(ds, yCol)
-	if xVals == nil || yVals == nil {
+	xVals, errX := ds.Float64(xCol)
+	yVals, errY := ds.Float64(yCol)
+	if errX != nil || errY != nil {
 		return
 	}
 
@@ -249,7 +252,10 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 	}
 
 	// Continuous color samples the scale at each segment midpoint.
-	zVals := getFloat64Values(ds, contColorCol)
+	var zVals []float64
+	if contColorCol != "" {
+		zVals, _ = ds.Float64(contColorCol)
+	}
 
 	cv.SetLineWidth(lw)
 
@@ -292,14 +298,14 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	type barPt struct{ x, y float64 }
 	var pts []barPt
 
-	xVals := getFloat64Values(ds, xCol)
-	if xVals == nil {
+	xVals, err := ds.Float64(xCol)
+	if err != nil {
 		return
 	}
 
-	yVals := getFloat64Values(ds, yCol)
-	if yVals == nil {
-		yVals = getFloat64Values(ds, "count")
+	yVals, err := ds.Float64(yCol)
+	if err != nil {
+		yVals, _ = ds.Float64("count")
 	}
 
 	for i, x := range xVals {
@@ -402,9 +408,9 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 }
 
 func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xVals := getFloat64Values(ds, xCol)
-	yVals := getFloat64Values(ds, yCol)
-	if xVals == nil || yVals == nil {
+	xVals, errX := ds.Float64(xCol)
+	yVals, errY := ds.Float64(yCol)
+	if errX != nil || errY != nil {
 		return
 	}
 
@@ -456,9 +462,9 @@ func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 }
 
 func drawStep(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xVals := getFloat64Values(ds, xCol)
-	yVals := getFloat64Values(ds, yCol)
-	if xVals == nil || yVals == nil {
+	xVals, errX := ds.Float64(xCol)
+	yVals, errY := ds.Float64(yCol)
+	if errX != nil || errY != nil {
 		return
 	}
 
@@ -522,7 +528,7 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 	const rugFrac = 0.02 // 2% of panel extent
 
 	// X rugs: tick marks along the bottom edge of the panel.
-	if xVals := getFloat64Values(ds, xCol); xVals != nil {
+	if xVals, err := ds.Float64(xCol); err == nil {
 		cv.SetRGBA(cr, cg, cb, alpha)
 		cv.SetLineWidth(lw)
 		for _, x := range xVals {
@@ -536,7 +542,7 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 	}
 
 	// Y rugs: tick marks along the left edge of the panel.
-	if yVals := getFloat64Values(ds, yCol); yVals != nil {
+	if yVals, err := ds.Float64(yCol); err == nil {
 		cv.SetRGBA(cr, cg, cb, alpha)
 		cv.SetLineWidth(lw)
 		for _, y := range yVals {
@@ -605,9 +611,9 @@ func drawVLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax flo
 }
 
 func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, mapping grammar.AesMap, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xVals := getFloat64Values(ds, xCol)
-	yVals := getFloat64Values(ds, yCol)
-	if xVals == nil || yVals == nil {
+	xVals, errX := ds.Float64(xCol)
+	yVals, errY := ds.Float64(yCol)
+	if errX != nil || errY != nil {
 		return
 	}
 
@@ -659,13 +665,13 @@ func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 
 func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
 	// Read stat_boxplot output columns.
-	xVals := getFloat64Values(ds, "x")
-	lowerVals := getFloat64Values(ds, "lower")
-	q1Vals := getFloat64Values(ds, "q1")
-	midVals := getFloat64Values(ds, "middle")
-	q3Vals := getFloat64Values(ds, "q3")
-	upperVals := getFloat64Values(ds, "upper")
-	if xVals == nil || lowerVals == nil || q1Vals == nil || midVals == nil || q3Vals == nil || upperVals == nil {
+	xVals, errX := ds.Float64("x")
+	lowerVals, errL := ds.Float64("lower")
+	q1Vals, errQ1 := ds.Float64("q1")
+	midVals, errM := ds.Float64("middle")
+	q3Vals, errQ3 := ds.Float64("q3")
+	upperVals, errU := ds.Float64("upper")
+	if errX != nil || errL != nil || errQ1 != nil || errM != nil || errQ3 != nil || errU != nil {
 		return
 	}
 

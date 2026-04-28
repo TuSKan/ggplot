@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/TuSKan/ggplot/colormap"
-	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/internal/canvas"
 )
 
@@ -36,22 +35,6 @@ func setColorFromTheme(cv canvas.Canvas, c color.Color) {
 		float64(b)/65535.0,
 		float64(a)/65535.0,
 	)
-}
-
-// getFloat64Values returns the float64 values for the named column, or nil on any error.
-func getFloat64Values(ds dataset.Dataset, col string) []float64 {
-	if col == "" {
-		return nil
-	}
-	c, err := ds.Column(col)
-	if err != nil {
-		return nil
-	}
-	fc, ok := c.(dataset.Column[float64])
-	if !ok {
-		return nil
-	}
-	return fc.Values()
 }
 
 // normalize maps a value to [0, 1] within [min, max].
