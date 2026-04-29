@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"cmp"
+	"fmt"
 	"math"
 	"slices"
 
@@ -17,6 +18,9 @@ type StringOpt = func([]string) []string
 // aliases the underlying column data (zero-copy). Any opt forces a copy
 // before the chain runs, so callers may freely mutate the result.
 func (d Dataset) Float64(name string, opts ...Float64Opt) ([]float64, error) {
+	if d.tbl == nil {
+		return nil, fmt.Errorf("dataset: Float64() on uncollected Dataset — call Collect(ctx) first")
+	}
 	if d.err != nil {
 		return nil, d.err
 	}
@@ -35,6 +39,9 @@ func (d Dataset) Float64(name string, opts ...Float64Opt) ([]float64, error) {
 }
 
 func (d Dataset) Int64(name string, opts ...Int64Opt) ([]int64, error) {
+	if d.tbl == nil {
+		return nil, fmt.Errorf("dataset: Int64() on uncollected Dataset — call Collect(ctx) first")
+	}
 	if d.err != nil {
 		return nil, d.err
 	}
@@ -53,6 +60,9 @@ func (d Dataset) Int64(name string, opts ...Int64Opt) ([]int64, error) {
 }
 
 func (d Dataset) Strings(name string, opts ...StringOpt) ([]string, error) {
+	if d.tbl == nil {
+		return nil, fmt.Errorf("dataset: Strings() on uncollected Dataset — call Collect(ctx) first")
+	}
 	if d.err != nil {
 		return nil, d.err
 	}
@@ -71,6 +81,9 @@ func (d Dataset) Strings(name string, opts ...StringOpt) ([]string, error) {
 }
 
 func (d Dataset) Bools(name string) ([]bool, error) {
+	if d.tbl == nil {
+		return nil, fmt.Errorf("dataset: Bools() on uncollected Dataset — call Collect(ctx) first")
+	}
 	if d.err != nil {
 		return nil, d.err
 	}

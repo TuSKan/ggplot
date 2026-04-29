@@ -304,7 +304,7 @@ func BenchmarkFrameArrange(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				_, _ = dataset.From(ds).Arrange("x").Collect()
+				_, _ = dataset.From(ds).Arrange("x").Collect(context.Background())
 			}
 		})
 	}
@@ -317,7 +317,7 @@ func BenchmarkFrameHead(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				_, _ = dataset.From(ds).Head(100).Collect()
+				_, _ = dataset.From(ds).Head(100).Collect(context.Background())
 			}
 		})
 	}
@@ -330,7 +330,7 @@ func BenchmarkFrameSelect(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				_, _ = dataset.From(ds).Select("x", "group").Collect()
+				_, _ = dataset.From(ds).Select("x", "group").Collect(context.Background())
 			}
 		})
 	}
@@ -349,7 +349,7 @@ func BenchmarkGroupBySummarize(b *testing.B) {
 						dataset.Sum("total", "x"),
 						dataset.Count("n", "x"),
 						dataset.Mean("avg", "x"),
-					).Collect()
+					).Collect(context.Background())
 			}
 		})
 	}

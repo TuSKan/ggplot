@@ -40,6 +40,13 @@ type Engine interface {
 	Context() context.Context
 }
 
+// Optimizer is optionally implemented by engines that can fuse or reorder
+// operations for efficiency. BigQuery uses this to fuse verb chains into
+// a single SQL query.
+type Optimizer interface {
+	Optimize(ops []op) []op
+}
+
 // HasEngine is implemented by datasets that carry an engine reference.
 // This enables engine propagation through transformations — stat packages
 // and ggplot internals can produce new datasets using the same engine

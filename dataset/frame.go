@@ -7,25 +7,32 @@ import (
 	"math"
 )
 
-// Frame is the fluent API for data manipulation. All verbs return a new Frame
-// (immutable chain). Every operation delegates to the dataset's engine via
-// sub-interfaces — the Frame never touches raw data directly.
+// Dataset is the fluent API for data manipulation. All verbs return a new
+// Dataset that records the operation lazily — no computation happens until
+// [Dataset.Collect] is called. The chain forms a linked list of [op] nodes
+// rooted at a materialised Table.
 //
 // Usage:
 //
-//	result := dataset.From(ds).
+//	result, err := dataset.From(ds).
 //	    Select("x", "y").
 //	    Filter(dataset.Gt("x", 0)).
 //	    Arrange("x").
-//	    Collect()
+//	    Collect(ctx)
 type Dataset struct {
+	// Lazy chain.
+	eng    Engine   // engine for this chain (propagated from root)
+	parent *Dataset // previous node in the chain; nil = root
+	op     op       // operation this node represents
+
+	// Materialised state — only populated for root nodes or after Collect.
 	tbl Table
 	err error
 }
 
 // From wraps a Table in a Dataset for fluent verb chaining.
 func From(ds Table) Dataset {
-	return Dataset{tbl: ds}
+	return Dataset{eng: GetEngine(ds), tbl: ds, op: op{kind: opNone}}
 }
 
 // NewDataset creates a Dataset from an engine and columns.
@@ -44,54 +51,57 @@ func NewDataset(eng Engine, cols ...AnyColumn) (Dataset, error) {
 	if err != nil {
 		return Dataset{}, err
 	}
-	return Dataset{tbl: tbl}, nil
+	return Dataset{eng: eng, tbl: tbl, op: op{kind: opNone}}, nil
 }
 
-// ReplaceColumn replaces a named column in a Dataset with new float64 values.
-// All other columns are preserved. Used for discrete-to-numeric remapping.
-func ReplaceColumn(ds Dataset, name string, values []float64) (Dataset, error) {
-	eng := GetEngine(ds.Table())
-	if eng == nil {
-		return Dataset{}, fmt.Errorf("ReplaceColumn: no engine")
+// ReplaceColumn returns a lazy Dataset that replaces a named column with
+// new float64 values when collected.
+func ReplaceColumn(ds Dataset, name string, values []float64) Dataset {
+	return Dataset{
+		eng:    ds.engine(),
+		parent: &ds,
+		op:     op{kind: opReplaceCol, replaceCol: name, replaceVals: values},
 	}
-	factory, ok := eng.(ColumnFactory)
-	if !ok {
-		return Dataset{}, fmt.Errorf("ReplaceColumn: engine %q does not support ColumnFactory", eng.Name())
-	}
-
-	newCol := factory.NewFloat64Column(name, values)
-	n := int(ds.NumCols())
-	cols := make([]AnyColumn, 0, n)
-	for i := 0; i < n; i++ {
-		f := ds.Schema().Field(i)
-		if f.Name == name {
-			cols = append(cols, newCol)
-		} else {
-			c, err := ds.Column(f.Name)
-			if err != nil {
-				return Dataset{}, err
-			}
-			cols = append(cols, c)
-		}
-	}
-	return NewDataset(eng, cols...)
 }
 
 // Err returns the first error encountered in the chain, or nil.
 func (f Dataset) Err() error { return f.err }
 
-// Table returns the underlying Table, or nil if an error occurred.
-func (f Dataset) Table() Table { return f.tbl }
+// Table returns the underlying Table. Panics if the Dataset is uncollected.
+func (f Dataset) Table() Table {
+	if f.tbl == nil && f.parent != nil {
+		panic("dataset: Table() called on uncollected lazy Dataset — call Collect(ctx) first")
+	}
+	return f.tbl
+}
 
-// Convenience forwarding methods — allow Dataset to be used where Table is expected.
-func (f Dataset) Column(name string) (AnyColumn, error) { return f.tbl.Column(name) }
-func (f Dataset) NumRows() int64                        { return f.tbl.NumRows() }
-func (f Dataset) NumCols() int64                        { return f.tbl.NumCols() }
-func (f Dataset) Schema() *Schema                       { return f.tbl.Schema() }
+// Convenience forwarding methods — require a collected Dataset.
+func (f Dataset) Column(name string) (AnyColumn, error) {
+	if f.tbl == nil {
+		return nil, fmt.Errorf("dataset: Column() on uncollected Dataset — call Collect(ctx) first")
+	}
+	return f.tbl.Column(name)
+}
 
-// Collect materializes the frame's pipeline and returns the Dataset and error.
-func (f Dataset) Collect() (Table, error) {
-	return f.tbl, f.err
+func (f Dataset) NumRows() int64 {
+	if f.tbl == nil {
+		return 0
+	}
+	return f.tbl.NumRows()
+}
+
+func (f Dataset) NumCols() int64 {
+	if f.tbl == nil {
+		return 0
+	}
+	return f.tbl.NumCols()
+}
+
+func (f Dataset) Schema() *Schema {
+	if f.tbl == nil {
+		return nil
+	}
+	return f.tbl.Schema()
 }
 
 // withError returns a Frame with an error set; short-circuits all further verbs.
@@ -107,9 +117,14 @@ func (f Dataset) requireEngine() (Engine, Dataset) {
 	if f.err != nil {
 		return nil, f
 	}
-	eng := GetEngine(f.tbl)
+	eng := f.engine()
 	if eng == nil {
-		return nil, f.withError(fmt.Errorf("dataset: Frame requires a dataset with an engine"))
+		if f.tbl != nil {
+			eng = GetEngine(f.tbl)
+		}
+	}
+	if eng == nil {
+		return nil, f.withError(fmt.Errorf("dataset: Dataset requires an engine"))
 	}
 	return eng, f
 }
@@ -131,6 +146,15 @@ func (f Dataset) requireSelector(eng Engine) (Selector, ColumnFactory, error) {
 
 // Select keeps only the named columns, in the order specified.
 func (f Dataset) Select(cols ...string) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opSelect, cols: cols}}
+}
+
+// Rename renames a column.
+func (f Dataset) Rename(oldName, newName string) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opRename, renameOld: oldName, renameNew: newName}}
+}
+
+func (f Dataset) execSelect(cols []string) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -139,7 +163,6 @@ func (f Dataset) Select(cols ...string) Dataset {
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
 	}
-
 	fields := make([]Field, 0, len(cols))
 	columns := make([]AnyColumn, 0, len(cols))
 	for _, name := range cols {
@@ -154,17 +177,15 @@ func (f Dataset) Select(cols ...string) Dataset {
 		}
 		columns = append(columns, col)
 	}
-
 	schema := NewSchema(fields...)
 	ds, err := factory.FromColumns(schema, columns...)
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
-// Rename renames a column.
-func (f Dataset) Rename(oldName, newName string) Dataset {
+func (f Dataset) execRename(oldName, newName string) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -173,7 +194,6 @@ func (f Dataset) Rename(oldName, newName string) Dataset {
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
 	}
-
 	schema := f.tbl.Schema()
 	fields := make([]Field, schema.NumFields())
 	columns := make([]AnyColumn, schema.NumFields())
@@ -190,57 +210,83 @@ func (f Dataset) Rename(oldName, newName string) Dataset {
 		fields[i] = field
 		columns[i] = col
 	}
-
-	newSchema := NewSchema(fields...)
-	ds, err := factory.FromColumns(newSchema, columns...)
+	ns := NewSchema(fields...)
+	ds, err := factory.FromColumns(ns, columns...)
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Filtering ---
 
 // Filter keeps rows where the Masker evaluates to true.
 func (f Dataset) Filter(mask Masker) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opFilter, mask: mask}}
+}
+
+func (f Dataset) execFilter(mask Masker) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
 	}
-
-	// Try engine-native Filterer first
 	if filterer, ok := eng.(Filterer); ok {
 		ds, err := filterer.Filter(f.tbl, mask)
 		if err != nil {
 			return f.withError(err)
 		}
-		return Dataset{tbl: ds}
+		return Dataset{eng: eng, tbl: ds}
 	}
-
-	// Via Selector: mask → indices → Take
 	sel, factory, err := f.requireSelector(eng)
 	if err != nil {
 		return f.withError(err)
 	}
-
 	bools, err := mask.Mask(f.tbl)
 	if err != nil {
 		return f.withError(err)
 	}
-
 	indices := sel.FilterIndices(bools)
 	ds, err := applySelect(sel, factory, f.tbl, indices)
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Sorting ---
 
 // Arrange sorts the dataset by the named column (ascending).
-// Engine's Selector.SortIndices computes the permutation; Selector.Take applies it.
 func (f Dataset) Arrange(cols ...string) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opArrange, cols: cols}}
+}
+
+// --- Row Slicing ---
+
+// Head returns the first n rows.
+func (f Dataset) Head(n int) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opHead, n: n}}
+}
+
+// Tail returns the last n rows.
+func (f Dataset) Tail(n int) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opTail, n: n}}
+}
+
+// Slice returns rows in the range [start, end).
+func (f Dataset) Slice(start, end int) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opSlice, start: start, end: end}}
+}
+
+// --- Distinct ---
+
+// Distinct removes duplicate rows based on the specified columns.
+func (f Dataset) Distinct(cols ...string) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opDistinct, cols: cols}}
+}
+
+// --- exec methods ---
+
+func (f Dataset) execArrange(cols []string) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -249,7 +295,6 @@ func (f Dataset) Arrange(cols ...string) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-
 	if len(cols) == 0 {
 		return f
 	}
@@ -261,41 +306,28 @@ func (f Dataset) Arrange(cols ...string) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-
 	ds, err := applySelect(sel, factory, f.tbl, indices)
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
-// --- Row Slicing ---
-
-// Head returns the first n rows.
-func (f Dataset) Head(n int) Dataset {
-	if f.err != nil {
-		return f
-	}
+func (f Dataset) execHead(n int) Dataset {
 	if n >= int(f.tbl.NumRows()) {
 		return f
 	}
-	return f.Slice(0, n)
+	return f.execSlice(0, n)
 }
 
-// Tail returns the last n rows.
-func (f Dataset) Tail(n int) Dataset {
-	if f.err != nil {
-		return f
-	}
+func (f Dataset) execTail(n int) Dataset {
 	if n >= int(f.tbl.NumRows()) {
 		return f
 	}
-	return f.Slice(int(f.tbl.NumRows())-n, int(f.tbl.NumRows()))
+	return f.execSlice(int(f.tbl.NumRows())-n, int(f.tbl.NumRows()))
 }
 
-// Slice returns rows in the range [start, end).
-// Engine's Selector.SliceColumn handles this — for Arrow, zero-copy via array.NewSlice.
-func (f Dataset) Slice(start, end int) Dataset {
+func (f Dataset) execSlice(start, end int) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -304,7 +336,6 @@ func (f Dataset) Slice(start, end int) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-
 	if start < 0 {
 		start = 0
 	}
@@ -314,19 +345,14 @@ func (f Dataset) Slice(start, end int) Dataset {
 	if start >= end {
 		return f.withError(fmt.Errorf("dataset: Slice start (%d) >= end (%d)", start, end))
 	}
-
 	ds, err := applySlice(sel, factory, f.tbl, start, end)
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
-// --- Distinct ---
-
-// Distinct removes duplicate rows based on the specified columns.
-// If no columns are specified, all columns are used.
-func (f Dataset) Distinct(cols ...string) Dataset {
+func (f Dataset) execDistinct(cols []string) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -335,12 +361,9 @@ func (f Dataset) Distinct(cols ...string) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-
 	if len(cols) == 0 {
 		cols = Names(f.tbl)
 	}
-
-	// Build unique row indices
 	seen := make(map[uint64]struct{}, int(f.tbl.NumRows())/2)
 	var indices []int
 	for row := 0; row < int(f.tbl.NumRows()); row++ {
@@ -350,47 +373,46 @@ func (f Dataset) Distinct(cols ...string) Dataset {
 			indices = append(indices, row)
 		}
 	}
-
 	ds, err := applySelect(sel, factory, f.tbl, indices)
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Joins ---
 
 func (f Dataset) LeftJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinLeft
-	return f.join(other, spec)
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) InnerJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinInner
-	return f.join(other, spec)
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) RightJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinRight
-	return f.join(other, spec)
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) FullJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinFull
-	return f.join(other, spec)
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) SemiJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinSemi
-	return f.join(other, spec)
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) AntiJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinAnti
-	return f.join(other, spec)
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
-func (f Dataset) join(other Table, spec JoinSpec) Dataset {
+func (f Dataset) execJoin(other Table, spec JoinSpec) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -403,12 +425,24 @@ func (f Dataset) join(other Table, spec JoinSpec) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Reshape ---
 
 func (f Dataset) PivotLonger(spec PivotLongerSpec) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opPivotLonger, pivotL: spec}}
+}
+
+func (f Dataset) PivotWider(spec PivotWiderSpec) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opPivotWider, pivotW: spec}}
+}
+
+func (f Dataset) Separate(col string, into []string, sep string) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opSeparate, sepCol: col, into: into, sep: sep}}
+}
+
+func (f Dataset) execPivotLonger(spec PivotLongerSpec) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -421,10 +455,10 @@ func (f Dataset) PivotLonger(spec PivotLongerSpec) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
-func (f Dataset) PivotWider(spec PivotWiderSpec) Dataset {
+func (f Dataset) execPivotWider(spec PivotWiderSpec) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -437,10 +471,10 @@ func (f Dataset) PivotWider(spec PivotWiderSpec) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
-func (f Dataset) Separate(col string, into []string, sep string) Dataset {
+func (f Dataset) execSeparate(col string, into []string, sep string) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -453,12 +487,20 @@ func (f Dataset) Separate(col string, into []string, sep string) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Fill / DropNA ---
 
 func (f Dataset) Fill(col string, dir FillDirection) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opFill, fillCol: col, fillDir: dir}}
+}
+
+func (f Dataset) DropNA(cols ...string) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opDropNA, cols: cols}}
+}
+
+func (f Dataset) execFill(col string, dir FillDirection) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -471,7 +513,6 @@ func (f Dataset) Fill(col string, dir FillDirection) Dataset {
 	if !ok2 {
 		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
 	}
-
 	c, err := f.tbl.Column(col)
 	if err != nil {
 		return f.withError(err)
@@ -483,7 +524,7 @@ func (f Dataset) Fill(col string, dir FillDirection) Dataset {
 	return f.replaceColumn(factory, col, filled)
 }
 
-func (f Dataset) DropNA(cols ...string) Dataset {
+func (f Dataset) execDropNA(cols []string) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -496,12 +537,20 @@ func (f Dataset) DropNA(cols ...string) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Composing ---
 
 func (f Dataset) Stack(others ...Table) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opStack, others: others}}
+}
+
+func (f Dataset) Combine(others ...Table) Dataset {
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opCombine, others: others}}
+}
+
+func (f Dataset) execStack(others []Table) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -515,10 +564,10 @@ func (f Dataset) Stack(others ...Table) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
-func (f Dataset) Combine(others ...Table) Dataset {
+func (f Dataset) execCombine(others []Table) Dataset {
 	eng, fr := f.requireEngine()
 	if fr.err != nil {
 		return fr
@@ -532,7 +581,7 @@ func (f Dataset) Combine(others ...Table) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Internal ---
@@ -556,7 +605,7 @@ func (f Dataset) replaceColumn(factory ColumnFactory, name string, newCol AnyCol
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: f.engine(), tbl: ds}
 }
 
 // --- GroupBy + Summarize ---
@@ -603,111 +652,14 @@ func (f Dataset) GroupBy(cols ...string) GroupedFrame {
 	return GroupedFrame{frame: f, groupCols: cols}
 }
 
-// Summarize applies aggregations per group using the engine's Aggregator.
-// All computation is delegated to the engine — the Frame only orchestrates grouping.
+// Summarize applies aggregations per group, producing a lazy Dataset.
 func (gf GroupedFrame) Summarize(specs ...AggSpec) Dataset {
 	f := gf.frame
-	eng, fr := f.requireEngine()
-	if fr.err != nil {
-		return fr
+	return Dataset{
+		eng:    f.engine(),
+		parent: &f,
+		op:     op{kind: opGroupBy, cols: gf.groupCols, aggSpecs: specs},
 	}
-	agg, ok := eng.(Aggregator)
-	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support Aggregator", eng.Name()))
-	}
-	sel, factory, err := f.requireSelector(eng)
-	if err != nil {
-		return f.withError(err)
-	}
-
-	// Build group index: key → row indices
-	type group struct {
-		indices []int
-	}
-	seen := make(map[uint64]int, int(f.tbl.NumRows())/2) // hash → index in groups
-	var groups []group
-
-	for row := 0; row < int(f.tbl.NumRows()); row++ {
-		key := rowKeyHash(f.tbl, gf.groupCols, row)
-		if idx, exists := seen[key]; exists {
-			groups[idx].indices = append(groups[idx].indices, row)
-		} else {
-			seen[key] = len(groups)
-			groups = append(groups, group{indices: []int{row}})
-		}
-	}
-
-	nGroups := len(groups)
-
-	// Build output fielTable: group columns + agg output columns
-	var outFields []Field
-	for _, name := range gf.groupCols {
-		idx := f.tbl.Schema().FieldIndex(name)
-		if idx < 0 {
-			return f.withError(&ErrColumnNotFound{Name: name})
-		}
-		outFields = append(outFields, f.tbl.Schema().Field(idx))
-	}
-	for _, spec := range specs {
-		dtype := resolveAggDType(spec.Fn, f.tbl, spec.InputName)
-		outFields = append(outFields, Field{Name: spec.OutputName, Dtype: dtype})
-	}
-	outSchema := NewSchema(outFields...)
-
-	// Compute per-group results
-	outCols := make([]AnyColumn, len(outFields))
-
-	// Group-key columns: take the first row of each group
-	firstIndices := make([]int, nGroups)
-	for i, g := range groups {
-		firstIndices[i] = g.indices[0]
-	}
-	for ci, name := range gf.groupCols {
-		col, err := f.tbl.Column(name)
-		if err != nil {
-			return f.withError(err)
-		}
-		taken, err := sel.Select(col, firstIndices)
-		if err != nil {
-			return f.withError(err)
-		}
-		outCols[ci] = taken
-	}
-
-	// Agg columns: slice each group, aggregate
-	for si, spec := range specs {
-		col, err := f.tbl.Column(spec.InputName)
-		if err != nil {
-			return f.withError(err)
-		}
-
-		// Collect per-group agg results
-		aggResults := make([]AnyColumn, nGroups)
-		for gi, g := range groups {
-			groupCol, err := sel.Select(col, g.indices)
-			if err != nil {
-				return f.withError(err)
-			}
-			result, err := dispatchAgg(agg, spec.Fn, groupCol)
-			if err != nil {
-				return f.withError(err)
-			}
-			aggResults[gi] = result
-		}
-
-		// Merge single-element agg results into one column
-		merged, err := mergeAggResults(factory, spec.OutputName, aggResults)
-		if err != nil {
-			return f.withError(err)
-		}
-		outCols[len(gf.groupCols)+si] = merged
-	}
-
-	ds, err := factory.FromColumns(outSchema, outCols...)
-	if err != nil {
-		return f.withError(err)
-	}
-	return Dataset{tbl: ds}
 }
 
 // dispatchAgg calls the appropriate Aggregator method.
@@ -800,46 +752,7 @@ type MutateFunc interface {
 
 // Mutate appends or replaces a column using a MutateFunc.
 func (f Dataset) Mutate(name string, fn MutateFunc) Dataset {
-	eng, fr := f.requireEngine()
-	if fr.err != nil {
-		return fr
-	}
-	factory, ok := eng.(ColumnFactory)
-	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
-	}
-
-	newCol, err := fn.Apply(f.tbl)
-	if err != nil {
-		return f.withError(err)
-	}
-
-	// Replace existing or append new
-	schema := f.tbl.Schema()
-	if schema.HasField(name) {
-		return f.replaceColumn(factory, name, newCol)
-	}
-
-	// Append: new schema + new column
-	fields := schema.Fields()
-	fields = append(fields, Field{Name: name, Dtype: newCol.DType()})
-	newSchema := NewSchema(fields...)
-
-	columns := make([]AnyColumn, schema.NumFields()+1)
-	for i := 0; i < schema.NumFields(); i++ {
-		col, err := f.tbl.Column(schema.Field(i).Name)
-		if err != nil {
-			return f.withError(err)
-		}
-		columns[i] = col
-	}
-	columns[schema.NumFields()] = newCol
-
-	ds, err := factory.FromColumns(newSchema, columns...)
-	if err != nil {
-		return f.withError(err)
-	}
-	return Dataset{tbl: ds}
+	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opMutate, mutName: name, mutFn: fn}}
 }
 
 // applyTake applies a Take operation to all columns in a dataset using the engine's Selector.
@@ -925,4 +838,149 @@ func (c *renamedColumn) DType() DType { return c.inner.DType() }
 // renameColumn wraps a column with a new name.
 func renameColumn(col AnyColumn, name string) AnyColumn {
 	return &renamedColumn{inner: col, newName: name}
+}
+
+// --- exec: GroupBy + Summarize ---
+
+func (f Dataset) execGroupBy(groupCols []string, specs []AggSpec) Dataset {
+	eng, fr := f.requireEngine()
+	if fr.err != nil {
+		return fr
+	}
+	agg, ok := eng.(Aggregator)
+	if !ok {
+		return f.withError(fmt.Errorf("engine %q does not support Aggregator", eng.Name()))
+	}
+	sel, factory, err := f.requireSelector(eng)
+	if err != nil {
+		return f.withError(err)
+	}
+
+	type group struct{ indices []int }
+	seen := make(map[uint64]int, int(f.tbl.NumRows())/2)
+	var groups []group
+	for row := 0; row < int(f.tbl.NumRows()); row++ {
+		key := rowKeyHash(f.tbl, groupCols, row)
+		if idx, exists := seen[key]; exists {
+			groups[idx].indices = append(groups[idx].indices, row)
+		} else {
+			seen[key] = len(groups)
+			groups = append(groups, group{indices: []int{row}})
+		}
+	}
+
+	nGroups := len(groups)
+	var outFields []Field
+	for _, name := range groupCols {
+		idx := f.tbl.Schema().FieldIndex(name)
+		if idx < 0 {
+			return f.withError(&ErrColumnNotFound{Name: name})
+		}
+		outFields = append(outFields, f.tbl.Schema().Field(idx))
+	}
+	for _, spec := range specs {
+		dtype := resolveAggDType(spec.Fn, f.tbl, spec.InputName)
+		outFields = append(outFields, Field{Name: spec.OutputName, Dtype: dtype})
+	}
+	outSchema := NewSchema(outFields...)
+	outCols := make([]AnyColumn, len(outFields))
+
+	firstIndices := make([]int, nGroups)
+	for i, g := range groups {
+		firstIndices[i] = g.indices[0]
+	}
+	for ci, name := range groupCols {
+		col, err := f.tbl.Column(name)
+		if err != nil {
+			return f.withError(err)
+		}
+		taken, err := sel.Select(col, firstIndices)
+		if err != nil {
+			return f.withError(err)
+		}
+		outCols[ci] = taken
+	}
+
+	for si, spec := range specs {
+		col, err := f.tbl.Column(spec.InputName)
+		if err != nil {
+			return f.withError(err)
+		}
+		aggResults := make([]AnyColumn, nGroups)
+		for gi, g := range groups {
+			groupCol, err := sel.Select(col, g.indices)
+			if err != nil {
+				return f.withError(err)
+			}
+			result, err := dispatchAgg(agg, spec.Fn, groupCol)
+			if err != nil {
+				return f.withError(err)
+			}
+			aggResults[gi] = result
+		}
+		merged, err := mergeAggResults(factory, spec.OutputName, aggResults)
+		if err != nil {
+			return f.withError(err)
+		}
+		outCols[len(groupCols)+si] = merged
+	}
+
+	ds, err := factory.FromColumns(outSchema, outCols...)
+	if err != nil {
+		return f.withError(err)
+	}
+	return Dataset{eng: eng, tbl: ds}
+}
+
+// --- exec: Mutate ---
+
+func (f Dataset) execMutate(name string, fn MutateFunc) Dataset {
+	eng, fr := f.requireEngine()
+	if fr.err != nil {
+		return fr
+	}
+	factory, ok := eng.(ColumnFactory)
+	if !ok {
+		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
+	}
+	newCol, err := fn.Apply(f.tbl)
+	if err != nil {
+		return f.withError(err)
+	}
+	schema := f.tbl.Schema()
+	if schema.HasField(name) {
+		return f.replaceColumn(factory, name, newCol)
+	}
+	fields := schema.Fields()
+	fields = append(fields, Field{Name: name, Dtype: newCol.DType()})
+	newSchema := NewSchema(fields...)
+	columns := make([]AnyColumn, schema.NumFields()+1)
+	for i := 0; i < schema.NumFields(); i++ {
+		col, err := f.tbl.Column(schema.Field(i).Name)
+		if err != nil {
+			return f.withError(err)
+		}
+		columns[i] = col
+	}
+	columns[schema.NumFields()] = newCol
+	ds, err := factory.FromColumns(newSchema, columns...)
+	if err != nil {
+		return f.withError(err)
+	}
+	return Dataset{eng: eng, tbl: ds}
+}
+
+// --- exec: ReplaceColumn ---
+
+func (f Dataset) execReplaceCol(colName string, values []float64) Dataset {
+	eng, fr := f.requireEngine()
+	if fr.err != nil {
+		return fr
+	}
+	factory, ok := eng.(ColumnFactory)
+	if !ok {
+		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
+	}
+	newCol := factory.NewFloat64Column(colName, values)
+	return f.replaceColumn(factory, colName, newCol)
 }

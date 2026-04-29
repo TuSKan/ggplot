@@ -487,6 +487,13 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 	if len(p.spec.Layers) == 0 {
 		return fmt.Errorf("ggplot: plot has no layers")
 	}
+	// Materialise any lazy Dataset chain before rendering.
+	collectedDS, collectErr := p.spec.Dataset.Collect(ctx)
+	if collectErr != nil {
+		return fmt.Errorf("ggplot: collect dataset: %w", collectErr)
+	}
+	p.spec.Dataset = collectedDS
+
 	if p.spec.Dataset.Table() == nil {
 		return fmt.Errorf("ggplot: plot has no dataset")
 	}
@@ -568,7 +575,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				}
 
 				// Split data by group, assign palette colours.
-				groups, subsets, err := groupByColumn(ds, groupCol)
+				groups, subsets, err := groupByColumn(ctx, ds, groupCol)
 				if err != nil {
 					return fmt.Errorf("ggplot: group split by %q: %w", groupCol, err)
 				}
@@ -751,9 +758,9 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 						positions[j] = ds.MapCategory(v)
 					}
 					// Build new dataset with numeric X.
-					newDS, err := dataset.ReplaceColumn(rl.ds, xColName, positions)
-					if err == nil {
-						resolved[i].ds = newDS
+					lazyDS := dataset.ReplaceColumn(rl.ds, xColName, positions)
+					if cds, cerr := lazyDS.Collect(ctx); cerr == nil {
+						resolved[i].ds = cds
 					}
 				}
 			}
@@ -1209,7 +1216,7 @@ func updateMappingForStat(statName stat.Name, mapping grammar.AesMap) grammar.Ae
 // groupByColumn splits a Dataset into subsets by the distinct values in the
 // given column. Returns ordered unique labels, corresponding filtered datasets,
 // and any error encountered.
-func groupByColumn(ds dataset.Dataset, colName string) ([]string, []dataset.Dataset, error) {
+func groupByColumn(ctx context.Context, ds dataset.Dataset, colName string) ([]string, []dataset.Dataset, error) {
 	col, err := ds.Column(colName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("column %q: %w", colName, err)
@@ -1254,10 +1261,11 @@ func groupByColumn(ds dataset.Dataset, colName string) ([]string, []dataset.Data
 			mask[idx] = true
 		}
 		filtered := ds.Filter(dataset.BoolMask(mask))
-		if filtered.Err() != nil {
-			return nil, nil, fmt.Errorf("filter group %q: %w", label, filtered.Err())
+		collected, cerr := filtered.Collect(ctx)
+		if cerr != nil {
+			return nil, nil, fmt.Errorf("filter group %q: %w", label, cerr)
 		}
-		subsets[i] = filtered
+		subsets[i] = collected
 	}
 	return order, subsets, nil
 }

@@ -358,7 +358,7 @@ func TestJoinFrameAPI(t *testing.T) {
 
 	result, err := dataset.From(left).
 		LeftJoin(right, dataset.On("id")).
-		Collect()
+		Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +369,7 @@ func TestJoinFrameAPI(t *testing.T) {
 	// Test InnerJoin through Frame.
 	result, err = dataset.From(left).
 		InnerJoin(right, dataset.On("id")).
-		Collect()
+		Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

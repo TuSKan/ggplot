@@ -207,7 +207,7 @@ func TestIdentityStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result != ds {
+	if result.Table() != ds.Table() {
 		t.Error("identity stat should return the same dataset")
 	}
 }

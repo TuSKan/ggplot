@@ -207,7 +207,7 @@ func BenchmarkArrowFilter(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				_, _ = dataset.From(ds).Filter(pred).Collect()
+				_, _ = dataset.From(ds).Filter(pred).Collect(context.Background())
 			}
 		})
 	}
@@ -373,7 +373,7 @@ func BenchmarkArrowFrameHead(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				_, _ = dataset.From(ds).Head(100).Collect()
+				_, _ = dataset.From(ds).Head(100).Collect(context.Background())
 			}
 		})
 	}
@@ -392,7 +392,7 @@ func BenchmarkArrowGroupBySummarize(b *testing.B) {
 						dataset.Sum("total", "x"),
 						dataset.Count("n", "x"),
 						dataset.Mean("avg", "x"),
-					).Collect()
+					).Collect(context.Background())
 			}
 		})
 	}

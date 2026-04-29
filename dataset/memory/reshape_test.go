@@ -338,7 +338,7 @@ func TestPivotLongerFrameAPI(t *testing.T) {
 
 	result, err := dataset.From(ds).PivotLonger(dataset.PivotLongerSpec{
 		Cols: []string{"Q1", "Q2"}, NamesTo: "q", ValuesTo: "v",
-	}).Collect()
+	}).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

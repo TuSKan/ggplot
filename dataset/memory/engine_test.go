@@ -185,7 +185,7 @@ func TestGroupBySummarize(t *testing.T) {
 			dataset.Mean("avg_x", "x"),
 			dataset.Min("min_x", "x"),
 			dataset.Max("max_x", "x"),
-		).Collect()
+		).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestMutateAppend(t *testing.T) {
 	ds := makeGroupDS(t)
 	result, err := dataset.From(ds).
 		Mutate("x2", doubleX{}).
-		Collect()
+		Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestFullPipeline(t *testing.T) {
 		Summarize(
 			dataset.Sum("total", "x"),
 			dataset.Count("n", "x"),
-		).Collect()
+		).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func makeTestDS(t *testing.T) dataset.Table {
 
 func TestFrameSelect(t *testing.T) {
 	ds := makeTestDS(t)
-	result, err := dataset.From(ds).Select("x", "label").Collect()
+	result, err := dataset.From(ds).Select("x", "label").Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +333,7 @@ func TestFrameSelect(t *testing.T) {
 
 func TestFrameHead(t *testing.T) {
 	ds := makeTestDS(t)
-	result, err := dataset.From(ds).Head(3).Collect()
+	result, err := dataset.From(ds).Head(3).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +349,7 @@ func TestFrameHead(t *testing.T) {
 
 func TestFrameTail(t *testing.T) {
 	ds := makeTestDS(t)
-	result, err := dataset.From(ds).Tail(2).Collect()
+	result, err := dataset.From(ds).Tail(2).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +365,7 @@ func TestFrameTail(t *testing.T) {
 
 func TestFrameArrange(t *testing.T) {
 	ds := makeTestDS(t)
-	result, err := dataset.From(ds).Arrange("x").Collect()
+	result, err := dataset.From(ds).Arrange("x").Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +380,7 @@ func TestFrameArrange(t *testing.T) {
 
 func TestFrameDistinct(t *testing.T) {
 	ds := makeTestDS(t)
-	result, err := dataset.From(ds).Distinct("label").Collect()
+	result, err := dataset.From(ds).Distinct("label").Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestFrameChain(t *testing.T) {
 		Select("x", "label").
 		Head(4).
 		Arrange("x").
-		Collect()
+		Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +418,7 @@ func TestFilter(t *testing.T) {
 	// x = [3, 1, 4, 1, 5], filter x > 3 → [4, 5]
 	result, err := dataset.From(ds).
 		Filter(dataset.Gt("x", 3.0)).
-		Collect()
+		Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -442,7 +442,7 @@ func TestFilterEmpty(t *testing.T) {
 	// x = [3, 1, 4, 1, 5], filter x > 100 → empty
 	result, err := dataset.From(ds).
 		Filter(dataset.Gt("x", 100.0)).
-		Collect()
+		Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,7 +480,7 @@ func TestDropNA(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := dataset.From(ds).DropNA("x").Collect()
+	result, err := dataset.From(ds).DropNA("x").Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -510,7 +510,7 @@ func TestFillDown(t *testing.T) {
 	xApp.AppendNull()
 
 	ds, _ := b.Build()
-	result, err := dataset.From(ds).Fill("x", dataset.FillDown).Collect()
+	result, err := dataset.From(ds).Fill("x", dataset.FillDown).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +564,7 @@ func TestStack(t *testing.T) {
 		eng.NewStringColumn("label", []string{"c", "d", "e"}),
 	)
 
-	result, err := dataset.From(ds1).Stack(ds2).Collect()
+	result, err := dataset.From(ds1).Stack(ds2).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -596,7 +596,7 @@ func TestCombine(t *testing.T) {
 		eng.NewStringColumn("label", []string{"a", "b", "c"}),
 	)
 
-	result, err := dataset.From(ds1).Combine(ds2).Collect()
+	result, err := dataset.From(ds1).Combine(ds2).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
