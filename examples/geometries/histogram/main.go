@@ -21,7 +21,8 @@ func main() {
 		xs[i] = rand.NormFloat64()*5 + 10
 	}
 
-	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs))
+	eng := memory.NewEngine(context.Background())
+	ds, err := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs))
 	if err != nil {
 		log.Fatalln(err)
 	}

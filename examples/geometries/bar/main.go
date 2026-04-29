@@ -14,9 +14,10 @@ import (
 )
 
 func main() {
-	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
-		memory.NewEngine(context.Background()).NewFloat64Column("count", []float64{10, 25, 15, 30, 20}),
+	eng := memory.NewEngine(context.Background())
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		eng.NewFloat64Column("count", []float64{10, 25, 15, 30, 20}),
 	)
 	if err != nil {
 		log.Fatalln(err)

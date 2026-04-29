@@ -25,9 +25,10 @@ func main() {
 	}
 
 	// Create dataset using the new dplyr-style API.
-	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", xs),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", ys),
+	eng := memory.NewEngine(context.Background())
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", xs),
+		eng.NewFloat64Column("y", ys),
 	)
 	if err != nil {
 		log.Fatalln(err)

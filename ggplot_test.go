@@ -21,9 +21,10 @@ import (
 
 func testDataset(t *testing.T) dataset.Dataset {
 	t.Helper()
-	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{2.1, 4.3, 3.0, 7.8, 5.5, 8.1, 6.9, 9.2, 8.5, 10.0}),
+	eng := memory.NewEngine(context.Background())
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+		eng.NewFloat64Column("y", []float64{2.1, 4.3, 3.0, 7.8, 5.5, 8.1, 6.9, 9.2, 8.5, 10.0}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -100,9 +101,10 @@ func TestRender_Line(t *testing.T) {
 }
 
 func TestRender_Bar(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
-		memory.NewEngine(context.Background()).NewFloat64Column("count", []float64{10, 25, 15, 30, 20}),
+	eng2 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng2,
+		eng2.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		eng2.NewFloat64Column("count", []float64{10, 25, 15, 30, 20}),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("count")).
 		Layer(geom.Bar(geom.WithFill("#336699"), geom.WithWidth(0.7)))
@@ -118,7 +120,8 @@ func TestRender_Histogram(t *testing.T) {
 	for i := range xs {
 		xs[i] = rand.NormFloat64()*5 + 10
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs))
+	eng3 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng3, eng3.NewFloat64Column("x", xs))
 
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Histogram(geom.WithBins(30), geom.WithFill("#3498DB")))
@@ -136,7 +139,8 @@ func TestRender_Histogram_StatTransform(t *testing.T) {
 	for i := range xs {
 		xs[i] = float64(i)
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs))
+	eng4 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng4, eng4.NewFloat64Column("x", xs))
 
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Histogram(geom.WithBins(10)))
@@ -174,7 +178,8 @@ func TestRender_Density(t *testing.T) {
 	for i := range xs {
 		xs[i] = rand.NormFloat64()
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs))
+	eng5 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng5, eng5.NewFloat64Column("x", xs))
 
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Density(geom.WithFill("#9b59b6"), geom.WithAlpha(0.5)))
@@ -296,7 +301,8 @@ func TestPlot_Save_Histogram(t *testing.T) {
 	for i := range xs {
 		xs[i] = rand.NormFloat64()
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs))
+	eng6 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng6, eng6.NewFloat64Column("x", xs))
 
 	outPath := filepath.Join(t.TempDir(), "hist.png")
 	p := ggplot.New(ds, aes.X("x")).
@@ -324,7 +330,8 @@ func TestPlot_Save_AllGeomTypes(t *testing.T) {
 		xs[i] = float64(i)
 		ys[i] = math.Sin(float64(i) * 0.2)
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
+	eng7 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng7, eng7.NewFloat64Column("x", xs), eng7.NewFloat64Column("y", ys))
 
 	cases := []struct {
 		name  string
@@ -390,9 +397,10 @@ func TestCartesianTransform(t *testing.T) {
 // --- Edge cases ---
 
 func TestRender_SingleDataPoint(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{5}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{10}),
+	eng8 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng8,
+		eng8.NewFloat64Column("x", []float64{5}),
+		eng8.NewFloat64Column("y", []float64{10}),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point())
@@ -404,9 +412,10 @@ func TestRender_SingleDataPoint(t *testing.T) {
 }
 
 func TestRender_TwoDataPoints(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{0, 100}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{0, 100}),
+	eng9 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng9,
+		eng9.NewFloat64Column("x", []float64{0, 100}),
+		eng9.NewFloat64Column("y", []float64{0, 100}),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line())
@@ -425,7 +434,8 @@ func TestRender_LargeDataset(t *testing.T) {
 		xs[i] = float64(i)
 		ys[i] = math.Sin(float64(i) * 0.01)
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", xs), memory.NewEngine(context.Background()).NewFloat64Column("y", ys))
+	eng10 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng10, eng10.NewFloat64Column("x", xs), eng10.NewFloat64Column("y", ys))
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line())
@@ -437,9 +447,10 @@ func TestRender_LargeDataset(t *testing.T) {
 }
 
 func TestRender_NegativeValues(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{-5, -3, -1, 1, 3, 5}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{-10, -5, 0, 5, 10, 15}),
+	eng11 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng11,
+		eng11.NewFloat64Column("x", []float64{-5, -3, -1, 1, 3, 5}),
+		eng11.NewFloat64Column("y", []float64{-10, -5, 0, 5, 10, 15}),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -452,9 +463,10 @@ func TestRender_NegativeValues(t *testing.T) {
 }
 
 func TestRender_ConstantY(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{5, 5, 5, 5, 5}),
+	eng12 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng12,
+		eng12.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		eng12.NewFloat64Column("y", []float64{5, 5, 5, 5, 5}),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point())
@@ -469,10 +481,11 @@ func TestRender_ConstantY(t *testing.T) {
 
 func groupedDataset(t *testing.T) dataset.Dataset {
 	t.Helper()
-	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 1, 2, 3, 1, 2, 3}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{1, 4, 9, 2, 5, 8, 3, 6, 7}),
-		memory.NewEngine(context.Background()).NewStringColumn("group", []string{"A", "A", "A", "B", "B", "B", "C", "C", "C"}),
+	eng13 := memory.NewEngine(context.Background())
+	ds, err := dataset.NewDataset(eng13,
+		eng13.NewFloat64Column("x", []float64{1, 2, 3, 1, 2, 3, 1, 2, 3}),
+		eng13.NewFloat64Column("y", []float64{1, 4, 9, 2, 5, 8, 3, 6, 7}),
+		eng13.NewStringColumn("group", []string{"A", "A", "A", "B", "B", "B", "C", "C", "C"}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -529,10 +542,11 @@ func TestRender_ColorMapping_ManyGroups(t *testing.T) {
 		ys[i] = float64(i)
 		groups[i] = labels[i%10]
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", xs),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", ys),
-		memory.NewEngine(context.Background()).NewStringColumn("g", groups),
+	eng14 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng14,
+		eng14.NewFloat64Column("x", xs),
+		eng14.NewFloat64Column("y", ys),
+		eng14.NewStringColumn("g", groups),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("g")).
 		Layer(geom.Point())
@@ -610,9 +624,10 @@ func TestRender_CoordFlip_Point(t *testing.T) {
 }
 
 func TestRender_CoordFlip_Bar(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{10, 25, 15, 30, 20}),
+	eng15 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng15,
+		eng15.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		eng15.NewFloat64Column("y", []float64{10, 25, 15, 30, 20}),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Bar()).
@@ -625,9 +640,10 @@ func TestRender_CoordFlip_Bar(t *testing.T) {
 }
 
 func TestOrientation_HorizontalBar(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{10, 25, 15, 30, 20}),
+	eng16 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng16,
+		eng16.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		eng16.NewFloat64Column("y", []float64{10, 25, 15, 30, 20}),
 	)
 	// Horizontal bar via explicit orientation (no CoordFlip)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -646,9 +662,10 @@ func TestOrientation_HorizontalBoxplot(t *testing.T) {
 		groups = append(groups, "A")
 		vals = append(vals, float64(i))
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewStringColumn("g", groups),
-		memory.NewEngine(context.Background()).NewFloat64Column("v", vals),
+	eng17 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng17,
+		eng17.NewStringColumn("g", groups),
+		eng17.NewFloat64Column("v", vals),
 	)
 	p := ggplot.New(ds, aes.X("g"), aes.Y("v")).
 		Layer(geom.Boxplot(geom.WithOrientation(geom.Horizontal)))
@@ -662,9 +679,10 @@ func TestOrientation_HorizontalBoxplot(t *testing.T) {
 // --- Step geom tests ---
 
 func TestRender_StepGeom(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{0, 1, 1, 2, 2, 3, 3, 4, 4, 5}),
+	eng18 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng18,
+		eng18.NewFloat64Column("x", []float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}),
+		eng18.NewFloat64Column("y", []float64{0, 1, 1, 2, 2, 3, 3, 4, 4, 5}),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Step(geom.WithColor("#336699")))
@@ -833,10 +851,11 @@ func TestRender_HLine_OutOfRange(t *testing.T) {
 // --- Text tests ---
 
 func TestRender_Text(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{10, 20, 15}),
-		memory.NewEngine(context.Background()).NewStringColumn("label", []string{"A", "B", "C"}),
+	eng19 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng19,
+		eng19.NewFloat64Column("x", []float64{1, 2, 3}),
+		eng19.NewFloat64Column("y", []float64{10, 20, 15}),
+		eng19.NewStringColumn("label", []string{"A", "B", "C"}),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -863,9 +882,10 @@ func TestRender_Text_NoLabelColumn(t *testing.T) {
 // --- geom.Col tests ---
 
 func TestRender_Col(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", []float64{10, 25, 15, 30, 20}),
+	eng20 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng20,
+		eng20.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		eng20.NewFloat64Column("y", []float64{10, 25, 15, 30, 20}),
 	)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Col())
@@ -879,10 +899,11 @@ func TestRender_Col(t *testing.T) {
 // --- WithLabel legend test ---
 
 func TestRender_WithLabel_Legend(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
-		memory.NewEngine(context.Background()).NewFloat64Column("sin", []float64{0, 1, 0, -1, 0}),
-		memory.NewEngine(context.Background()).NewFloat64Column("cos", []float64{1, 0, -1, 0, 1}),
+	eng21 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng21,
+		eng21.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		eng21.NewFloat64Column("sin", []float64{0, 1, 0, -1, 0}),
+		eng21.NewFloat64Column("cos", []float64{1, 0, -1, 0, 1}),
 	)
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Line(geom.WithColor("#1F77B4"), geom.WithLabel("sin")), aes.Y("sin")).
@@ -898,9 +919,10 @@ func TestRender_WithLabel_Legend(t *testing.T) {
 // --- Discrete Scale (Categorical X) tests ---
 
 func TestRender_CategoricalBars(t *testing.T) {
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewStringColumn("city", []string{"A", "B", "C"}),
-		memory.NewEngine(context.Background()).NewFloat64Column("value", []float64{10, 20, 15}),
+	eng22 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng22,
+		eng22.NewStringColumn("city", []string{"A", "B", "C"}),
+		eng22.NewFloat64Column("value", []float64{10, 20, 15}),
 	)
 	p := ggplot.New(ds, aes.X("city"), aes.Y("value")).
 		Layer(geom.Col())
@@ -917,9 +939,10 @@ func TestRender_CategoricalBars_ManyCategories(t *testing.T) {
 	for i := range values {
 		values[i] = float64(i+1) * 10
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewStringColumn("city", cities),
-		memory.NewEngine(context.Background()).NewFloat64Column("pop", values),
+	eng23 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng23,
+		eng23.NewStringColumn("city", cities),
+		eng23.NewFloat64Column("pop", values),
 	)
 	p := ggplot.New(ds, aes.X("city"), aes.Y("pop")).
 		Layer(geom.Col())
@@ -940,7 +963,8 @@ func TestRender_Boxplot(t *testing.T) {
 		x[i] = float64(i/10 + 1)
 		y[i] = float64(i*3 + 10)
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", x), memory.NewEngine(context.Background()).NewFloat64Column("y", y))
+	eng24 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng24, eng24.NewFloat64Column("x", x), eng24.NewFloat64Column("y", y))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Boxplot())
 
@@ -956,7 +980,8 @@ func TestRender_Boxplot_SingleGroup(t *testing.T) {
 	for i := range x {
 		x[i] = 1
 	}
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()), memory.NewEngine(context.Background()).NewFloat64Column("x", x), memory.NewEngine(context.Background()).NewFloat64Column("y", y))
+	eng25 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng25, eng25.NewFloat64Column("x", x), eng25.NewFloat64Column("y", y))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Boxplot())
 

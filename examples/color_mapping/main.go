@@ -54,10 +54,11 @@ func main() {
 		}
 	}
 
-	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("sepal_length", sepalLen),
-		memory.NewEngine(context.Background()).NewFloat64Column("sepal_width", sepalWid),
-		memory.NewEngine(context.Background()).NewStringColumn("species", species),
+	eng := memory.NewEngine(context.Background())
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("sepal_length", sepalLen),
+		eng.NewFloat64Column("sepal_width", sepalWid),
+		eng.NewStringColumn("species", species),
 	)
 	if err != nil {
 		log.Fatalln(err)

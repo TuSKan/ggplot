@@ -47,10 +47,11 @@ func main() {
 		zData[i] = math.Sqrt(xData[i]*xData[i] + yData[i]*yData[i])
 	}
 
-	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", xData),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", yData),
-		memory.NewEngine(context.Background()).NewFloat64Column("z", zData),
+	eng := memory.NewEngine(context.Background())
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", xData),
+		eng.NewFloat64Column("y", yData),
+		eng.NewFloat64Column("z", zData),
 	)
 	if err != nil {
 		log.Fatalln(err)

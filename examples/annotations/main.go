@@ -34,9 +34,10 @@ func referenceLines(dir string) {
 		y[i] = math.Sin(t)
 	}
 
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", x),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", y),
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", x),
+		eng.NewFloat64Column("y", y),
 	)
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -82,10 +83,11 @@ func textLabels(dir string) {
 	peakY := []float64{1, -1, 1, -1}
 	peakLabels := []string{"peak", "trough", "peak", "trough"}
 
-	ds, _ := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", peakX),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", peakY),
-		memory.NewEngine(context.Background()).NewStringColumn("label", peakLabels),
+	eng2 := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng2,
+		eng2.NewFloat64Column("x", peakX),
+		eng2.NewFloat64Column("y", peakY),
+		eng2.NewStringColumn("label", peakLabels),
 	)
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Label("label")).

@@ -43,10 +43,11 @@ func main() {
 		x, y = nextX, nextY
 	}
 
-	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("Space X", xData),
-		memory.NewEngine(context.Background()).NewFloat64Column("Space Y", yData),
-		memory.NewEngine(context.Background()).NewFloat64Column("Density", cData),
+	eng := memory.NewEngine(context.Background())
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("Space X", xData),
+		eng.NewFloat64Column("Space Y", yData),
+		eng.NewFloat64Column("Density", cData),
 	)
 	if err != nil {
 		log.Fatalln(err)

@@ -47,11 +47,12 @@ func wideFormat(dir string) {
 		sin2[i] = math.Sin(2*t) * 0.5
 	}
 
-	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", x),
-		memory.NewEngine(context.Background()).NewFloat64Column("sin", sin),
-		memory.NewEngine(context.Background()).NewFloat64Column("cos", cos),
-		memory.NewEngine(context.Background()).NewFloat64Column("sin_2x", sin2),
+	eng := memory.NewEngine(context.Background())
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", x),
+		eng.NewFloat64Column("sin", sin),
+		eng.NewFloat64Column("cos", cos),
+		eng.NewFloat64Column("sin_2x", sin2),
 	)
 	if err != nil {
 		log.Fatalln(err)
@@ -91,10 +92,11 @@ func longFormat(dir string) {
 		groups = append(groups, "sin(x)", "cos(x)", "sin(2x)/2")
 	}
 
-	ds, err := dataset.NewDataset(memory.NewEngine(context.Background()),
-		memory.NewEngine(context.Background()).NewFloat64Column("x", xs),
-		memory.NewEngine(context.Background()).NewFloat64Column("y", ys),
-		memory.NewEngine(context.Background()).NewStringColumn("func", groups),
+	eng2 := memory.NewEngine(context.Background())
+	ds, err := dataset.NewDataset(eng2,
+		eng2.NewFloat64Column("x", xs),
+		eng2.NewFloat64Column("y", ys),
+		eng2.NewStringColumn("func", groups),
 	)
 	if err != nil {
 		log.Fatalln(err)

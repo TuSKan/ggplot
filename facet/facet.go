@@ -156,6 +156,7 @@ func (g *gridFacet) Split(ds dataset.Dataset) ([]Panel, error) {
 	g.nRowVals = len(rowVals)
 	g.nColVals = len(colVals)
 
+	// TODO: Remove the need for these to be members of gridFacet, use ds.Strings()
 	rStrings, _ := columnStrings(ds, g.rowCol)
 	cStrings, _ := columnStrings(ds, g.colCol)
 	n := len(rStrings)
@@ -201,6 +202,8 @@ func (g *gridFacet) String() string { return "grid(" + g.rowCol + " ~ " + g.colC
 
 // columnStrings extracts a string slice from a column, supporting string and
 // float64/int64 columns via fmt.Sprintf conversion.
+// TODO: Remove the need for this to be a helper function - use ds.Strings(col) instead (with sort). and filter using it
+// Its empty after laze dataset
 func columnStrings(ds dataset.Dataset, col string) ([]string, error) {
 	c, err := ds.Column(col)
 	if err != nil {
@@ -234,6 +237,7 @@ func columnStrings(ds dataset.Dataset, col string) ([]string, error) {
 	return out, nil
 }
 
+// TODO: Remove the need for this to be a helper function - use ds.Strings(col) and sort the result
 func distinctStrings(ds dataset.Dataset, col string) ([]string, error) {
 	vals, err := columnStrings(ds, col)
 	if err != nil {
