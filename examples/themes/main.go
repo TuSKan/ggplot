@@ -1,7 +1,8 @@
 // Example: Theme Showcase
 //
-// Demonstrates how to apply different built-in themes to the same plot.
-// Available themes: "default", "dark", "minimal", "classic", "bw"
+// Renders the same multi-series plot under every built-in theme so the
+// visual differences in panel chrome and discrete color cycle are
+// directly comparable.
 package main
 
 import (
@@ -21,17 +22,31 @@ import (
 )
 
 func main() {
-	// Generate sample data: sin wave with noise.
-	n := 80
-	xs := make([]float64, n)
-	ys := make([]float64, n)
-	for i := 0; i < n; i++ {
-		xs[i] = float64(i) / float64(n) * 4 * math.Pi
-		ys[i] = math.Sin(xs[i]) + rand.NormFloat64()*0.3
+	// Generate sample data: five sin waves with different phase shifts so
+	// the theme palette is visible across multiple series.
+	const n = 80
+	const series = 5
+	xs := make([]float64, 0, n*series)
+	ys := make([]float64, 0, n*series)
+	groups := make([]string, 0, n*series)
+	for s := 0; s < series; s++ {
+		phase := float64(s) * math.Pi / 4
+		label := []string{"A", "B", "C", "D", "E"}[s]
+		for i := 0; i < n; i++ {
+			x := float64(i) / float64(n) * 4 * math.Pi
+			y := math.Sin(x+phase) + rand.NormFloat64()*0.15
+			xs = append(xs, x)
+			ys = append(ys, y)
+			groups = append(groups, label)
+		}
 	}
 
 	eng := memory.NewEngine(context.Background())
-	ds, err := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs), eng.NewFloat64Column("y", ys))
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", xs),
+		eng.NewFloat64Column("y", ys),
+		eng.NewStringColumn("series", groups),
+	)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -39,17 +54,14 @@ func main() {
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
 
-	// Each theme renders the same plot with a different visual identity.
-	themes := []theme.Name{theme.Default, theme.Dark, theme.Minimal, theme.Classic, theme.BW}
-
-	for _, name := range themes {
-		p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
-			Layer(geom.Line(geom.WithColor("#3498DB"), geom.WithLineWidth(1.5))).
-			Layer(geom.Point(geom.WithColor("#E74C3C"), geom.WithSize(2), geom.WithAlpha(0.5))).
+	for _, name := range theme.AllNames() {
+		p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("series")).
+			Layer(geom.Line(geom.WithLineWidth(1.5))).
+			Layer(geom.Point(geom.WithSize(2.5), geom.WithAlpha(0.7))).
 			Theme(name).
 			Labs(
 				ggplot.Title("Theme: "+string(name)),
-				ggplot.Subtitle("Sin wave with Gaussian noise"),
+				ggplot.Subtitle("Phase-shifted sine waves with Gaussian noise"),
 				ggplot.XLab("Angle (rad)"),
 				ggplot.YLab("Amplitude"),
 				ggplot.Caption("ggplot theme showcase"),

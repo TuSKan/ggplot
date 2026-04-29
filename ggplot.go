@@ -564,10 +564,11 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			}
 
 			if groupCol != "" {
-				// Resolve the discrete color scale: user override, else default Tab10.
+				// Resolve the discrete color scale: user override, else
+				// the active theme's palette, else Tab10.
 				colorScale := p.spec.ColorScales["color"]
 				if colorScale == nil {
-					colorScale = colormap.NewDiscrete(colormap.Tab10)
+					colorScale = colormap.NewDiscrete(themePaletteCmap(th))
 				}
 				// Train on the group column so labels get a stable index.
 				if col, err := ds.Column(groupCol); err == nil {
@@ -1268,6 +1269,27 @@ func groupByColumn(ctx context.Context, ds dataset.Dataset, colName string) ([]s
 		subsets[i] = collected
 	}
 	return order, subsets, nil
+}
+
+// themePaletteCmap returns a discrete colormap derived from the theme's
+// Palette, falling back to colormap.Tab10 when the theme carries no
+// palette. Used as the default discrete color cycle when the plot has
+// no explicit color scale set.
+func themePaletteCmap(th theme.Theme) colormap.Cmap {
+	if len(th.Palette) == 0 {
+		return colormap.Tab10
+	}
+	colors := make([]gg.RGBA, len(th.Palette))
+	for i, c := range th.Palette {
+		r, g, b, a := c.RGBA()
+		colors[i] = gg.RGBA{
+			R: float64(r) / 65535.0,
+			G: float64(g) / 65535.0,
+			B: float64(b) / 65535.0,
+			A: float64(a) / 65535.0,
+		}
+	}
+	return colormap.NewListed("theme:"+th.Name, colormap.Qualitative, colors)
 }
 
 // allLayersHorizontal returns true if every layer in the list has
