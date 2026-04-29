@@ -4,6 +4,7 @@
 package facet
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/TuSKan/ggplot/dataset"
@@ -13,7 +14,7 @@ import (
 type Facet interface {
 	// Split partitions the dataset into panels. Each panel has a label
 	// and a filtered subset of the data.
-	Split(ds dataset.Dataset) ([]Panel, error)
+	Split(ctx context.Context, ds dataset.Dataset) ([]Panel, error)
 
 	// GridDims returns the (rows, cols) grid dimensions for layout.
 	// For Wrap, this is computed from the number of panels and nCols.
@@ -36,7 +37,7 @@ func None() Facet { return none{} }
 
 type none struct{}
 
-func (none) Split(ds dataset.Dataset) ([]Panel, error) {
+func (none) Split(_ context.Context, ds dataset.Dataset) ([]Panel, error) {
 	return []Panel{{Label: "", Dataset: ds}}, nil
 }
 func (none) GridDims(int) (int, int) { return 1, 1 }
@@ -69,8 +70,8 @@ type wrapFacet struct {
 	nRows int
 }
 
-func (f *wrapFacet) Split(ds dataset.Dataset) ([]Panel, error) {
-	vals, err := columnStrings(ds, f.col)
+func (f *wrapFacet) Split(ctx context.Context, ds dataset.Dataset) ([]Panel, error) {
+	vals, err := facetStrings(ds, f.col)
 	if err != nil {
 		return nil, err
 	}
@@ -91,12 +92,13 @@ func (f *wrapFacet) Split(ds dataset.Dataset) ([]Panel, error) {
 	panels := make([]Panel, 0, len(order))
 	for _, label := range order {
 		filtered := ds.Filter(dataset.BoolMask(groupMasks[label]))
-		if filtered.Err() != nil {
-			return nil, filtered.Err()
+		collected, cerr := filtered.Collect(ctx)
+		if cerr != nil {
+			return nil, cerr
 		}
 		panels = append(panels, Panel{
 			Label:   label,
-			Dataset: filtered,
+			Dataset: collected,
 		})
 	}
 	return panels, nil
@@ -141,26 +143,24 @@ type gridFacet struct {
 	nColVals int // set by Split, used by GridDims
 }
 
-func (g *gridFacet) Split(ds dataset.Dataset) ([]Panel, error) {
-	// Extract distinct values for row and column facet variables.
-	rowVals, err := distinctStrings(ds, g.rowCol)
+func (g *gridFacet) Split(ctx context.Context, ds dataset.Dataset) ([]Panel, error) {
+	rStrings, err := facetStrings(ds, g.rowCol)
 	if err != nil {
 		return nil, err
 	}
-	colVals, err := distinctStrings(ds, g.colCol)
+	cStrings, err := facetStrings(ds, g.colCol)
 	if err != nil {
 		return nil, err
 	}
 
-	// Store cardinalities for GridDims.
+	// Compute distinct values preserving order.
+	rowVals := distinctOrdered(rStrings)
+	colVals := distinctOrdered(cStrings)
+
 	g.nRowVals = len(rowVals)
 	g.nColVals = len(colVals)
 
-	// TODO: Remove the need for these to be members of gridFacet, use ds.Strings()
-	rStrings, _ := columnStrings(ds, g.rowCol)
-	cStrings, _ := columnStrings(ds, g.colCol)
 	n := len(rStrings)
-
 	panels := make([]Panel, 0, len(rowVals)*len(colVals))
 
 	for _, rv := range rowVals {
@@ -171,12 +171,13 @@ func (g *gridFacet) Split(ds dataset.Dataset) ([]Panel, error) {
 			}
 
 			filtered := ds.Filter(dataset.BoolMask(mask))
-			if filtered.Err() != nil {
-				return nil, filtered.Err()
+			collected, cerr := filtered.Collect(ctx)
+			if cerr != nil {
+				return nil, cerr
 			}
 			panels = append(panels, Panel{
 				Label:   rv + " | " + cv,
-				Dataset: filtered,
+				Dataset: collected,
 			})
 		}
 	}
@@ -200,11 +201,9 @@ func (g *gridFacet) String() string { return "grid(" + g.rowCol + " ~ " + g.colC
 
 // --- Helpers ---
 
-// columnStrings extracts a string slice from a column, supporting string and
-// float64/int64 columns via fmt.Sprintf conversion.
-// TODO: Remove the need for this to be a helper function - use ds.Strings(col) instead (with sort). and filter using it
-// Its empty after laze dataset
-func columnStrings(ds dataset.Dataset, col string) ([]string, error) {
+// facetStrings extracts a string slice from a column, supporting string,
+// float64, int64, and bool columns via fmt.Sprintf conversion.
+func facetStrings(ds dataset.Dataset, col string) ([]string, error) {
 	c, err := ds.Column(col)
 	if err != nil {
 		return nil, err
@@ -237,12 +236,8 @@ func columnStrings(ds dataset.Dataset, col string) ([]string, error) {
 	return out, nil
 }
 
-// TODO: Remove the need for this to be a helper function - use ds.Strings(col) and sort the result
-func distinctStrings(ds dataset.Dataset, col string) ([]string, error) {
-	vals, err := columnStrings(ds, col)
-	if err != nil {
-		return nil, err
-	}
+// distinctOrdered returns distinct values preserving first-occurrence order.
+func distinctOrdered(vals []string) []string {
 	seen := make(map[string]struct{})
 	var order []string
 	for _, v := range vals {
@@ -251,7 +246,7 @@ func distinctStrings(ds dataset.Dataset, col string) ([]string, error) {
 			order = append(order, v)
 		}
 	}
-	return order, nil
+	return order
 }
 
 func ceilSqrt(n int) int {

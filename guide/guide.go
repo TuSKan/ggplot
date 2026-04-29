@@ -106,9 +106,15 @@ func DrawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 	}
 }
 
-// DrawGrid renders major grid lines in the data area.
+// DrawGrid renders major grid lines in the data area, first filling the panel
+// background with the theme's Panel.Background color.
 // Grid lines use the theme's DashPattern (nil = solid, e.g. {4,4} = dashed).
 func DrawGrid(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h float64, th theme.Theme) {
+	// Fill panel background first so it appears behind all grid lines and data.
+	cv.SetColor(th.Panel.Background)
+	cv.DrawRectangle(x, y, w, h)
+	cv.Fill()
+
 	mr, mg, mb, ma := rgbaOf(th.Grid.MajorColor)
 	cv.SetRGBA(mr, mg, mb, ma)
 	cv.SetLineWidth(th.Grid.MajorWidth)

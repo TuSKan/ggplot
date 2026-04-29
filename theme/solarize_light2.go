@@ -35,6 +35,12 @@ func newSolarizeLight2() Theme {
 
 	t.Ticks.Color = base00
 
+	// Solarize_Light2: warm beige panel (#EEE8D5), base3 (#FDF6E3) grid →
+	// use base3 as edge (matches grid, harmonious with Solarized palette).
+	t.Geom.PatchEdgeColor = base3
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 1.0
+
 	t.Palette = []color.Color{
 		hex("268BD2"), // blue
 		hex("2AA198"), // cyan

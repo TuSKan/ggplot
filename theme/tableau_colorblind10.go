@@ -25,6 +25,11 @@ func newTableauColorblind10() Theme {
 
 	t.Ticks.Color = gray(60)
 
+	// tableau_colorblind10: white panel + gray grid → gray edge matches grid.
+	t.Geom.PatchEdgeColor = gray(220)
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 1.0
+
 	t.Palette = []color.Color{
 		hex("006BA4"),
 		hex("FF800E"),

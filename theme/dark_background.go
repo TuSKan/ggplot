@@ -31,6 +31,11 @@ func newDarkBackground() Theme {
 
 	t.Ticks.Color = color.White
 
+	// dark_background: black panel + white grid → white edges.
+	t.Geom.PatchEdgeColor = color.White
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 0.9
+
 	t.Palette = []color.Color{
 		hex("8DD3C7"),
 		hex("FEFFB3"),

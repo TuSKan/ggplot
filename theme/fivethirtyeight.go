@@ -36,6 +36,12 @@ func newFivethirtyeight() Theme {
 	t.Ticks.Width = 0
 	t.Ticks.Color = color.Transparent
 
+	// fivethirtyeight: uniform #F0F0F0 background + #CBCBCB grid →
+	// use grid color as edge for a clean, publication-style outline.
+	t.Geom.PatchEdgeColor = hex("CBCBCB")
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 1.0
+
 	t.Palette = []color.Color{
 		hex("008FD5"),
 		hex("FC4F30"),

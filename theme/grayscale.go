@@ -33,6 +33,12 @@ func newGrayscale() Theme {
 
 	t.Ticks.Color = color.Black
 
+	// grayscale: white panel, gray grid, monochrome palette →
+	// use dark gray edges that survive B&W print.
+	t.Geom.PatchEdgeColor = gray(60)
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 1.0
+
 	// axes.prop_cycle: ['0.00', '0.40', '0.60', '0.70']
 	t.Palette = []color.Color{
 		gray(0),

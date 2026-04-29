@@ -21,6 +21,7 @@ func init() {
 	MustRegister(SeabornPoster, newSeabornPoster)
 }
 
+
 // Seaborn family. Sources:
 //   matplotlib/lib/matplotlib/mpl-data/stylelib/seaborn-v0_8*.mplstyle
 //
@@ -53,6 +54,12 @@ func seabornBase(name string) Theme {
 	t.Ticks.Length = 4
 	t.Ticks.Width = 1
 
+	// seaborn uses patch.edgecolor: .15 (barely visible on white).
+	// Chrome variants may override this.
+	t.Geom.PatchEdgeColor = nil // default: darken fill
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 0.8
+
 	t.Palette = seabornDeepPalette()
 	return t
 }
@@ -78,6 +85,9 @@ func newSeabornDarkgrid() Theme {
 	t.Grid.MinorColor = hexA("FFFFFF", 160)
 	t.Grid.MinorWidth = 0.5
 	t.Grid.DashPattern = nil
+	// Gray panel + white grid → white patch edges (same as ggplot logic).
+	t.Geom.PatchEdgeColor = color.White
+	t.Geom.PatchAlpha = 0.8
 	return t
 }
 
@@ -92,6 +102,9 @@ func newSeabornWhitegrid() Theme {
 	t.Grid.MinorColor = gray(230)
 	t.Grid.MinorWidth = 0.3
 	t.Grid.DashPattern = nil
+	// White panel + gray grid → gray patch edge (subtle outline).
+	t.Geom.PatchEdgeColor = gray(204)
+	t.Geom.PatchAlpha = 0.8
 	return t
 }
 
@@ -105,6 +118,9 @@ func newSeabornDark() Theme {
 	t.Grid.MajorWidth = 0
 	t.Grid.MinorColor = color.Transparent
 	t.Grid.MinorWidth = 0
+	// Same gray panel as darkgrid → white edges.
+	t.Geom.PatchEdgeColor = color.White
+	t.Geom.PatchAlpha = 0.8
 	return t
 }
 

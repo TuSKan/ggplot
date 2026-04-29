@@ -37,6 +37,11 @@ func newGgplot() Theme {
 
 	t.Ticks.Color = axisLabel
 
+	// Mirrors matplotlib's ggplot.mplstyle: patch.edgecolor: white
+	t.Geom.PatchEdgeColor = color.White
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 1.0
+
 	t.Palette = []color.Color{
 		hex("E24A33"), // red
 		hex("348ABD"), // blue

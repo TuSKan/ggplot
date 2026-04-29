@@ -32,6 +32,11 @@ func newBmh() Theme {
 
 	t.Ticks.Color = gray(60)
 
+	// BMH: light gray panel (#EEEEEE) + white grid → white edges.
+	t.Geom.PatchEdgeColor = color.White
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 0.9
+
 	t.Palette = []color.Color{
 		hex("348ABD"),
 		hex("A60628"),

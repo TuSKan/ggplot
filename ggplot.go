@@ -505,7 +505,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 	cv.Clear(th.Background)
 
 	// 1. Facet.
-	panels, err := p.spec.Facet.Split(p.spec.Dataset)
+	panels, err := p.spec.Facet.Split(ctx, p.spec.Dataset)
 	if err != nil {
 		return fmt.Errorf("ggplot: facet split: %w", err)
 	}
@@ -1057,13 +1057,10 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			renderXLabel, renderYLabel = renderYLabel, renderXLabel
 		}
 
-		// 2d. Draw grid (in absolute coords).
+		// 2d. Draw grid (fills panel background then draws grid lines).
 		guide.DrawGrid(cv, renderXScale, renderYScale, dataX, dataY, cellW, cellH, th)
 
-		// 2e. Panel background and border.
-		cv.SetColor(th.Panel.Background)
-		// (already drawn by grid background — skip duplicate fill)
-
+		// 2e. Panel border.
 		if th.Panel.BorderWidth > 0 {
 			cv.SetColor(th.Panel.Border)
 			cv.SetLineWidth(th.Panel.BorderWidth)
@@ -1081,7 +1078,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		for _, rl := range resolved {
 			drawLayer(cv, p.spec.Coord, rl.ds, rl.geom, rl.mapping,
 				rl.groupColor, rl.contColCol, rl.contColScale,
-				cellW, cellH, xMin, xMax, yMin, yMax)
+				cellW, cellH, xMin, xMax, yMin, yMax, th)
 		}
 		cv.Restore()
 

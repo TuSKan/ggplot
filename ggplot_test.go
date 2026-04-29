@@ -375,7 +375,7 @@ func TestPlot_Save_AllGeomTypes(t *testing.T) {
 
 func TestFacetNone(t *testing.T) {
 	ds := testDataset(t)
-	panels, err := facet.None().Split(ds)
+	panels, err := facet.None().Split(context.Background(), ds)
 	if err != nil {
 		t.Fatal(err)
 	}

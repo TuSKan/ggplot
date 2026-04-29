@@ -64,6 +64,12 @@ func newDark() Theme {
 			MarginTop: 10, MarginRight: 10, MarginBottom: 10, MarginLeft: 10,
 			PanelSpacing: 10,
 		},
+		// dark: near-black panel + subtle grid → white edges pop off the dark canvas.
+		Geom: GeomDefaults{
+			PatchEdgeColor: color.White,
+			PatchEdgeWidth: 0.5,
+			PatchAlpha:     0.9,
+		},
 	}
 }
 
@@ -78,5 +84,9 @@ func newBW() Theme {
 	t.Grid.MinorColor = color.RGBA{R: 230, G: 230, B: 230, A: 255}
 	t.Grid.MinorWidth = 0.3
 	t.Grid.DashPattern = nil
+	// bw: white panel, black border, gray grid → black edges for B&W print.
+	t.Geom.PatchEdgeColor = color.Black
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 1.0
 	return t
 }

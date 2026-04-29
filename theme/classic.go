@@ -35,6 +35,11 @@ func newClassic() Theme {
 
 	t.Ticks.Color = color.Black
 
+	// Classic: white panel, black axis border → black edges match axes style.
+	t.Geom.PatchEdgeColor = color.Black
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 1.0
+
 	// axes.prop_cycle: 'bgrcmyk'
 	t.Palette = []color.Color{
 		hex("0000FF"), // b — blue

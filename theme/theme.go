@@ -43,6 +43,7 @@ const (
 	Fivethirtyeight     Name = "fivethirtyeight"
 	DarkBackground      Name = "dark_background"
 	SolarizeLight2      Name = "solarize_light2"
+	SolarizeDark        Name = "solarize_dark"
 	TableauColorblind10 Name = "tableau_colorblind10"
 	Fast                Name = "fast"
 
@@ -71,8 +72,26 @@ const (
 	// Additions from raybuhr/pyplot-themes that don't overlap with matplotlib.
 	PaulTol    Name = "paul_tol"
 	Few        Name = "few"
+	FewLight   Name = "few_light"
+	FewDark    Name = "few_dark"
 	UCBerkeley Name = "uc_berkeley"
 	Tableau    Name = "tableau"
+
+	// Colorblind-safe theme (Wong 2011, 8 colors).
+	Colorblind Name = "colorblind"
+
+	// Seasonal / contextual palettes on tableau chrome.
+	Autumn1 Name = "autumn1"
+	Autumn2 Name = "autumn2"
+	Canyon  Name = "canyon"
+	Chili   Name = "chili"
+	Tomato  Name = "tomato"
+
+	// Solarized light companion (pyplot-themes Solarized.light palette).
+	SolarizeLight Name = "solarize_light"
+
+	// Petroff10 (new in matplotlib 3.10).
+	Petroff10 Name = "petroff10"
 )
 
 // Theme encapsulates the complete visual styling for a plot.
@@ -88,6 +107,24 @@ type Theme struct {
 	// explicit color scale set. Mirrors matplotlib's axes.prop_cycle.
 	// May be nil; callers fall back to colormap.Tab10.
 	Palette []color.Color
+	// Geom holds default visual properties for geometry primitives.
+	// Individual geom options (WithColor, WithFill, etc.) always take precedence.
+	Geom GeomDefaults
+}
+
+// GeomDefaults holds theme-level visual defaults for geometry primitives
+// (bars, histograms, areas, boxplots). These act as fallbacks when the user
+// has not explicitly overridden a property with a geom option.
+type GeomDefaults struct {
+	// PatchEdgeColor is the stroke color drawn around filled geoms.
+	// Mirrors matplotlib's patch.edgecolor.
+	// A nil value means "darken the fill color" (legacy behaviour).
+	PatchEdgeColor color.Color
+	// PatchEdgeWidth is the stroke line width for filled geoms (pixels).
+	PatchEdgeWidth float64
+	// PatchAlpha is the default fill opacity for filled geoms [0,1].
+	// Zero is treated as "use geom's built-in default" (typically 0.85).
+	PatchAlpha float64
 }
 
 // PanelStyle controls the data panel appearance.
@@ -240,6 +277,12 @@ func baseTheme(name string) Theme {
 		Spacing: Spacing{
 			MarginTop: 10, MarginRight: 10, MarginBottom: 10, MarginLeft: 10,
 			PanelSpacing: 10,
+		},
+		// GeomDefaults: nil PatchEdgeColor → legacy "darken fill" stroke.
+		Geom: GeomDefaults{
+			PatchEdgeColor: nil,
+			PatchEdgeWidth: 0.5,
+			PatchAlpha:     0,
 		},
 	}
 }

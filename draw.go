@@ -17,6 +17,7 @@ import (
 	"github.com/TuSKan/ggplot/geom"
 	"github.com/TuSKan/ggplot/internal/canvas"
 	"github.com/TuSKan/ggplot/internal/grammar"
+	"github.com/TuSKan/ggplot/theme"
 	"github.com/gogpu/gg"
 )
 
@@ -29,6 +30,7 @@ type DrawContext struct {
 	Data         dataset.Dataset
 	Mapping      grammar.AesMap
 	Params       geom.Params
+	Theme        theme.Theme     // active theme for default styling
 	ContColorCol string          // continuous color column (empty if none)
 	ContScale    *colormap.Scale // continuous color scale (nil if none)
 	W, H         float64         // panel size in pixels
@@ -94,6 +96,7 @@ func drawLayer(
 	contColorCol string,
 	contScale *colormap.Scale,
 	w, h, xMin, xMax, yMin, yMax float64,
+	th theme.Theme,
 ) {
 	// If a group colour was assigned, override the layer's fixed color.
 	params := g.Params
@@ -118,6 +121,7 @@ func drawLayer(
 		Data:         ds,
 		Mapping:      mapping,
 		Params:       params,
+		Theme:        th,
 		ContColorCol: contColorCol,
 		ContScale:    contScale,
 		W:            w,
@@ -148,7 +152,7 @@ func drawStepFn(dc DrawContext) {
 
 func drawBarsFn(dc DrawContext) {
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
-	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme)
 }
 
 func drawAreaFn(dc DrawContext) {
@@ -175,7 +179,7 @@ func drawTextFn(dc DrawContext) {
 }
 
 func drawBoxplotFn(dc DrawContext) {
-	drawBoxplot(dc.Canvas, dc.Coord, dc.Data, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+	drawBoxplot(dc.Canvas, dc.Coord, dc.Data, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme)
 }
 
 func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, contColorCol string, contScale *colormap.Scale, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
@@ -293,7 +297,7 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 	}
 }
 
-func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
+func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, th theme.Theme) {
 	// Collect all points first so we can compute spacing.
 	type barPt struct{ x, y float64 }
 	var pts []barPt
@@ -365,7 +369,11 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 
 	alpha := p.Alpha
 	if alpha <= 0 {
-		alpha = 0.85
+		if th.Geom.PatchAlpha > 0 {
+			alpha = th.Geom.PatchAlpha
+		} else {
+			alpha = 0.85
+		}
 	}
 	fr, fg, fb := colormap.ParseRGB(p.Fill, 0.2, 0.4, 0.8)
 
@@ -402,9 +410,17 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 		cv.DrawRectangle(rx, ry, rw, rh)
 		cv.FillPreserve()
 
-		// Outline: slightly darker than fill.
-		cv.SetRGBA(fr*0.7, fg*0.7, fb*0.7, alpha)
-		cv.SetLineWidth(0.5)
+		// Outline: use theme PatchEdgeColor when set, otherwise darken fill.
+		edgeW := th.Geom.PatchEdgeWidth
+		if edgeW <= 0 {
+			edgeW = 0.5
+		}
+		if th.Geom.PatchEdgeColor != nil {
+			cv.SetColor(th.Geom.PatchEdgeColor)
+		} else {
+			cv.SetRGBA(fr*0.7, fg*0.7, fb*0.7, alpha)
+		}
+		cv.SetLineWidth(edgeW)
 		cv.Stroke()
 	}
 }
@@ -665,7 +681,7 @@ func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	}
 }
 
-func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
+func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, th theme.Theme) {
 	// Read stat_boxplot output columns.
 	xVals, errX := ds.Float64("x")
 	lowerVals, errL := ds.Float64("lower")
