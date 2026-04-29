@@ -26,7 +26,7 @@ User Code → Frame (fluent API) → Engine (Arrow / Memory / SQL)
 | No fallbacks | If an engine doesn't implement a sub-interface, it's an error — not a slow path |
 | Two-tier column design | `AnyColumn` (type-erased) + `Column[T]` (generic typed access) |
 | Arrow-aligned schema | `Field` → `arrow.Field`, `Schema` → `arrow.Schema` |
-| Eager evaluation | Frame verbs execute immediately via the engine; `Collect()` returns the accumulated result. BigQuery has engine-specific lazy SQL accumulation. |
+| Lazy evaluation | Frame verbs build a lazy execution chain across all engines; `Collect(ctx)` forces materialization via the engine. |
 | Zero-copy when possible | Arrow backend uses zero-copy slicing, mmap IPC, SIMD kernels |
 | Billion-row ready | Streaming `Builder` construction — no boxing, no intermediate slices |
 
@@ -124,7 +124,7 @@ github.com/TuSKan/ggplot/
 │                        User Code                             │
 │                                                              │
 │  dataset.From(ds).Filter(...).PivotLonger(...).              │
-│    LeftJoin(other, "id").Mutate(...).Collect()               │
+│    LeftJoin(other, "id").Mutate(...).Collect(ctx)            │
 │                                                              │
 ├──────────────────────────────────────────────────────────────┤
 │                    Frame (Fluent API)                        │
@@ -632,7 +632,7 @@ ds := eng.Table("analytics", "events")
 result, _ := dataset.From(ds).
     Select("region", "revenue").
     Filter(dataset.Gt("revenue", 1000)).
-    Collect()
+    Collect(ctx)
 ```
 
 **Features**:
@@ -670,7 +670,7 @@ dataset.From(ds).
             dataset.Max("hi", "x"),
             dataset.Variance("var", "x"),
         ).
-    Collect()
+    Collect(ctx)
 ```
 
 ### Joins

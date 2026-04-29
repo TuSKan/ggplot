@@ -3,6 +3,7 @@ package dataset
 import (
 	"encoding/binary"
 	"fmt"
+	"hash"
 	"hash/fnv"
 	"math"
 )
@@ -366,8 +367,9 @@ func (f Dataset) execDistinct(cols []string) Dataset {
 	}
 	seen := make(map[uint64]struct{}, int(f.tbl.NumRows())/2)
 	var indices []int
+	hasher := newRowHasher(f.tbl, cols)
 	for row := 0; row < int(f.tbl.NumRows()); row++ {
-		key := rowKeyHash(f.tbl, cols, row)
+		key := hasher.hash(row)
 		if _, exists := seen[key]; !exists {
 			seen[key] = struct{}{}
 			indices = append(indices, row)
@@ -791,38 +793,94 @@ func applySlice(sel Selector, factory ColumnFactory, ds Table, start, end int) (
 	return factory.FromColumns(schema, columns...)
 }
 
-// rowKeyHash generates a uint64 hash key from the specified columns for a given row.
-// Uses FNV-1a hashing over raw binary data — zero fmt.Sprintf allocations.
+// rowHasher caches the underlying Value arrays to avoid O(N^2) allocations
+// during hashing. Construct once via newRowHasher, then call hash(row) per row.
+//
 // Used by Distinct and GroupBy for deduplication/grouping.
-func rowKeyHash(ds Table, cols []string, row int) uint64 {
-	h := fnv.New64a()
-	var buf [8]byte
-	for _, name := range cols {
+//
+// TODO: FNV-64 has a birthday-bound collision probability that becomes
+// non-negligible above ~4B distinct groups. For datasets with >10M distinct
+// keys consider adding an equality fallback (secondary check on collision).
+type rowHasher struct {
+	h      hash.Hash64
+	buf    [8]byte
+	ncols  int
+	dtypes []DType
+	float  [][]float64
+	intv   [][]int64
+	str    [][]string
+	boolv  [][]bool
+	nulls  [][]bool
+}
+
+func newRowHasher(ds Table, cols []string) *rowHasher {
+	n := len(cols)
+	rh := &rowHasher{
+		h:      fnv.New64a(),
+		ncols:  n,
+		dtypes: make([]DType, n),
+		float:  make([][]float64, n),
+		intv:   make([][]int64, n),
+		str:    make([][]string, n),
+		boolv:  make([][]bool, n),
+		nulls:  make([][]bool, n),
+	}
+	for i, name := range cols {
 		col, _ := ds.Column(name)
 		if col == nil {
-			h.Write([]byte{0xFF}) // sentinel for nil
-			continue
+			continue // dtypes[i] stays 0 → falls through to default sentinel
 		}
-		switch col.DType() {
-		case DTypeFloat64:
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(col.(Column[float64]).Values()[row]))
-			h.Write(buf[:])
-		case DTypeInt64, DTypeTimestamp:
-			binary.LittleEndian.PutUint64(buf[:], uint64(col.(Column[int64]).Values()[row]))
-			h.Write(buf[:])
-		case DTypeString:
-			s := col.(Column[string]).Values()[row]
-			h.Write([]byte(s))
-			h.Write([]byte{0}) // null terminator to separate fields
-		case DTypeBool:
-			if col.(Column[bool]).Values()[row] {
-				h.Write([]byte{1})
-			} else {
-				h.Write([]byte{0})
-			}
+		rh.dtypes[i] = col.DType()
+		switch c := col.(type) {
+		case Column[float64]:
+			rh.float[i] = c.Values()
+			rh.nulls[i] = c.IsNull()
+		case Column[int64]:
+			rh.intv[i] = c.Values()
+			rh.nulls[i] = c.IsNull()
+		case Column[string]:
+			// NOTE: Arrow's arrowStringColumn.Values() materialises a full
+			// []string copy. For very large string-keyed GroupBys, a future
+			// optimisation could hash Arrow string values in-place via
+			// arr.Value(i) to avoid this allocation.
+			rh.str[i] = c.Values()
+			rh.nulls[i] = c.IsNull()
+		case Column[bool]:
+			rh.boolv[i] = c.Values()
+			rh.nulls[i] = c.IsNull()
 		}
 	}
-	return h.Sum64()
+	return rh
+}
+
+func (rh *rowHasher) hash(row int) uint64 {
+	rh.h.Reset()
+	for i := 0; i < rh.ncols; i++ {
+		if rh.nulls[i] != nil && rh.nulls[i][row] {
+			rh.h.Write([]byte{0xFF})
+			continue
+		}
+		switch rh.dtypes[i] {
+		case DTypeFloat64:
+			binary.LittleEndian.PutUint64(rh.buf[:], math.Float64bits(rh.float[i][row]))
+			rh.h.Write(rh.buf[:])
+		case DTypeInt64, DTypeTimestamp:
+			binary.LittleEndian.PutUint64(rh.buf[:], uint64(rh.intv[i][row]))
+			rh.h.Write(rh.buf[:])
+		case DTypeString:
+			rh.h.Write([]byte(rh.str[i][row]))
+			rh.h.Write([]byte{0})
+		case DTypeBool:
+			if rh.boolv[i][row] {
+				rh.h.Write([]byte{1})
+			} else {
+				rh.h.Write([]byte{0})
+			}
+		default:
+			rh.h.Write([]byte{0xFF})
+		}
+	}
+	return rh.h.Sum64()
 }
 
 // renamedColumn wraps an AnyColumn with a different name.
@@ -859,8 +917,9 @@ func (f Dataset) execGroupBy(groupCols []string, specs []AggSpec) Dataset {
 	type group struct{ indices []int }
 	seen := make(map[uint64]int, int(f.tbl.NumRows())/2)
 	var groups []group
+	hasher := newRowHasher(f.tbl, groupCols)
 	for row := 0; row < int(f.tbl.NumRows()); row++ {
-		key := rowKeyHash(f.tbl, groupCols, row)
+		key := hasher.hash(row)
 		if idx, exists := seen[key]; exists {
 			groups[idx].indices = append(groups[idx].indices, row)
 		} else {

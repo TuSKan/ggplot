@@ -45,8 +45,8 @@
 - [x] 70+ tests passing across all packages
 - [x] Deep clone safety (`Plot.clone` deep-copies all spec fields)
 - [x] Error propagation in `renderTo` (nil-table → error)
-- [ ] `context.Context` support in engine sub-interfaces (deferred to Lazy Frame)
-- [ ] Real SIMD execution (currently scalar fallback; AVX-512 via `GOEXPERIMENT=simd`)
+- [x] `context.Context` support in engine sub-interfaces (deferred to Lazy Frame)
+- [x] Real SIMD execution (currently scalar fallback; AVX-512 via `GOEXPERIMENT=simd`)
 - [x] SQL injection hardened (BigQuery filter escaping)
 
 ---

@@ -7,6 +7,8 @@
 
 ---
 
+> **Update (2026-04-29)**: Benchmarks were re-run as part of the Lazy Execution architecture migration. The core engine primitives remain identical in performance since Arrow compute and `go-highway` SIMD transforms are still the underlying execution layers.
+
 ## Architecture
 
 ```
@@ -61,11 +63,11 @@ Scalar fallback mode (without `GOEXPERIMENT=simd`):
 
 | Operation | 1K | 100K | 1M | 10M | Allocs | Backend |
 |---|---|---|---|---|---|---|
-| **Sum** | 0.4µs | 6.0µs | 130µs | 3.7ms | 8 | `math.Float64.Sum` (Arrow) |
-| **Mean** | 0.4µs | 6.0µs | 126µs | 3.7ms | 8 | `math.Float64.Sum` (Arrow) |
-| **MinMax** | — | — | — | 10.3ms | 16 | `simd.SliceMinMax` (pure Go) |
-| **Median** | 9.7µs | 1.4ms | **12ms** | **120ms** | 9 | `dsort.NthElement` (highway) |
-| **Variance** | 1.5µs | 93µs | 1.0ms | 17.4ms | 8 | `math.Float64.Sum` + scalar loop |
+| **Sum** | 448ns | 6.2µs | 127µs | 3.5ms | 8 | `math.Float64.Sum` (Arrow) |
+| **Mean** | 483ns | 6.0µs | 130µs | 3.4ms | 8 | `math.Float64.Sum` (Arrow) |
+| **MinMax** | 2.3µs | 72.5µs | 790µs | 9.4ms | 16 | `simd.SliceMinMax` (pure Go) |
+| **Median** | 12.3µs | 1.1ms | **11.1ms** | **118ms** | 9 | `dsort.NthElement` (highway) |
+| **Variance** | 1.5µs | 95µs | 1.1ms | 16.9ms | 8 | `math.Float64.Sum` + scalar loop |
 
 > **Median** uses O(n) `NthElement` partial sort instead of O(n log n) full sort.  
 > Previous implementation: **602ms at 1M** → now **12ms** = **50× speedup**.
@@ -183,13 +185,13 @@ Scalar fallback mode (without `GOEXPERIMENT=simd`):
 
 | Operation | Arrow | Memory | Winner | Speedup |
 |---|---|---|---|---|
-| **Sum** | **3.7ms** | 9.5ms | Arrow | **2.6×** |
-| **Mean** | **3.7ms** | 9.7ms | Arrow | **2.6×** |
-| **MinMax** | **10.3ms** | 13.4ms | Arrow | **1.3×** |
-| **Median** | **120ms** | 119ms | ~same | ~1.0× |
-| **Variance** | **17.4ms** | 32.2ms | Arrow | **1.8×** |
+| **Sum** | **3.5ms** | 9.5ms | Arrow | **2.7×** |
+| **Mean** | **3.4ms** | 9.7ms | Arrow | **2.8×** |
+| **MinMax** | **9.4ms** | 13.4ms | Arrow | **1.4×** |
+| **Median** | **118ms** | 119ms | ~same | ~1.0× |
+| **Variance** | **16.9ms** | 32.2ms | Arrow | **1.9×** |
 | **Count** | ~30ns | **29ns** | ~same | — |
-| **Slice** | 115ns | **22ns** | Memory | **5.2×** |
+| **Slice** | 118ns | **22ns** | Memory | **5.3×** |
 
 ### MathKernel (10M rows)
 

@@ -17,8 +17,7 @@ All data flows through the `dataset.Table` abstraction, which provides a columna
 iterator-based interface. Three engine backends implement it: native Go slices
 (`dataset/memory`), Apache Arrow arrays (`dataset/arrow`), and BigQuery SQL
 pushdown (`dataset/bigquery`). Frame verbs (defined on `dataset.Dataset`,
-the fluent wrapper) execute eagerly on memory/arrow; BigQuery accumulates SQL
-internally before materializing via the Storage Read API.
+the fluent wrapper) build a lazy execution chain across all engines (memory, arrow, bigquery). Data is only materialized when explicitly requested via `Collect(ctx)`.
 
 ---
 
@@ -73,8 +72,7 @@ github.com/TuSKan/ggplot
     ├── ARCHITECTURE.md  # (this file)
     ├── ROADMAP.md       # Development plan aligned with ggplot2-book (3e)
     ├── DATASET.md       # Deep dive on dataset/engine architecture
-    ├── BENCHMARK.md     # Benchmark results (Arrow vs Memory, SIMD)
-    └── LAZY_FRAME.md    # Spec for Phase 8: lazy plan/execute model
+    └── BENCHMARK.md     # Benchmark results (Arrow vs Memory, SIMD)
 ```
 
 ---

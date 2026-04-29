@@ -138,7 +138,6 @@ ggplot.New(ds, aes.X("group"), aes.Y("value")).
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Package map, rendering pipeline, design decisions |
 | [ROADMAP.md](docs/ROADMAP.md) | Development plan aligned with the ggplot2 book (3e) |
 | [BENCHMARK.md](docs/BENCHMARK.md) | Arrow vs Memory engine performance benchmarks |
-| [LAZY_FRAME.md](docs/LAZY_FRAME.md) | Spec for lazy plan/execute Dataset architecture |
 
 ---
 
