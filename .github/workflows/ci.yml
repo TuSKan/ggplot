@@ -103,6 +103,10 @@ jobs:
 
   benchmarks:
     runs-on: ubuntu-latest
+    # Non-blocking: go-highway v0.0.12 AVX2 codegen emits AVX-512 instructions
+    # on some runners (AMD EPYC 7763), causing SIGILL in dmath benchmarks.
+    # Benchmarks are for local performance tracking, not correctness.
+    continue-on-error: true
     env:
       GOEXPERIMENT: simd
     steps:
