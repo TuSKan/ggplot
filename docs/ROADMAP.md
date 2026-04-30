@@ -57,19 +57,24 @@
 
 ---
 
-## 🔲 Phase 5 — Position Scales & Axes (Book Ch.10, Ch.14)
+## 🔲 Phase 5a — Scale Configuration (Book Ch.10) — _Next_
 
-> Book: `scale_x_continuous`, `scale_x_log10`, `scale_x_date`, `sec_axis`, `guide_axis`
+> Additive changes to the Scale interface. No layout/panel loop changes required.
 
-- [ ] **Date/Time Scale** — `scale.DateTime()` with automatic tick formatting (year, month, day, hour)
-- [ ] **Scale Limits** — `scale.WithLimits(min, max)` for zoom without data filtering (`coord_cartesian` equivalent)
-- [ ] **Scale Breaks** — `scale.WithBreaks(...)` for explicit tick positions
-- [ ] **Scale Labels** — `scale.WithLabels(...)` for custom tick label text
-- [ ] **Minor Breaks** — `scale.WithMinorBreaks(...)` for minor grid line positions
-- [ ] **Scale Expand** — `scale.WithExpand(mult, add)` to control axis padding (ggplot2 `expand`)
-- [ ] **Secondary Axes** — `SecAxis()` / `DupAxis()` for dual Y-axis support
-- [ ] **Axis Formatting** — `FormatX(func(float64) string)` for custom formatters (currency, percent, scientific)
-- [ ] **guide_axis(n.dodge)** — rotated or dodged axis labels for dense categorical axes
+- [ ] **Scale Breaks** — `scale.WithBreaks([]float64)`: user-supplied tick positions override `Ticks(n)` auto-generation
+- [ ] **Scale Labels** — `scale.WithLabels([]string)`: user-supplied tick labels override `Format(v)` auto-formatting
+- [ ] **Axis Formatting** — `scale.WithFormatter(func(float64) string)` for custom formatters (currency, percent, scientific)
+- [ ] **Scale Expand** — `scale.WithExpand(mult, add)` to control axis padding (ggplot2 `expand`); applied post-`SetBounds`
+- [ ] **Minor Breaks** — `scale.WithMinorBreaks([]float64)` for minor grid line positions; interleaved between major ticks
+- [ ] **Scale Limits (coord_cartesian)** — separate "scale domain" (data range) from "visible window" (clip rect). Currently `SetBounds` collapses both; add `ClipBounds(min, max)` for zoom-without-filter semantics
+
+## 🔲 Phase 5b — Axes & Time Scales (Book Ch.10, Ch.14) — _Blocked by renderTo decomposition_
+
+> Structural changes requiring layout rework. Land after Phase 4 `renderTo` decomposition.
+
+- [ ] **Secondary Axes** — `SecAxis()` / `DupAxis()` for dual Y-axis support. Requires dual-axis layout (right margin, second tick column) — blocked by single-pass layout cache in `renderTo`
+- [ ] **Date/Time Scale** — `scale.DateTime()` with automatic tick formatting (year, month, day, hour). Training path needs `Column[int64]` → epoch; `Format()` via `time.Unix`. Exposes float64-everywhere assumption in renderer
+- [ ] **guide_axis(n.dodge)** — rotated or dodged axis labels for dense categorical axes. Pure layout complexity in axis-drawing code
 - [ ] **Binned Scales** — `scale_x_binned()` for discretizing continuous axes
 
 ## 🔲 Phase 6 — Colour Scales & Legends (Book Ch.11, Ch.14)

@@ -368,4 +368,3 @@ func (e *Engine) BitShiftRight(col dataset.AnyColumn, n int) (dataset.AnyColumn,
 	}
 	return &int64Column{name: c.name, data: out}, nil
 }
-

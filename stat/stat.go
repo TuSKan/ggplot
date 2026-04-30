@@ -96,9 +96,9 @@ func init() {
 
 type identityStat struct{}
 
-func (identityStat) Name() Name                    { return Identity }
-func (identityStat) RequiredAes() []string         { return nil }
-func (identityStat) OutputSchema() []string        { return nil }
+func (identityStat) Name() Name                       { return Identity }
+func (identityStat) RequiredAes() []string            { return nil }
+func (identityStat) OutputSchema() []string           { return nil }
 func (identityStat) OutputMapping() map[string]string { return nil }
 func (identityStat) Compute(_ context.Context, ds dataset.Dataset, _ map[string]string, _ Options) (dataset.Dataset, error) {
 	return ds, nil
@@ -108,9 +108,9 @@ func (identityStat) Compute(_ context.Context, ds dataset.Dataset, _ map[string]
 
 type binStat struct{}
 
-func (binStat) Name() Name             { return Bin }
-func (binStat) RequiredAes() []string  { return []string{"x"} }
-func (binStat) OutputSchema() []string { return []string{"x", "count", "xmin", "xmax"} }
+func (binStat) Name() Name                       { return Bin }
+func (binStat) RequiredAes() []string            { return []string{"x"} }
+func (binStat) OutputSchema() []string           { return []string{"x", "count", "xmin", "xmax"} }
 func (binStat) OutputMapping() map[string]string { return map[string]string{"x": "x", "y": "count"} }
 
 func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
@@ -178,9 +178,9 @@ func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string
 
 type countStat struct{}
 
-func (countStat) Name() Name             { return Count }
-func (countStat) RequiredAes() []string  { return []string{"x"} }
-func (countStat) OutputSchema() []string { return []string{"x", "count"} }
+func (countStat) Name() Name                       { return Count }
+func (countStat) RequiredAes() []string            { return []string{"x"} }
+func (countStat) OutputSchema() []string           { return []string{"x", "count"} }
 func (countStat) OutputMapping() map[string]string { return map[string]string{"x": "x", "y": "count"} }
 
 func (countStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, _ Options) (dataset.Dataset, error) {
@@ -225,7 +225,9 @@ type densityStat struct{}
 func (densityStat) Name() Name             { return Density }
 func (densityStat) RequiredAes() []string  { return []string{"x"} }
 func (densityStat) OutputSchema() []string { return []string{"x", "density"} }
-func (densityStat) OutputMapping() map[string]string { return map[string]string{"x": "x", "y": "density"} }
+func (densityStat) OutputMapping() map[string]string {
+	return map[string]string{"x": "x", "y": "density"}
+}
 
 func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
@@ -344,9 +346,9 @@ func silvermanBandwidth(vals []float64) float64 {
 
 type smoothStat struct{}
 
-func (smoothStat) Name() Name             { return Smooth }
-func (smoothStat) RequiredAes() []string  { return []string{"x", "y"} }
-func (smoothStat) OutputSchema() []string { return []string{"x", "y"} }
+func (smoothStat) Name() Name                       { return Smooth }
+func (smoothStat) RequiredAes() []string            { return []string{"x", "y"} }
+func (smoothStat) OutputSchema() []string           { return []string{"x", "y"} }
 func (smoothStat) OutputMapping() map[string]string { return map[string]string{"x": "x", "y": "y"} }
 
 func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
@@ -521,9 +523,9 @@ func loessFit(ctx context.Context, ds dataset.Dataset, pts []xyPair, n, nOut int
 
 type summaryStat struct{}
 
-func (summaryStat) Name() Name             { return Summary }
-func (summaryStat) RequiredAes() []string  { return []string{"x", "y"} }
-func (summaryStat) OutputSchema() []string { return []string{"x", "y"} }
+func (summaryStat) Name() Name                       { return Summary }
+func (summaryStat) RequiredAes() []string            { return []string{"x", "y"} }
+func (summaryStat) OutputSchema() []string           { return []string{"x", "y"} }
 func (summaryStat) OutputMapping() map[string]string { return map[string]string{"x": "x", "y": "y"} }
 
 func (summaryStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, _ Options) (dataset.Dataset, error) {
@@ -602,7 +604,9 @@ func (boxplotStat) RequiredAes() []string { return []string{"y"} }
 func (boxplotStat) OutputSchema() []string {
 	return []string{"x", "lower", "q1", "middle", "q3", "upper", "notch_lower", "notch_upper"}
 }
-func (boxplotStat) OutputMapping() map[string]string { return map[string]string{"x": "x", "y": "middle"} }
+func (boxplotStat) OutputMapping() map[string]string {
+	return map[string]string{"x": "x", "y": "middle"}
+}
 
 // Compute produces the five-number summary for each unique X value (group).
 // Output columns: x, lower, q1, middle, q3, upper.

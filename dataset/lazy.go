@@ -16,25 +16,25 @@ type opKind int
 
 const (
 	opNone        opKind = iota // root node — wraps a materialised Table
-	opSelect                   // keep named columns
-	opRename                   // rename one column
-	opFilter                   // mask-based row filtering
-	opArrange                  // sort by columns
-	opHead                     // first N rows
-	opTail                     // last N rows
-	opSlice                    // row range [start, end)
-	opDistinct                 // deduplicate
-	opJoin                     // any join type
-	opPivotLonger              // wide → long
-	opPivotWider               // long → wide
-	opSeparate                 // split column
-	opFill                     // fill missing values
-	opDropNA                   // drop rows with NA
-	opStack                    // row-bind
-	opCombine                  // column-bind
-	opGroupBy                  // group-by + summarize (compound)
-	opMutate                   // add/replace column
-	opReplaceCol               // replace column with float64 values
+	opSelect                    // keep named columns
+	opRename                    // rename one column
+	opFilter                    // mask-based row filtering
+	opArrange                   // sort by columns
+	opHead                      // first N rows
+	opTail                      // last N rows
+	opSlice                     // row range [start, end)
+	opDistinct                  // deduplicate
+	opJoin                      // any join type
+	opPivotLonger               // wide → long
+	opPivotWider                // long → wide
+	opSeparate                  // split column
+	opFill                      // fill missing values
+	opDropNA                    // drop rows with NA
+	opStack                     // row-bind
+	opCombine                   // column-bind
+	opGroupBy                   // group-by + summarize (compound)
+	opMutate                    // add/replace column
+	opReplaceCol                // replace column with float64 values
 )
 
 // op holds the parameters for a single lazy operation.

@@ -21,7 +21,6 @@ func init() {
 	MustRegister(SeabornPoster, newSeabornPoster)
 }
 
-
 // Seaborn family. Sources:
 //   matplotlib/lib/matplotlib/mpl-data/stylelib/seaborn-v0_8*.mplstyle
 //
