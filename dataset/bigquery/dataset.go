@@ -1,6 +1,7 @@
 package bigquery
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -306,7 +307,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 	var resultDS dataset.Table
 	for {
 		resp, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

@@ -88,20 +88,6 @@ type op struct {
 	replaceVals []float64
 }
 
-// engine returns the Engine for this Dataset, walking the parent chain if needed.
-func (f Dataset) engine() Engine {
-	if f.eng != nil {
-		return f.eng
-	}
-	if f.tbl != nil {
-		return GetEngine(f.tbl)
-	}
-	if f.parent != nil {
-		return f.parent.engine()
-	}
-	return nil
-}
-
 // root walks the parent chain to find the root Dataset (the one with a Table).
 func (f *Dataset) root() *Dataset {
 	cur := f
@@ -113,14 +99,22 @@ func (f *Dataset) root() *Dataset {
 
 // flatten walks the parent chain and returns the operations in execution
 // order (root-first). The root node (opNone) is excluded.
+// Pre-counts chain length for exact capacity; builds in-order to skip reversal.
 func (f *Dataset) flatten() []op {
-	var chain []op
+	// Count chain length.
+	n := 0
 	for cur := f; cur != nil && cur.op.kind != opNone; cur = cur.parent {
-		chain = append(chain, cur.op)
+		n++
 	}
-	// Reverse to root-first execution order.
-	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
-		chain[i], chain[j] = chain[j], chain[i]
+	if n == 0 {
+		return nil
+	}
+	// Fill from tail to head (root-first order).
+	chain := make([]op, n)
+	i := n - 1
+	for cur := f; cur != nil && cur.op.kind != opNone; cur = cur.parent {
+		chain[i] = cur.op
+		i--
 	}
 	return chain
 }
@@ -152,11 +146,11 @@ func (f Dataset) Collect(ctx context.Context) (Dataset, error) {
 	// Flatten verb chain.
 	ops := f.flatten()
 	if len(ops) == 0 {
-		return Dataset{eng: f.engine(), tbl: root.tbl}, nil
+		return Dataset{eng: f.eng, tbl: root.tbl}, nil
 	}
 
 	// Let engine optimise if it supports it.
-	eng := f.engine()
+	eng := f.eng
 	if opt, ok := eng.(Optimizer); ok {
 		ops = opt.Optimize(ops)
 	}

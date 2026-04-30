@@ -20,7 +20,7 @@ func Store[T Lanes](v Vec[T], data []T) { hwy.Store(v, data) }
 func StoreSlice[T Lanes](v Vec[T], data []T) { hwy.StoreSlice(v, data) }
 
 // Set broadcasts a scalar value to all lanes of a vector.
-func Set[T Lanes](val T) Vec[T] { return hwy.Set[T](val) }
+func Set[T Lanes](val T) Vec[T] { return hwy.Set(val) }
 
 // Zero returns a vector with all lanes set to zero.
 func Zero[T Lanes]() Vec[T] { return hwy.Zero[T]() }
@@ -32,7 +32,7 @@ func MaskLoad[T Lanes](mask Mask[T], data []T) Vec[T] { return hwy.MaskLoad(mask
 func MaskStore[T Lanes](mask Mask[T], v Vec[T], data []T) { hwy.MaskStore(mask, v, data) }
 
 // Load4 loads four interleaved vectors from data (AoS → SoA deinterleave).
-func Load4[T Lanes](data []T) (a, b, c, d Vec[T]) { return hwy.Load4[T](data) }
+func Load4[T Lanes](data []T) (a, b, c, d Vec[T]) { return hwy.Load4(data) }
 
 // CompressStore compresses elements based on a mask and stores them directly to a slice.
 // It returns the number of elements successfully stored.

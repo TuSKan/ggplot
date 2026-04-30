@@ -53,6 +53,61 @@ func TestPlot_Layer_Immutable(t *testing.T) {
 	}
 }
 
+func TestPlot_Aes_DoesNotMutateParent(t *testing.T) {
+	ds := testDataset(t)
+	base := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point())
+
+	// Derive two children with different Aes overrides.
+	childA := base.Aes(aes.Color("x"))
+	childB := base.Aes(aes.Color("y"))
+
+	// Render all three — none should affect the others.
+	_, err := base.Render(context.Background(), 200, 150)
+	if err != nil {
+		t.Fatalf("base render failed: %v", err)
+	}
+	_, err = childA.Render(context.Background(), 200, 150)
+	if err != nil {
+		t.Fatalf("childA render failed: %v", err)
+	}
+	_, err = childB.Render(context.Background(), 200, 150)
+	if err != nil {
+		t.Fatalf("childB render failed: %v", err)
+	}
+
+	// Re-render base to prove it wasn't corrupted.
+	_, err = base.Render(context.Background(), 200, 150)
+	if err != nil {
+		t.Fatalf("base re-render failed (mutation detected): %v", err)
+	}
+}
+
+func TestPlot_Clone_Independence(t *testing.T) {
+	ds := testDataset(t)
+	base := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point()).
+		Labs(ggplot.Title("Base"))
+
+	// Derive siblings with different modifications.
+	withTheme := base.Theme("dark")
+	withScale := base.ScaleX("log10")
+	withLim := base.XLim(2, 8)
+
+	// All four must render independently without error.
+	for name, p := range map[string]*ggplot.Plot{
+		"base":      base,
+		"withTheme": withTheme,
+		"withScale": withScale,
+		"withLim":   withLim,
+	} {
+		_, err := p.Render(context.Background(), 200, 150)
+		if err != nil {
+			t.Fatalf("%s render failed: %v", name, err)
+		}
+	}
+}
+
 func TestPlot_NoLayers_Error(t *testing.T) {
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"))

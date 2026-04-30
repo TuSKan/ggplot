@@ -16,8 +16,11 @@ func ReduceMin[T Lanes](v Vec[T]) T { return hwy.ReduceMin(v) }
 func ReduceMax[T Lanes](v Vec[T]) T { return hwy.ReduceMax(v) }
 
 // --- Slice-level reductions ---
-// Pure Go scalar implementations — zero allocations.
-// When GOEXPERIMENT=simd is enabled, the compiler auto-vectorizes these loops.
+//
+// Scalar implementation. Go's compiler does not auto-vectorize these loops
+// as of Go 1.26; SIMD wrappers via Vec[T] regress due to heap escape on
+// generic call sites (see golang/go#65592). Use dmath.X[float64] for
+// transcendentals which manage SIMD internally via slice-level transforms.
 
 // SliceSum computes the sum of all elements in a slice.
 func SliceSum[T Lanes](data []T) T {

@@ -38,16 +38,22 @@
 
 ## 🔶 Phase 4 — Production Hardening (In Progress)
 
-- [x] All `errcheck` / `go vet` / linter errors resolved
-- [x] `clone()` correctly copies all spec fields (XLim, YLim, LegendPosition, ScaleOverrides)
-- [x] `BoundsSetter` implemented on all scale types (Linear, Log10, Sqrt, Reverse, Discrete)
-- [x] Compile-time interface checks for all scale types
-- [x] 70+ tests passing across all packages
+- [x] Linting: `.golangci.yml` with `errcheck`, `staticcheck`, `gocritic`, `errorlint`; `-race` in CI test step; `GOEXPERIMENT` matrix (simd + scalar); official `golangci-lint-action`
+- [x] Golden snapshot tests: 6 PNG goldens with SHA-256 comparison (scatter, bar, multi-layer, grouped-color, histogram, labels+theme); platform-specific (`GOOS_GOARCH`)
+- [x] Clone independence tests: `TestPlot_Aes_DoesNotMutateParent`, `TestPlot_Clone_Independence`
 - [x] Deep clone safety (`Plot.clone` deep-copies all spec fields)
 - [x] Error propagation in `renderTo` (nil-table → error)
-- [x] `context.Context` support in engine sub-interfaces (deferred to Lazy Frame)
-- [x] Real SIMD execution (currently scalar fallback; AVX-512 via `GOEXPERIMENT=simd`)
 - [x] SQL injection hardened (BigQuery filter escaping)
+- [x] `errors.Is(err, io.EOF)` fix in BigQuery stream reader (was `err == io.EOF`)
+- [x] Lazy chain performance: `engine()` parent walk eliminated (use `f.eng` directly); `flatten()` pre-count + exact capacity + no reversal
+- [x] Render hot path: `groupByColumn` uses `strconv` (not `fmt.Sprintf`) + `SelectRows` (not `BoolMask`) — eliminates O(n×k) bool-mask allocations
+- [x] Stat extensibility: `Stat.OutputMapping()` replaces hardcoded `updateMappingForStat` switch — third-party stats work without modifying core `ggplot.go`
+- [ ] `context.Context` in engine sub-interfaces — currently plumbed only through `executeOps` (op-boundary cancellation). Engine methods (`AddCols`, `Sum`, `Join`, `PivotLonger`, etc.) don't take a `ctx`. Deferred — current granularity sufficient for plotting workloads.
+- [ ] Real SIMD execution — pending Go SIMD intrinsics that don't heap-escape `Vec[T]` through generic call sites (`golang/go#65592`). Current: scalar loops for arithmetic/reductions; go-highway SIMD only inside `dmath` transcendentals.
+- [ ] `renderTo` decomposition — extract ~600-line function into `resolveLayers`, `trainScales`, `computeLayout`, `drawPanel`, `drawAxes`, `drawLegend`. Deferred to pre-Phase 11 (free scales) when per-panel state boundaries are known.
+- [ ] KDE inner loop SIMD — `stat.Density` Gaussian kernel loop is vectorisable via `compute.Exp`/`compute.Mul`/`compute.ReduceSum`. Currently scalar + NumCPU() parallelism.
+- [ ] `GroupAggregator` interface — current `dispatchAgg` allocates per-group (1M groups = 1M 1-element columns). Arrow has `hash_aggregate` for single-pass grouped aggregation. Needed before Phase 9 (more stats).
+- [ ] FNV-64 collision guard in `execDistinct` — acknowledged in TODO (frame.go:802). Fix: xxh3 + equality fallback at >10M rows.
 
 ---
 
@@ -192,6 +198,7 @@
 - [ ] **Programmatic Aesthetics** — `aes.String("colname")` for dynamic column names
 - [ ] **Custom Geom Protocol** — user-defined `Geom` implementations via interface
 - [ ] **Custom Stat Protocol** — user-defined `Stat` implementations via interface
+- [ ] **Smooth Method Expansion** — `stat.Smooth` dispatch for GAM, cubic spline, LOWESS in addition to current LM/LOESS
 - [ ] **Custom Scale Protocol** — user-defined `Scale` implementations via interface
 - [ ] **after_stat() / after_scale()** — computed aesthetics from stat/scale output
 

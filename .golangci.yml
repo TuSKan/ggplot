@@ -1,0 +1,58 @@
+# golangci-lint config for ggplot
+# Run: golangci-lint run --timeout 10m
+
+run:
+  timeout: 10m
+  go: "1.26"
+
+linters:
+  enable:
+    - errcheck      # unchecked error returns
+    - staticcheck   # advanced static analysis (SA* checks)
+    - gocritic      # opinionated code style checks
+    - errorlint     # error wrapping/comparison best practices
+    - govet         # go vet checks (already in CI, but explicit)
+    - ineffassign   # unused assignments
+    - unused        # unused code
+    - typecheck     # type checking
+
+linters-settings:
+  errcheck:
+    # Don't flag fmt.Fprintf / io.Writer.Write — too noisy for rendering code.
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - (io.Writer).Write
+      - (*bytes.Buffer).WriteString
+      - (*bytes.Buffer).Write
+
+  staticcheck:
+    checks:
+      - all
+
+  gocritic:
+    disabled-checks:
+      - ifElseChain     # style-only; switch isn't always clearer
+
+  errorlint:
+    # Only flag errors.Is / errors.As misuse, not fmt.Errorf wrapping style.
+    errorf: false
+    asserts: true
+    comparison: true
+
+issues:
+  # Don't report issues in test files for errcheck — test code often ignores errors intentionally.
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gocritic
+
+    # Exclude generated files.
+    - path: ".*_gen\\.go"
+      linters:
+        - all
+
+  # Show all issues, don't cap per-linter.
+  max-issues-per-linter: 0
+  max-same-issues: 0

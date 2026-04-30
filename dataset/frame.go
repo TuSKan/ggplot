@@ -59,7 +59,7 @@ func NewDataset(eng Engine, cols ...AnyColumn) (Dataset, error) {
 // new float64 values when collected.
 func ReplaceColumn(ds Dataset, name string, values []float64) Dataset {
 	return Dataset{
-		eng:    ds.engine(),
+		eng:    ds.eng,
 		parent: &ds,
 		op:     op{kind: opReplaceCol, replaceCol: name, replaceVals: values},
 	}
@@ -68,11 +68,9 @@ func ReplaceColumn(ds Dataset, name string, values []float64) Dataset {
 // Err returns the first error encountered in the chain, or nil.
 func (f Dataset) Err() error { return f.err }
 
-// Table returns the underlying Table. Panics if the Dataset is uncollected.
+// Table returns the underlying Table, or nil if the Dataset is uncollected.
+// Callers must check for nil or call Collect(ctx) before accessing the Table.
 func (f Dataset) Table() Table {
-	if f.tbl == nil && f.parent != nil {
-		panic("dataset: Table() called on uncollected lazy Dataset — call Collect(ctx) first")
-	}
 	return f.tbl
 }
 
@@ -118,7 +116,7 @@ func (f Dataset) requireEngine() (Engine, Dataset) {
 	if f.err != nil {
 		return nil, f
 	}
-	eng := f.engine()
+	eng := f.eng
 	if eng == nil {
 		if f.tbl != nil {
 			eng = GetEngine(f.tbl)
@@ -147,12 +145,12 @@ func (f Dataset) requireSelector(eng Engine) (Selector, ColumnFactory, error) {
 
 // Select keeps only the named columns, in the order specified.
 func (f Dataset) Select(cols ...string) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opSelect, cols: cols}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opSelect, cols: cols}}
 }
 
 // Rename renames a column.
 func (f Dataset) Rename(oldName, newName string) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opRename, renameOld: oldName, renameNew: newName}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opRename, renameOld: oldName, renameNew: newName}}
 }
 
 func (f Dataset) execSelect(cols []string) Dataset {
@@ -223,7 +221,7 @@ func (f Dataset) execRename(oldName, newName string) Dataset {
 
 // Filter keeps rows where the Masker evaluates to true.
 func (f Dataset) Filter(mask Masker) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opFilter, mask: mask}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opFilter, mask: mask}}
 }
 
 func (f Dataset) execFilter(mask Masker) Dataset {
@@ -254,35 +252,63 @@ func (f Dataset) execFilter(mask Masker) Dataset {
 	return Dataset{eng: eng, tbl: ds}
 }
 
+// SelectRows returns a new materialised Dataset containing only the rows at
+// the given indices. This is more efficient than Filter when you already have
+// indices (avoids O(n) bool-mask allocation).
+//
+// The Dataset must be materialised (collected). Use on collected datasets only.
+func (f Dataset) SelectRows(indices []int) (Dataset, error) {
+	if f.tbl == nil {
+		return f, fmt.Errorf("dataset: SelectRows requires a materialised dataset (call Collect first)")
+	}
+	eng := f.eng
+	if eng == nil {
+		eng = GetEngine(f.tbl)
+	}
+	sel, ok := eng.(Selector)
+	if !ok {
+		return f, fmt.Errorf("engine %q does not support Selector", eng.Name())
+	}
+	factory, ok := eng.(ColumnFactory)
+	if !ok {
+		return f, fmt.Errorf("engine %q does not support ColumnFactory", eng.Name())
+	}
+	ds, err := applySelect(sel, factory, f.tbl, indices)
+	if err != nil {
+		return f, err
+	}
+	return Dataset{eng: eng, tbl: ds}, nil
+}
+
 // --- Sorting ---
 
 // Arrange sorts the dataset by the named column (ascending).
 func (f Dataset) Arrange(cols ...string) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opArrange, cols: cols}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opArrange, cols: cols}}
 }
 
 // --- Row Slicing ---
 
 // Head returns the first n rows.
 func (f Dataset) Head(n int) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opHead, n: n}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opHead, n: n}}
 }
 
 // Tail returns the last n rows.
 func (f Dataset) Tail(n int) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opTail, n: n}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opTail, n: n}}
 }
 
 // Slice returns rows in the range [start, end).
 func (f Dataset) Slice(start, end int) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opSlice, start: start, end: end}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opSlice, start: start, end: end}}
 }
 
 // --- Distinct ---
 
 // Distinct removes duplicate rows based on the specified columns.
 func (f Dataset) Distinct(cols ...string) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opDistinct, cols: cols}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opDistinct, cols: cols}}
 }
 
 // --- exec methods ---
@@ -386,32 +412,32 @@ func (f Dataset) execDistinct(cols []string) Dataset {
 
 func (f Dataset) LeftJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinLeft
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) InnerJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinInner
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) RightJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinRight
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) FullJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinFull
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) SemiJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinSemi
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) AntiJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinAnti
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
 func (f Dataset) execJoin(other Table, spec JoinSpec) Dataset {
@@ -433,15 +459,15 @@ func (f Dataset) execJoin(other Table, spec JoinSpec) Dataset {
 // --- Reshape ---
 
 func (f Dataset) PivotLonger(spec PivotLongerSpec) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opPivotLonger, pivotL: spec}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opPivotLonger, pivotL: spec}}
 }
 
 func (f Dataset) PivotWider(spec PivotWiderSpec) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opPivotWider, pivotW: spec}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opPivotWider, pivotW: spec}}
 }
 
 func (f Dataset) Separate(col string, into []string, sep string) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opSeparate, sepCol: col, into: into, sep: sep}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opSeparate, sepCol: col, into: into, sep: sep}}
 }
 
 func (f Dataset) execPivotLonger(spec PivotLongerSpec) Dataset {
@@ -495,11 +521,11 @@ func (f Dataset) execSeparate(col string, into []string, sep string) Dataset {
 // --- Fill / DropNA ---
 
 func (f Dataset) Fill(col string, dir FillDirection) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opFill, fillCol: col, fillDir: dir}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opFill, fillCol: col, fillDir: dir}}
 }
 
 func (f Dataset) DropNA(cols ...string) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opDropNA, cols: cols}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opDropNA, cols: cols}}
 }
 
 func (f Dataset) execFill(col string, dir FillDirection) Dataset {
@@ -545,11 +571,11 @@ func (f Dataset) execDropNA(cols []string) Dataset {
 // --- Composing ---
 
 func (f Dataset) Stack(others ...Table) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opStack, others: others}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opStack, others: others}}
 }
 
 func (f Dataset) Combine(others ...Table) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opCombine, others: others}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opCombine, others: others}}
 }
 
 func (f Dataset) execStack(others []Table) Dataset {
@@ -607,7 +633,7 @@ func (f Dataset) replaceColumn(factory ColumnFactory, name string, newCol AnyCol
 	if err != nil {
 		return f.withError(err)
 	}
-	return Dataset{eng: f.engine(), tbl: ds}
+	return Dataset{eng: f.eng, tbl: ds}
 }
 
 // --- GroupBy + Summarize ---
@@ -658,7 +684,7 @@ func (f Dataset) GroupBy(cols ...string) GroupedFrame {
 func (gf GroupedFrame) Summarize(specs ...AggSpec) Dataset {
 	f := gf.frame
 	return Dataset{
-		eng:    f.engine(),
+		eng:    f.eng,
 		parent: &f,
 		op:     op{kind: opGroupBy, cols: gf.groupCols, aggSpecs: specs},
 	}
@@ -754,7 +780,7 @@ type MutateFunc interface {
 
 // Mutate appends or replaces a column using a MutateFunc.
 func (f Dataset) Mutate(name string, fn MutateFunc) Dataset {
-	return Dataset{eng: f.engine(), parent: &f, op: op{kind: opMutate, mutName: name, mutFn: fn}}
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opMutate, mutName: name, mutFn: fn}}
 }
 
 // applyTake applies a Take operation to all columns in a dataset using the engine's Selector.

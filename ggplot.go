@@ -36,6 +36,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/TuSKan/ggplot/aes"
@@ -617,7 +618,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 								statName, grpLabel)
 						}
 						grpDS = transformed
-						grpMerged = updateMappingForStat(statName, grpMerged)
+						grpMerged = updateMappingForStat(s, grpMerged)
 					}
 
 					grpColorCopy := grpRGBA
@@ -669,7 +670,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 						return fmt.Errorf("ggplot: stat %q produced nil table", statName)
 					}
 					ds = transformed
-					merged = updateMappingForStat(statName, merged)
+					merged = updateMappingForStat(s, merged)
 				}
 
 				// Resolve and train the continuous color scale (if any).
@@ -1179,34 +1180,19 @@ type resolvedLayer struct {
 }
 
 // updateMappingForStat updates aesthetic mappings to point to the columns
-// produced by a stat transform. Each stat produces specific output columns.
-func updateMappingForStat(statName stat.Name, mapping grammar.AesMap) grammar.AesMap {
+// produced by a stat transform. Delegates to Stat.OutputMapping() so that
+// third-party stats work without modifying this function.
+func updateMappingForStat(s stat.Stat, mapping grammar.AesMap) grammar.AesMap {
+	om := s.OutputMapping()
+	if om == nil {
+		return mapping // identity — no rewriting
+	}
 	result := make(grammar.AesMap, len(mapping))
 	for k, v := range mapping {
 		result[k] = v
 	}
-	switch statName {
-	case stat.Bin, stat.Count:
-		// Stat bin/count produces "x" and "count" columns.
-		result["x"] = "x"
-		result["y"] = "count"
-	case stat.Density:
-		// Stat density produces "x" and "density" columns.
-		result["x"] = "x"
-		result["y"] = "density"
-	case stat.Smooth:
-		// Stat smooth produces "x" and "y" columns.
-		result["x"] = "x"
-		result["y"] = "y"
-	case stat.Summary:
-		// Stat summary produces "x" and "y" columns.
-		result["x"] = "x"
-		result["y"] = "y"
-	case stat.Boxplot:
-		// Stat boxplot produces x, lower, q1, middle, q3, upper columns.
-		// The drawBoxplot function reads these directly by name.
-		result["x"] = "x"
-		result["y"] = "middle"
+	for aes, col := range om {
+		result[aes] = col
 	}
 	return result
 }
@@ -1214,56 +1200,56 @@ func updateMappingForStat(statName stat.Name, mapping grammar.AesMap) grammar.Ae
 // groupByColumn splits a Dataset into subsets by the distinct values in the
 // given column. Returns ordered unique labels, corresponding filtered datasets,
 // and any error encountered.
-func groupByColumn(ctx context.Context, ds dataset.Dataset, colName string) ([]string, []dataset.Dataset, error) {
+//
+// Performance: uses strconv (not fmt.Sprintf) for numeric→string conversion
+// and SelectRows (not BoolMask) for O(group_size) extraction without
+// allocating O(n) bool masks per group.
+func groupByColumn(_ context.Context, ds dataset.Dataset, colName string) ([]string, []dataset.Dataset, error) {
 	col, err := ds.Column(colName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("column %q: %w", colName, err)
 	}
 
-	// Extract string values from the column.
+	// Extract string labels from the column.
+	// Uses strconv instead of fmt.Sprintf (~5× faster per value).
 	var vals []string
 	switch tc := col.(type) {
 	case dataset.Column[string]:
 		vals = tc.Values()
 	case dataset.Column[float64]:
-		vals = make([]string, len(tc.Values()))
-		for i, v := range tc.Values() {
-			vals[i] = fmt.Sprintf("%g", v)
+		raw := tc.Values()
+		vals = make([]string, len(raw))
+		for i, v := range raw {
+			vals[i] = strconv.FormatFloat(v, 'g', -1, 64)
 		}
 	case dataset.Column[int64]:
-		vals = make([]string, len(tc.Values()))
-		for i, v := range tc.Values() {
-			vals[i] = fmt.Sprintf("%d", v)
+		raw := tc.Values()
+		vals = make([]string, len(raw))
+		for i, v := range raw {
+			vals[i] = strconv.FormatInt(v, 10)
 		}
 	default:
 		return nil, nil, fmt.Errorf("unsupported column type %T for %q", col, colName)
 	}
 
-	n := len(vals)
-	// Use index-based grouping to avoid O(n×k) bool-mask memory.
+	// Build index groups: map[label] → []rowIndex.
 	groupIndices := make(map[string][]int)
 	var order []string
-	for i := 0; i < n; i++ {
-		v := vals[i]
+	for i, v := range vals {
 		if _, exists := groupIndices[v]; !exists {
 			order = append(order, v)
 		}
 		groupIndices[v] = append(groupIndices[v], i)
 	}
 
+	// Extract subsets using direct index selection (no bool-mask allocation).
 	subsets := make([]dataset.Dataset, len(order))
 	for i, label := range order {
-		// Build a bool mask from indices.
-		mask := make([]bool, n)
-		for _, idx := range groupIndices[label] {
-			mask[idx] = true
+		subset, serr := ds.SelectRows(groupIndices[label])
+		if serr != nil {
+			return nil, nil, fmt.Errorf("select group %q: %w", label, serr)
 		}
-		filtered := ds.Filter(dataset.BoolMask(mask))
-		collected, cerr := filtered.Collect(ctx)
-		if cerr != nil {
-			return nil, nil, fmt.Errorf("filter group %q: %w", label, cerr)
-		}
-		subsets[i] = collected
+		subsets[i] = subset
 	}
 	return order, subsets, nil
 }

@@ -31,7 +31,7 @@ type Layer struct {
 
 	// setFlags tracks which options were explicitly set by the user.
 	// Used by Validate() to emit warnings for irrelevant options.
-	setFlags optFlag
+	setFlags OptFlag
 	warnings []string // validation warnings from applyOpts
 }
 
@@ -114,67 +114,83 @@ type Params struct {
 
 // --- Option tracking for validation ---
 
-// optFlag tracks which parameters were explicitly set by the user.
-type optFlag uint32
+// OptFlag tracks which parameters were explicitly set by the user.
+// Exported so third-party packages can compose relevance masks for
+// [RegisterGeomType].
+type OptFlag uint32
 
 const (
-	optColor       optFlag = 1 << iota // common
-	optFill                            // common
-	optAlpha                           // common
-	optLineWidth                       // common
-	optSize                            // point, (also sets LineWidth)
-	optShape                           // point
-	optWidth                           // bar, histogram
-	optBins                            // histogram
-	optFontSize                        // text
-	optFontFamily                      // text
-	optAngle                           // text
-	optMethod                          // smooth
-	optSpan                            // smooth
-	optPoints                          // smooth, density
-	optWhisker                         // boxplot
-	optNotch                           // boxplot
-	optOrientation                     // bar, histogram, boxplot, area, density, rug
+	OptColor       OptFlag = 1 << iota // common
+	OptFill                            // common
+	OptAlpha                           // common
+	OptLineWidth                       // common
+	OptSize                            // point, (also sets LineWidth)
+	OptShape                           // point
+	OptWidth                           // bar, histogram
+	OptBins                            // histogram
+	OptFontSize                        // text
+	OptFontFamily                      // text
+	OptAngle                           // text
+	OptMethod                          // smooth
+	OptSpan                            // smooth
+	OptPoints                          // smooth, density
+	OptWhisker                         // boxplot
+	OptNotch                           // boxplot
+	OptOrientation                     // bar, histogram, boxplot, area, density, rug
 )
 
 // paramRelevance maps geometry types to what parameters are meaningful for them.
-var paramRelevance = map[Type]optFlag{
-	TypePoint:     optColor | optFill | optAlpha | optSize | optShape,
-	TypeLine:      optColor | optAlpha | optLineWidth | optSize, // Size → LineWidth
-	TypeBar:       optColor | optFill | optAlpha | optWidth | optLineWidth | optOrientation,
-	TypeHistogram: optColor | optFill | optAlpha | optWidth | optBins | optLineWidth | optOrientation,
-	TypeArea:      optColor | optFill | optAlpha | optLineWidth | optOrientation,
-	TypePolygon:   optColor | optFill | optAlpha | optLineWidth,
-	TypeSmooth:    optColor | optAlpha | optLineWidth | optSize | optMethod | optSpan | optPoints,
-	TypeDensity:   optColor | optFill | optAlpha | optLineWidth | optPoints | optOrientation,
-	TypeText:      optColor | optAlpha | optFontSize | optFontFamily | optAngle,
-	TypeStep:      optColor | optAlpha | optLineWidth | optSize,
-	TypeRug:       optColor | optAlpha | optLineWidth | optOrientation,
-	TypeBoxPlot:   optColor | optFill | optAlpha | optWidth | optLineWidth | optWhisker | optNotch | optOrientation,
-	TypeErrorBar:  optColor | optAlpha | optLineWidth | optWidth,
-	TypeSegment:   optColor | optAlpha | optLineWidth,
-	TypeTile:      optColor | optFill | optAlpha,
-	TypeHLine:     optColor | optAlpha | optLineWidth,
-	TypeVLine:     optColor | optAlpha | optLineWidth,
+var paramRelevance = map[Type]OptFlag{
+	TypePoint:     OptColor | OptFill | OptAlpha | OptSize | OptShape,
+	TypeLine:      OptColor | OptAlpha | OptLineWidth | OptSize, // Size → LineWidth
+	TypeBar:       OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation,
+	TypeHistogram: OptColor | OptFill | OptAlpha | OptWidth | OptBins | OptLineWidth | OptOrientation,
+	TypeArea:      OptColor | OptFill | OptAlpha | OptLineWidth | OptOrientation,
+	TypePolygon:   OptColor | OptFill | OptAlpha | OptLineWidth,
+	TypeSmooth:    OptColor | OptAlpha | OptLineWidth | OptSize | OptMethod | OptSpan | OptPoints,
+	TypeDensity:   OptColor | OptFill | OptAlpha | OptLineWidth | OptPoints | OptOrientation,
+	TypeText:      OptColor | OptAlpha | OptFontSize | OptFontFamily | OptAngle,
+	TypeStep:      OptColor | OptAlpha | OptLineWidth | OptSize,
+	TypeRug:       OptColor | OptAlpha | OptLineWidth | OptOrientation,
+	TypeBoxPlot:   OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptWhisker | OptNotch | OptOrientation,
+	TypeErrorBar:  OptColor | OptAlpha | OptLineWidth | OptWidth,
+	TypeSegment:   OptColor | OptAlpha | OptLineWidth,
+	TypeTile:      OptColor | OptFill | OptAlpha,
+	TypeHLine:     OptColor | OptAlpha | OptLineWidth,
+	TypeVLine:     OptColor | OptAlpha | OptLineWidth,
+}
+
+// RegisterGeomType registers a custom geometry type with its relevant option
+// flags. This makes geom.Type open: third-party packages can define new
+// geometry types that participate in option validation via [Layer.Validate].
+//
+// Combined with [ggplot.RegisterDrawer], this enables fully custom geoms:
+//
+//	// In your package init():
+//	const TypeViolin geom.Type = "violin"
+//	geom.RegisterGeomType(TypeViolin, geom.OptColor|geom.OptFill|geom.OptAlpha|geom.OptWidth)
+//	ggplot.RegisterDrawer(TypeViolin, myViolinDrawer)
+func RegisterGeomType(t Type, relevantOpts OptFlag) {
+	paramRelevance[t] = relevantOpts
 }
 
 // optName maps flags to human-readable names.
-var optName = map[optFlag]string{
-	optColor:       "WithColor",
-	optFill:        "WithFill",
-	optAlpha:       "WithAlpha",
-	optLineWidth:   "WithLineWidth",
-	optSize:        "WithSize",
-	optShape:       "WithShape",
-	optWidth:       "WithWidth",
-	optBins:        "WithBins",
-	optFontSize:    "WithFontSize",
-	optFontFamily:  "WithFontFamily",
-	optAngle:       "WithAngle",
-	optMethod:      "WithMethod",
-	optSpan:        "WithSpan",
-	optPoints:      "WithPoints",
-	optOrientation: "WithOrientation",
+var optName = map[OptFlag]string{
+	OptColor:       "WithColor",
+	OptFill:        "WithFill",
+	OptAlpha:       "WithAlpha",
+	OptLineWidth:   "WithLineWidth",
+	OptSize:        "WithSize",
+	OptShape:       "WithShape",
+	OptWidth:       "WithWidth",
+	OptBins:        "WithBins",
+	OptFontSize:    "WithFontSize",
+	OptFontFamily:  "WithFontFamily",
+	OptAngle:       "WithAngle",
+	OptMethod:      "WithMethod",
+	OptSpan:        "WithSpan",
+	OptPoints:      "WithPoints",
+	OptOrientation: "WithOrientation",
 }
 
 // Validate checks if the configured params are meaningful for this geometry
@@ -200,7 +216,7 @@ func (l *Layer) Validate() []string {
 	}
 
 	var warnings []string
-	for flag := optFlag(1); flag <= optPoints; flag <<= 1 {
+	for flag := OptFlag(1); flag <= OptPoints; flag <<= 1 {
 		if irrelevant&flag == 0 {
 			continue
 		}
@@ -232,40 +248,40 @@ func WithPosition(p position.Pos) Opt { return func(l *Layer) { l.Position = p }
 
 // WithColor sets a fixed color override.
 func WithColor(hex string) Opt {
-	return func(l *Layer) { l.Params.Color = hex; l.setFlags |= optColor }
+	return func(l *Layer) { l.Params.Color = hex; l.setFlags |= OptColor }
 }
 
 // WithFill sets a fixed fill color override.
 func WithFill(hex string) Opt {
-	return func(l *Layer) { l.Params.Fill = hex; l.setFlags |= optFill }
+	return func(l *Layer) { l.Params.Fill = hex; l.setFlags |= OptFill }
 }
 
 // WithAlpha sets the opacity.
 func WithAlpha(a float64) Opt {
-	return func(l *Layer) { l.Params.Alpha = a; l.setFlags |= optAlpha }
+	return func(l *Layer) { l.Params.Alpha = a; l.setFlags |= OptAlpha }
 }
 
 // WithSize sets the point radius. Use [WithLineWidth] for stroke width.
 func WithSize(s float64) Opt {
 	return func(l *Layer) {
 		l.Params.Size = s
-		l.setFlags |= optSize
+		l.setFlags |= OptSize
 	}
 }
 
 // WithLineWidth sets the stroke width.
 func WithLineWidth(w float64) Opt {
-	return func(l *Layer) { l.Params.LineWidth = w; l.setFlags |= optLineWidth }
+	return func(l *Layer) { l.Params.LineWidth = w; l.setFlags |= OptLineWidth }
 }
 
 // WithShape sets the point shape.
 func WithShape(shape string) Opt {
-	return func(l *Layer) { l.Params.Shape = shape; l.setFlags |= optShape }
+	return func(l *Layer) { l.Params.Shape = shape; l.setFlags |= OptShape }
 }
 
 // WithWidth sets the relative bar width [0, 1].
 func WithWidth(w float64) Opt {
-	return func(l *Layer) { l.Params.Width = w; l.setFlags |= optWidth }
+	return func(l *Layer) { l.Params.Width = w; l.setFlags |= OptWidth }
 }
 
 // WithGap sets the gap between bars as a fraction [0, 1].
@@ -281,59 +297,59 @@ func WithGap(g float64) Opt {
 		}
 		l.Params.Gap = g
 		l.Params.Width = 1 - g
-		l.setFlags |= optWidth
+		l.setFlags |= OptWidth
 	}
 }
 
 // WithBins sets the number of bins for histograms.
 func WithBins(n int) Opt {
-	return func(l *Layer) { l.Params.Bins = n; l.setFlags |= optBins }
+	return func(l *Layer) { l.Params.Bins = n; l.setFlags |= OptBins }
 }
 
 // WithMethod sets the smoothing method.
 func WithMethod(m string) Opt {
-	return func(l *Layer) { l.Params.Method = m; l.setFlags |= optMethod }
+	return func(l *Layer) { l.Params.Method = m; l.setFlags |= OptMethod }
 }
 
 // WithSpan sets the loess smoothing span.
 func WithSpan(s float64) Opt {
-	return func(l *Layer) { l.Params.Span = s; l.setFlags |= optSpan }
+	return func(l *Layer) { l.Params.Span = s; l.setFlags |= OptSpan }
 }
 
 // WithPoints sets the interpolation point count.
 func WithPoints(n int) Opt {
-	return func(l *Layer) { l.Params.Points = n; l.setFlags |= optPoints }
+	return func(l *Layer) { l.Params.Points = n; l.setFlags |= OptPoints }
 }
 
 // WithFontSize sets the text font size.
 func WithFontSize(size float64) Opt {
-	return func(l *Layer) { l.Params.FontSize = size; l.setFlags |= optFontSize }
+	return func(l *Layer) { l.Params.FontSize = size; l.setFlags |= OptFontSize }
 }
 
 // WithFontFamily sets the text font family.
 func WithFontFamily(family string) Opt {
-	return func(l *Layer) { l.Params.FontFamily = family; l.setFlags |= optFontFamily }
+	return func(l *Layer) { l.Params.FontFamily = family; l.setFlags |= OptFontFamily }
 }
 
 // WithAngle sets the text rotation angle in degrees.
 func WithAngle(deg float64) Opt {
-	return func(l *Layer) { l.Params.Angle = deg; l.setFlags |= optAngle }
+	return func(l *Layer) { l.Params.Angle = deg; l.setFlags |= OptAngle }
 }
 
 // WithWhisker sets the boxplot whisker rule: "tukey" (1.5×IQR, default) or "range" (min-max).
 func WithWhisker(rule string) Opt {
-	return func(l *Layer) { l.Params.Whisker = rule; l.setFlags |= optWhisker }
+	return func(l *Layer) { l.Params.Whisker = rule; l.setFlags |= OptWhisker }
 }
 
 // WithNotch enables notched boxplots that show the 95% confidence interval around the median.
 func WithNotch(enabled bool) Opt {
-	return func(l *Layer) { l.Params.Notch = enabled; l.setFlags |= optNotch }
+	return func(l *Layer) { l.Params.Notch = enabled; l.setFlags |= OptNotch }
 }
 
 // WithOrientation sets the axis extension direction for directional geoms.
 // [Horizontal] makes bars grow rightward, boxplots lay sideways, etc.
 func WithOrientation(o Orientation) Opt {
-	return func(l *Layer) { l.Params.Orientation = o; l.setFlags |= optOrientation }
+	return func(l *Layer) { l.Params.Orientation = o; l.setFlags |= OptOrientation }
 }
 
 // WithLabel sets a legend label for this layer. When used together with

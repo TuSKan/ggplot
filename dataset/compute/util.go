@@ -9,6 +9,13 @@ import "github.com/ajroetker/go-highway/hwy"
 // on the current hardware (e.g. 8 for float64 on AVX-512).
 func NumLanes[T Lanes]() int { return hwy.NumLanes[T]() }
 
+// HasSIMD returns true if hardware SIMD acceleration is active.
+// Returns false in scalar fallback mode (no GOEXPERIMENT=simd or HWY_NO_SIMD set).
+func HasSIMD() bool { return hwy.HasSIMD() }
+
+// SIMDName returns the active SIMD target name (e.g. "avx512", "avx2", "neon", "scalar").
+func SIMDName() string { return hwy.CurrentName() }
+
 // SignBit returns a vector with the sign bit set in every lane.
 // For floats: -0.0. For signed ints: minimum value. For unsigned: high bit.
 func SignBit[T Lanes]() Vec[T] { return hwy.SignBit[T]() }

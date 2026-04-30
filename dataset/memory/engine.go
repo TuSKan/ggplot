@@ -107,7 +107,6 @@ func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 func (e *Engine) Sum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	switch c := col.(type) {
 	case *float64Column:
-		// go-highway SIMD reduction (AVX-512 with GOEXPERIMENT=simd, scalar fallback otherwise).
 		s := simd.SliceSum(c.data)
 		return &float64Column{name: c.name, data: []float64{s}}, nil
 	case *int64Column:
@@ -140,7 +139,7 @@ func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyCo
 		if len(c.data) == 0 {
 			return nil, nil, fmt.Errorf("memory: MinMax of empty column")
 		}
-		// go-highway SIMD reduction (AVX-512 with GOEXPERIMENT=simd, scalar fallback otherwise).
+		// Scalar reduction; SIMD via Vec[T] generics regresses due to heap-escape (see slice.go).
 		lo, hi := simd.SliceMinMax(c.data)
 		return &float64Column{name: c.name, data: []float64{lo}},
 			&float64Column{name: c.name, data: []float64{hi}}, nil

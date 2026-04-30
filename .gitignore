@@ -39,3 +39,5 @@ CLAUDE.md
 *.log
 
 !assets/*
+!testdata/golden/**/*.png
+testdata/golden/**/*_actual.png

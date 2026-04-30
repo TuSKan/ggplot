@@ -1,8 +1,5 @@
 name: ggplot CI
 
-env:
-  GOEXPERIMENT: simd
-
 on:
   push:
     branches: [ "main" ]
@@ -15,7 +12,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         go-version: ['1.26']
+        goexperiment: ['simd', '']
     runs-on: ${{ matrix.os }}
+    env:
+      GOEXPERIMENT: ${{ matrix.goexperiment }}
     steps:
     - uses: actions/checkout@v4
 
@@ -28,7 +28,7 @@ jobs:
       run: go mod download
 
     - name: Verify formatting
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-latest' && matrix.goexperiment == 'simd'
       run: |
         if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
           echo "Files with formatting issues:"
@@ -42,11 +42,11 @@ jobs:
     - name: Build all packages
       run: go build ./...
 
-    - name: Run tests with coverage
-      run: go test -v -coverprofile coverage.out -covermode atomic -timeout 120s ./...
+    - name: Run tests with race detector and coverage
+      run: go test -race -v -coverprofile coverage.out -covermode atomic -timeout 180s ./...
 
     - name: Upload coverage reports to Codecov
-      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
+      if: matrix.os == 'ubuntu-latest' && matrix.goexperiment == 'simd'
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -55,6 +55,8 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    env:
+      GOEXPERIMENT: simd
     steps:
     - uses: actions/checkout@v4
 
@@ -64,12 +66,15 @@ jobs:
         go-version: '1.26'
 
     - name: Run golangci-lint
-      run: |
-        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-        $(go env GOPATH)/bin/golangci-lint run --timeout 10m
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+        args: --timeout 10m
 
   examples:
     runs-on: ubuntu-latest
+    env:
+      GOEXPERIMENT: simd
     steps:
     - uses: actions/checkout@v4
 
@@ -98,6 +103,8 @@ jobs:
 
   benchmarks:
     runs-on: ubuntu-latest
+    env:
+      GOEXPERIMENT: simd
     steps:
     - uses: actions/checkout@v4
 
@@ -107,4 +114,4 @@ jobs:
         go-version: '1.26'
 
     - name: Run benchmarks
-      run: go test -bench=. -benchmem -run=^$ -timeout 120s ./...
+      run: go test -bench=. -benchmem -run=^$ -timeout 180s ./...
