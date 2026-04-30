@@ -6,7 +6,6 @@ import (
 
 	"github.com/TuSKan/ggplot/dataset"
 	simd "github.com/TuSKan/ggplot/dataset/compute"
-	dmath "github.com/TuSKan/ggplot/dataset/math"
 )
 
 // --- MathKernel: direct loops on raw slices ---
@@ -59,7 +58,10 @@ func (e *Engine) scalarUnaryFloat64(col dataset.AnyColumn, fn func(float64) floa
 }
 
 // sliceTransformFloat64 applies a highway (dst, src) slice transform on float64 column data.
-// Used by dmath SIMD transcendentals (Exp, Log, Sin, Cos, Tanh, Sigmoid, Erf).
+// Currently unused: go-highway v0.0.12 AVX2 codegen bug causes SIGILL on AMD EPYC.
+// Will be re-enabled when the upstream fix lands.
+//
+//nolint:unused // retained for future dmath SIMD re-enablement
 func (e *Engine) sliceTransformFloat64(col dataset.AnyColumn, fn func(dst, src []float64)) (dataset.AnyColumn, error) {
 	c, err := requireFloat64(col)
 	if err != nil {
@@ -189,13 +191,18 @@ func (e *Engine) Pow(col dataset.AnyColumn, exp float64) (dataset.AnyColumn, err
 }
 
 // --- Transcendental: logarithmic ---
+// NOTE: Using scalar math.* loops instead of dmath SIMD transcendentals.
+// go-highway v0.0.12 has an AVX2 codegen bug: the _avx2.gen.go files emit
+// EVEX-encoded (AVX-512) instructions, causing SIGILL on CPUs with AVX2
+// but not AVX-512 (e.g., AMD EPYC 7763 on GitHub Actions).
+// Tracked upstream: github.com/ajroetker/go-highway
 
 func (e *Engine) Exp(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	return e.sliceTransformFloat64(col, dmath.Exp[float64])
+	return e.scalarUnaryFloat64(col, math.Exp)
 }
 
 func (e *Engine) Ln(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	return e.sliceTransformFloat64(col, dmath.Log[float64])
+	return e.scalarUnaryFloat64(col, math.Log)
 }
 
 func (e *Engine) Log2(col dataset.AnyColumn) (dataset.AnyColumn, error) {
@@ -209,11 +216,11 @@ func (e *Engine) Log10(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 // --- Transcendental: trigonometric ---
 
 func (e *Engine) Sin(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	return e.sliceTransformFloat64(col, dmath.Sin[float64])
+	return e.scalarUnaryFloat64(col, math.Sin)
 }
 
 func (e *Engine) Cos(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	return e.sliceTransformFloat64(col, dmath.Cos[float64])
+	return e.scalarUnaryFloat64(col, math.Cos)
 }
 
 func (e *Engine) Tan(col dataset.AnyColumn) (dataset.AnyColumn, error) {
@@ -251,18 +258,20 @@ func (e *Engine) Atan2(y, x dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return &float64Column{name: cy.name, data: out}, nil
 }
 
-// --- Transcendental: hyperbolic/special (highway) ---
+// --- Transcendental: hyperbolic/special (scalar — see go-highway note above) ---
 
 func (e *Engine) Tanh(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	return e.sliceTransformFloat64(col, dmath.Tanh[float64])
+	return e.scalarUnaryFloat64(col, math.Tanh)
 }
 
 func (e *Engine) Sigmoid(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	return e.sliceTransformFloat64(col, dmath.Sigmoid[float64])
+	return e.scalarUnaryFloat64(col, func(x float64) float64 {
+		return 1.0 / (1.0 + math.Exp(-x))
+	})
 }
 
 func (e *Engine) Erf(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	return e.sliceTransformFloat64(col, dmath.Erf[float64])
+	return e.scalarUnaryFloat64(col, math.Erf)
 }
 
 // --- Rounding ---
