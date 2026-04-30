@@ -2,6 +2,7 @@ package arrow
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"math"
@@ -12,8 +13,6 @@ import (
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	arrowcsv "github.com/apache/arrow-go/v18/arrow/csv"
-
-	simdcsv "github.com/nnnkkk7/go-simdcsv"
 )
 
 // ReadCSV reads CSV data using arrow/csv.NewInferringReader with chunked
@@ -132,7 +131,7 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 
 // WriteCSV writes a Dataset as CSV using go-simdcsv (generic string-based output).
 func (e *Engine) WriteCSV(ctx context.Context, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
-	writer := simdcsv.NewWriter(w)
+	writer := csv.NewWriter(w)
 	writer.Comma = cfg.Comma
 	defer writer.Flush()
 

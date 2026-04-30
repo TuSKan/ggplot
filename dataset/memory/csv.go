@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"math"
@@ -9,8 +10,6 @@ import (
 	"strings"
 
 	"github.com/TuSKan/ggplot/dataset"
-
-	csv "github.com/nnnkkk7/go-simdcsv"
 )
 
 // ReadCSV reads CSV data using go-simdcsv with schema inference.

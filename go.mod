@@ -7,7 +7,6 @@ require (
 	github.com/ajroetker/go-highway v0.0.12
 	github.com/apache/arrow-go/v18 v18.5.3-0.20260421173032-c5f094327715
 	github.com/gogpu/gg v0.43.2
-	github.com/nnnkkk7/go-simdcsv v0.1.0
 	github.com/parquet-go/parquet-go v0.29.0
 	golang.org/x/image v0.39.0
 	google.golang.org/api v0.276.0
