@@ -74,6 +74,7 @@ func init() {
 	RegisterDrawer(geom.TypeRug, DrawerFunc(drawRugFn))
 	RegisterDrawer(geom.TypeHLine, DrawerFunc(drawHLineFn))
 	RegisterDrawer(geom.TypeVLine, DrawerFunc(drawVLineFn))
+	RegisterDrawer(geom.TypeABLine, DrawerFunc(drawABLineFn))
 	RegisterDrawer(geom.TypeText, DrawerFunc(drawTextFn))
 	RegisterDrawer(geom.TypeBoxPlot, DrawerFunc(drawBoxplotFn))
 }
@@ -171,6 +172,10 @@ func drawHLineFn(dc DrawContext) {
 
 func drawVLineFn(dc DrawContext) {
 	drawVLine(dc.Canvas, dc.Coord, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+}
+
+func drawABLineFn(dc DrawContext) {
+	drawABLine(dc.Canvas, dc.Coord, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
 }
 
 func drawTextFn(dc DrawContext) {
@@ -620,6 +625,85 @@ func drawVLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax flo
 	// Draw from bottom (Y=0) to top (Y=1) in normalized space.
 	px1, py1 := orientedTransform(c, nx, 0, w, h, p.Orientation)
 	px2, py2 := orientedTransform(c, nx, 1, w, h, p.Orientation)
+
+	cv.SetRGBA(cr, cg, cb, alpha)
+	cv.SetLineWidth(lw)
+	cv.MoveTo(px1, py1)
+	cv.LineTo(px2, py2)
+	cv.Stroke()
+}
+
+func drawABLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
+	slope := p.Slope
+	intercept := p.Intercept
+
+	// Compute Y values at the left and right edges of the data domain.
+	y0 := slope*xMin + intercept
+	y1 := slope*xMax + intercept
+
+	// Clip to the visible Y range using parametric line clipping.
+	// Parametric: x(t) = xMin + t*(xMax-xMin), y(t) = y0 + t*(y1-y0), t ∈ [0,1]
+	t0, t1 := 0.0, 1.0
+	dy := y1 - y0
+
+	// Clip against yMin.
+	if dy != 0 {
+		tY := (yMin - y0) / dy
+		if dy < 0 {
+			if tY < t1 {
+				t1 = tY
+			}
+		} else {
+			if tY > t0 {
+				t0 = tY
+			}
+		}
+	} else if y0 < yMin || y0 > yMax {
+		return // horizontal line outside Y range
+	}
+
+	// Clip against yMax.
+	if dy != 0 {
+		tY := (yMax - y0) / dy
+		if dy < 0 {
+			if tY > t0 {
+				t0 = tY
+			}
+		} else {
+			if tY < t1 {
+				t1 = tY
+			}
+		}
+	}
+
+	if t0 >= t1 {
+		return // entirely outside visible range
+	}
+
+	// Compute clipped endpoints in data space.
+	cx0 := xMin + t0*(xMax-xMin)
+	cy0 := y0 + t0*dy
+	cx1 := xMin + t1*(xMax-xMin)
+	cy1 := y0 + t1*dy
+
+	// Normalize to [0,1].
+	nx0 := normalize(cx0, xMin, xMax)
+	ny0 := normalize(cy0, yMin, yMax)
+	nx1 := normalize(cx1, xMin, xMax)
+	ny1 := normalize(cy1, yMin, yMax)
+
+	lw := p.LineWidth
+	if lw <= 0 {
+		lw = 1
+	}
+	alpha := p.Alpha
+	if alpha <= 0 {
+		alpha = 0.8
+	}
+	cr, cg, cb := colormap.ParseRGB(p.Color, 0.5, 0.2, 0.7)
+
+	px1, py1 := orientedTransform(c, nx0, ny0, w, h, p.Orientation)
+	px2, py2 := orientedTransform(c, nx1, ny1, w, h, p.Orientation)
 
 	cv.SetRGBA(cr, cg, cb, alpha)
 	cv.SetLineWidth(lw)

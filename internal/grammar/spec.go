@@ -88,6 +88,7 @@ type LayerSpec struct {
 type ScaleOverride struct {
 	Type   scale.Type        // e.g., scale.Log10, scale.Sqrt, scale.Reverse
 	Params map[string]string // type-specific parameters
+	Opts   []scale.ScaleOpt  // functional options (WithBreaks, WithLabels, etc.)
 }
 
 // Labels holds all text annotations for a plot.

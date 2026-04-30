@@ -100,14 +100,16 @@ func (p *Plot) clone() *Plot {
 		layers[i] = grammar.LayerSpec{Geom: l.Geom, Mapping: m}
 	}
 
-	// Deep-clone scale overrides (ScaleOverride.Params is a map).
+	// Deep-clone scale overrides (ScaleOverride.Params is a map, Opts is a slice).
 	scales := make(map[string]grammar.ScaleOverride, len(p.spec.ScaleOverrides))
 	for k, v := range p.spec.ScaleOverrides {
 		params := make(map[string]string, len(v.Params))
 		for pk, pv := range v.Params {
 			params[pk] = pv
 		}
-		scales[k] = grammar.ScaleOverride{Type: v.Type, Params: params}
+		opts := make([]scale.ScaleOpt, len(v.Opts))
+		copy(opts, v.Opts)
+		scales[k] = grammar.ScaleOverride{Type: v.Type, Params: params, Opts: opts}
 	}
 
 	// ColorScales hold pointer values; clone the map but share the pointed-to
@@ -293,17 +295,21 @@ func (p *Plot) LegendPosition(pos LegendPos) *Plot {
 	return cloned
 }
 
-// ScaleX sets the x-axis scale type.
-func (p *Plot) ScaleX(scaleType scale.Type) *Plot {
+// ScaleX sets the x-axis scale type with optional configuration.
+// Options: [scale.WithBreaks], [scale.WithLabels], [scale.WithFormatter],
+// [scale.WithExpand], [scale.WithMinorBreaks], [scale.WithClipBounds].
+func (p *Plot) ScaleX(scaleType scale.Type, opts ...scale.ScaleOpt) *Plot {
 	cloned := p.clone()
-	cloned.spec.ScaleOverrides["x"] = grammar.ScaleOverride{Type: scaleType}
+	cloned.spec.ScaleOverrides["x"] = grammar.ScaleOverride{Type: scaleType, Opts: opts}
 	return cloned
 }
 
-// ScaleY sets the y-axis scale type.
-func (p *Plot) ScaleY(scaleType scale.Type) *Plot {
+// ScaleY sets the y-axis scale type with optional configuration.
+// Options: [scale.WithBreaks], [scale.WithLabels], [scale.WithFormatter],
+// [scale.WithExpand], [scale.WithMinorBreaks], [scale.WithClipBounds].
+func (p *Plot) ScaleY(scaleType scale.Type, opts ...scale.ScaleOpt) *Plot {
 	cloned := p.clone()
-	cloned.spec.ScaleOverrides["y"] = grammar.ScaleOverride{Type: scaleType}
+	cloned.spec.ScaleOverrides["y"] = grammar.ScaleOverride{Type: scaleType, Opts: opts}
 	return cloned
 }
 
@@ -721,6 +727,9 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		if err != nil {
 			return fmt.Errorf("ggplot: %w", err)
 		}
+		if yOpts := p.spec.ScaleOverrides["y"].Opts; len(yOpts) > 0 {
+			yScale = scale.Configure(yScale, yOpts...)
+		}
 		xIsDiscrete := false
 
 		// Probe the first resolved layer's X column to decide scale type.
@@ -772,6 +781,9 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			if err != nil {
 				return fmt.Errorf("ggplot: %w", err)
 			}
+			if xOpts := p.spec.ScaleOverrides["x"].Opts; len(xOpts) > 0 {
+				xScale = scale.Configure(xScale, xOpts...)
+			}
 		}
 
 		// Train scales on (now numeric) data.
@@ -816,47 +828,73 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		yMin, yMax := yScale.Bounds()
 
 		if !xIsDiscrete {
-			xPad := (xMax - xMin) * 0.05
-			yPad := (yMax - yMin) * 0.05
-			if xPad == 0 {
-				xPad = 0.5
+			// When the user set WithExpand on a scale, that scale's
+			// Bounds() already incorporates the expansion — skip the
+			// default 5% padding for that axis. Otherwise, apply
+			// the legacy default padding.
+			xHasExpand := false
+			if exp, ok := xScale.(scale.Expander); ok {
+				xHasExpand = exp.HasExpand()
 			}
-			if yPad == 0 {
-				yPad = 0.5
+			yHasExpand := false
+			if exp, ok := yScale.(scale.Expander); ok {
+				yHasExpand = exp.HasExpand()
+			}
+
+			xPad := 0.0
+			yPad := 0.0
+
+			if !xHasExpand {
+				xPad = (xMax - xMin) * 0.05
+				if xPad == 0 {
+					xPad = 0.5
+				}
+			}
+			if !yHasExpand {
+				yPad = (yMax - yMin) * 0.05
+				if yPad == 0 {
+					yPad = 0.5
+				}
 			}
 
 			// For bar/histogram/boxplot, add extra X padding so edge elements don't clip.
-			hasBars := false
-			for _, rl := range resolved {
-				switch rl.geom.Geom {
-				case geom.TypeBar, geom.TypeHistogram, geom.TypeBoxPlot:
-					hasBars = true
-				}
-			}
-			if hasBars {
+			if !xHasExpand {
+				hasBars := false
 				for _, rl := range resolved {
-					n := rl.ds.NumRows()
-					if n > 1 {
-						halfBin := (xMax - xMin) / float64(n-1) / 2.0
-						if halfBin > xPad {
-							xPad = halfBin
+					switch rl.geom.Geom {
+					case geom.TypeBar, geom.TypeHistogram, geom.TypeBoxPlot:
+						hasBars = true
+					}
+				}
+				if hasBars {
+					for _, rl := range resolved {
+						n := rl.ds.NumRows()
+						if n > 1 {
+							halfBin := (xMax - xMin) / float64(n-1) / 2.0
+							if halfBin > xPad {
+								xPad = halfBin
+							}
+						} else if n == 1 {
+							xPad = 1.0
 						}
-					} else if n == 1 {
-						xPad = 1.0
 					}
 				}
 			}
 
-			if bs, ok := xScale.(scale.BoundsSetter); ok {
-				bs.SetBounds(xMin-xPad, xMax+xPad)
-			}
-			if yMin == 0 {
-				if bs, ok := yScale.(scale.BoundsSetter); ok {
-					bs.SetBounds(0, yMax+yPad)
+			if xPad > 0 {
+				if bs, ok := xScale.(scale.BoundsSetter); ok {
+					bs.SetBounds(xMin-xPad, xMax+xPad)
 				}
-			} else {
-				if bs, ok := yScale.(scale.BoundsSetter); ok {
-					bs.SetBounds(yMin-yPad, yMax+yPad)
+			}
+			if yPad > 0 {
+				if yMin == 0 {
+					if bs, ok := yScale.(scale.BoundsSetter); ok {
+						bs.SetBounds(0, yMax+yPad)
+					}
+				} else {
+					if bs, ok := yScale.(scale.BoundsSetter); ok {
+						bs.SetBounds(yMin-yPad, yMax+yPad)
+					}
 				}
 			}
 		} else {
@@ -939,7 +977,16 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				mBottom += th.Text.AxisTitle.Size + 8
 			}
 			if p.spec.Labels.Y != "" {
-				mLeft += th.Text.AxisTitle.Size + 12
+				// Match the guide's title offset formula:
+				//   titleOffset = 5 + maxTickW + axisTitleSize/2 + 8
+				// The title extends axisTitleSize/2 further to the left
+				// of the translate point, so total from tick-end is:
+				//   5 + maxTickW + axisTitleSize + 8
+				titleGap := 5 + maxTickW + th.Text.AxisTitle.Size + 8
+				if titleGap < 30+th.Text.AxisTitle.Size/2 {
+					titleGap = 30 + th.Text.AxisTitle.Size/2
+				}
+				mLeft = 15.0 + titleGap + th.Ticks.Length
 			}
 			if p.spec.Labels.Caption != "" {
 				mBottom += th.Text.TickLabel.Size + 4

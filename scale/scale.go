@@ -54,6 +54,21 @@ type BoundsSetter interface {
 	SetBounds(mn, mx float64)
 }
 
+// MinorTicker is an optional interface for scales that provide minor tick
+// positions between major ticks. Used by the guide system to draw minor
+// grid lines. Implement this by using [WithMinorBreaks] on a [ConfiguredScale].
+type MinorTicker interface {
+	MinorTicks() []float64
+}
+
+// Expander is an optional interface for scales that carry user-specified
+// expand parameters. The rendering pipeline queries this to decide whether
+// to apply its default 5 % padding or the user's explicit expansion.
+type Expander interface {
+	Expand() (mult, add float64)
+	HasExpand() bool
+}
+
 // --- Shared training state ---
 
 // domain holds the trained min/max and provides reusable Train logic.

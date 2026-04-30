@@ -57,16 +57,16 @@
 
 ---
 
-## 🔲 Phase 5a — Scale Configuration (Book Ch.10) — _Next_
+## ✅ Phase 5a — Scale Configuration (Book Ch.10) — _Complete_
 
 > Additive changes to the Scale interface. No layout/panel loop changes required.
 
-- [ ] **Scale Breaks** — `scale.WithBreaks([]float64)`: user-supplied tick positions override `Ticks(n)` auto-generation
-- [ ] **Scale Labels** — `scale.WithLabels([]string)`: user-supplied tick labels override `Format(v)` auto-formatting
-- [ ] **Axis Formatting** — `scale.WithFormatter(func(float64) string)` for custom formatters (currency, percent, scientific)
-- [ ] **Scale Expand** — `scale.WithExpand(mult, add)` to control axis padding (ggplot2 `expand`); applied post-`SetBounds`
-- [ ] **Minor Breaks** — `scale.WithMinorBreaks([]float64)` for minor grid line positions; interleaved between major ticks
-- [ ] **Scale Limits (coord_cartesian)** — separate "scale domain" (data range) from "visible window" (clip rect). Currently `SetBounds` collapses both; add `ClipBounds(min, max)` for zoom-without-filter semantics
+- [x] **Scale Breaks** — `scale.WithBreaks([]float64)`: user-supplied tick positions override `Ticks(n)` auto-generation
+- [x] **Scale Labels** — `scale.WithLabels([]string)`: user-supplied tick labels override `Format(v)` auto-formatting
+- [x] **Axis Formatting** — `scale.WithFormatter(func(float64) string)` for custom formatters (currency, percent, scientific)
+- [x] **Scale Expand** — `scale.WithExpand(mult, add)` to control axis padding (ggplot2 `expand`); applied post-`SetBounds`
+- [x] **Minor Breaks** — `scale.WithMinorBreaks([]float64)` for minor grid line positions; interleaved between major ticks
+- [x] **Scale Limits (coord_cartesian)** — separate "scale domain" (data range) from "visible window" (clip rect). `WithClipBounds(min, max)` for zoom-without-filter semantics
 
 ## 🔲 Phase 5b — Axes & Time Scales (Book Ch.10, Ch.14) — _Blocked by renderTo decomposition_
 
@@ -122,7 +122,8 @@
 - [ ] **annotate()** — layer-less annotations: rect, text, segment, arrow, curve, pointrange
 - [ ] **geom.Label** — `geom_label()` with background box and connector lines
 - [ ] **Direct Labelling** — `ggrepel`-style anti-collision text placement
-- [ ] **Reference Lines** — `geom.ABLine(intercept, slope)` for regression lines
+- [x] **Reference Lines** — `geom.HLine(WithIntercept)`, `geom.VLine(WithIntercept)`, `geom.ABLine(WithSlope, WithIntercept)` for threshold, event, and regression lines
+
 - [ ] **Marginal Annotations** — custom axis marks, rug ticks, distribution overlays
 
 ## 🔲 Phase 10 — Coordinate Systems (Book Ch.15)

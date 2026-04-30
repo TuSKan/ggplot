@@ -59,6 +59,7 @@ const (
 	TypeStep      Type = "step"
 	TypeHLine     Type = "hline"
 	TypeVLine     Type = "vline"
+	TypeABLine    Type = "abline"
 )
 
 // Orientation controls which axis a directional geom extends along.
@@ -110,6 +111,7 @@ type Params struct {
 
 	// Reference lines
 	Intercept float64 // y-intercept (hline) or x-intercept (vline)
+	Slope     float64 // slope for abline (y = slope*x + intercept)
 }
 
 // --- Option tracking for validation ---
@@ -158,6 +160,7 @@ var paramRelevance = map[Type]OptFlag{
 	TypeTile:      OptColor | OptFill | OptAlpha,
 	TypeHLine:     OptColor | OptAlpha | OptLineWidth,
 	TypeVLine:     OptColor | OptAlpha | OptLineWidth,
+	TypeABLine:    OptColor | OptAlpha | OptLineWidth,
 }
 
 // RegisterGeomType registers a custom geometry type with its relevant option
@@ -596,6 +599,30 @@ func VLine(opts ...Opt) Layer {
 		StatName: stat.Identity,
 		Position: position.Identity(),
 		Params:   Params{LineWidth: 1, Alpha: 0.8},
+	}
+	applyOpts(&l, opts)
+	return l
+}
+
+// WithSlope sets the slope for [ABLine]. The line equation is y = slope*x + intercept.
+func WithSlope(s float64) Opt {
+	return func(l *Layer) { l.Params.Slope = s }
+}
+
+// ABLine creates a reference line defined by y = slope*x + intercept.
+// Use [WithIntercept] for the y-intercept and [WithSlope] for the slope.
+//
+// Example:
+//
+//	geom.ABLine(geom.WithIntercept(0), geom.WithSlope(1.5), geom.WithColor("#9B59B6"))
+//
+// Relevant options: WithIntercept, WithSlope, WithColor, WithAlpha, WithLineWidth, WithLabel.
+func ABLine(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeABLine,
+		StatName: stat.Identity,
+		Position: position.Identity(),
+		Params:   Params{LineWidth: 1, Alpha: 0.8, Slope: 1},
 	}
 	applyOpts(&l, opts)
 	return l

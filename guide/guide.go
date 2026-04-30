@@ -72,6 +72,10 @@ func DrawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 	yMin, yMax := sc.Bounds()
 	minSpacing := th.Text.TickLabel.Size + 4 // minimum px between labels
 	lastPy := -1000.0                        // track last drawn label position
+	maxLabelW := 0.0                         // track widest drawn label
+
+	// Measure + draw tick labels.
+	cv.SetFontSize(th.Text.TickLabel.Size)
 	for _, v := range ticks {
 		frac := (v - yMin) / (yMax - yMin)
 		if frac < 0 || frac > 1 {
@@ -86,20 +90,33 @@ func DrawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 
 		// Label — skip if too close to previous label.
 		if math.Abs(py-lastPy) >= minSpacing {
+			lbl := sc.Format(v)
+			tw, _ := cv.MeasureString(lbl)
+			if tw > maxLabelW {
+				maxLabelW = tw
+			}
 			cv.SetRGBA(tr, tg, tb, 1)
 			cv.SetFontSize(th.Text.TickLabel.Size)
-			cv.DrawStringAnchored(sc.Format(v), x-tickLen-5, py, 1.0, 0.5)
+			cv.DrawStringAnchored(lbl, x-tickLen-5, py, 1.0, 0.5)
 			lastPy = py
 		}
 	}
 
-	// Axis title (rotated).
+	// Axis title (rotated), positioned to the left of the widest tick label.
 	if label != "" {
 		lr, lg, lb, _ := rgbaOf(th.Text.AxisTitle.Color)
 		cv.SetRGBA(lr, lg, lb, 1)
 		cv.SetFontSize(th.Text.AxisTitle.Size)
 		cv.Save()
-		cv.Translate(x-tickLen-30, y+h/2)
+		// The rotated title's horizontal extent equals its font size,
+		// centred on the translate point. To avoid overlapping tick labels
+		// (which extend left from x-tickLen-5 by maxLabelW) we offset by:
+		//   5 (label gap) + maxLabelW + fontSize/2 + 8 (padding)
+		titleOffset := 5 + maxLabelW + th.Text.AxisTitle.Size/2 + 8
+		if titleOffset < 30 {
+			titleOffset = 30 // minimum offset for short labels
+		}
+		cv.Translate(x-tickLen-titleOffset, y+h/2)
 		cv.Rotate(-math.Pi / 2)
 		cv.DrawStringAnchored(label, 0, 0, 0.5, 0.5)
 		cv.Restore()
@@ -109,6 +126,8 @@ func DrawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 // DrawGrid renders major grid lines in the data area, first filling the panel
 // background with the theme's Panel.Background color.
 // Grid lines use the theme's DashPattern (nil = solid, e.g. {4,4} = dashed).
+// When a scale implements [scale.MinorTicker], minor grid lines are drawn
+// between the major ones using the theme's MinorColor / MinorWidth.
 func DrawGrid(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h float64, th theme.Theme) {
 	// Fill panel background first so it appears behind all grid lines and data.
 	cv.SetColor(th.Panel.Background)
@@ -148,8 +167,51 @@ func DrawGrid(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h float64, 
 		cv.Stroke()
 	}
 
-	// Reset to solid lines.
+	// Reset to solid lines before drawing minor grid.
 	cv.SetLineDash()
+
+	// --- Minor grid lines ---
+	drawMinorLines(cv, xScale, yScale, x, y, w, h, th)
+}
+
+// drawMinorLines renders minor grid lines for scales that implement
+// [scale.MinorTicker]. Minor lines use the theme's MinorColor/MinorWidth.
+func drawMinorLines(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h float64, th theme.Theme) {
+	if th.Grid.MinorColor == nil {
+		return
+	}
+	mr, mg, mb, ma := rgbaOf(th.Grid.MinorColor)
+	cv.SetRGBA(mr, mg, mb, ma)
+	cv.SetLineWidth(th.Grid.MinorWidth)
+
+	xMin, xMax := xScale.Bounds()
+	yMin, yMax := yScale.Bounds()
+
+	// Vertical minor grid lines.
+	if mt, ok := xScale.(scale.MinorTicker); ok {
+		for _, v := range mt.MinorTicks() {
+			frac := (v - xMin) / (xMax - xMin)
+			if frac < 0 || frac > 1 {
+				continue
+			}
+			px := x + frac*w
+			cv.DrawLine(px, y, px, y+h)
+			cv.Stroke()
+		}
+	}
+
+	// Horizontal minor grid lines.
+	if mt, ok := yScale.(scale.MinorTicker); ok {
+		for _, v := range mt.MinorTicks() {
+			frac := (v - yMin) / (yMax - yMin)
+			if frac < 0 || frac > 1 {
+				continue
+			}
+			py := y + h - frac*h
+			cv.DrawLine(x, py, x+w, py)
+			cv.Stroke()
+		}
+	}
 }
 
 // --- Legend ---
