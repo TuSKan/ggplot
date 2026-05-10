@@ -21,7 +21,9 @@ import (
 
 func testDataset(t *testing.T) dataset.Dataset {
 	t.Helper()
+
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
 		eng.NewFloat64Column("y", []float64{2.1, 4.3, 3.0, 7.8, 5.5, 8.1, 6.9, 9.2, 8.5, 10.0}),
@@ -29,6 +31,7 @@ func testDataset(t *testing.T) dataset.Dataset {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return ds
 }
 
@@ -36,6 +39,7 @@ func testDataset(t *testing.T) dataset.Dataset {
 
 func TestNew_ReturnsNonNil(t *testing.T) {
 	ds := testDataset(t)
+
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"))
 	if p == nil {
 		t.Fatal("New returned nil")
@@ -67,10 +71,12 @@ func TestPlot_Aes_DoesNotMutateParent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("base render failed: %v", err)
 	}
+
 	_, err = childA.Render(context.Background(), 200, 150)
 	if err != nil {
 		t.Fatalf("childA render failed: %v", err)
 	}
+
 	_, err = childB.Render(context.Background(), 200, 150)
 	if err != nil {
 		t.Fatalf("childB render failed: %v", err)
@@ -139,6 +145,7 @@ func TestRender_Point(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Point render failed: %v", err)
 	}
+
 	if cv.Width() != 400 || cv.Height() != 300 {
 		t.Errorf("unexpected canvas size: %dx%d", cv.Width(), cv.Height())
 	}
@@ -175,6 +182,7 @@ func TestRender_Histogram(t *testing.T) {
 	for i := range xs {
 		xs[i] = rand.NormFloat64()*5 + 10
 	}
+
 	eng3 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng3, eng3.NewFloat64Column("x", xs))
 
@@ -194,6 +202,7 @@ func TestRender_Histogram_StatTransform(t *testing.T) {
 	for i := range xs {
 		xs[i] = float64(i)
 	}
+
 	eng4 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng4, eng4.NewFloat64Column("x", xs))
 
@@ -233,6 +242,7 @@ func TestRender_Density(t *testing.T) {
 	for i := range xs {
 		xs[i] = rand.NormFloat64()
 	}
+
 	eng5 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng5, eng5.NewFloat64Column("x", xs))
 
@@ -346,6 +356,7 @@ func TestPlot_Save_PNG(t *testing.T) {
 	if err != nil {
 		t.Fatalf("output file not found: %v", err)
 	}
+
 	if info.Size() == 0 {
 		t.Fatal("output file is empty")
 	}
@@ -356,6 +367,7 @@ func TestPlot_Save_Histogram(t *testing.T) {
 	for i := range xs {
 		xs[i] = rand.NormFloat64()
 	}
+
 	eng6 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng6, eng6.NewFloat64Column("x", xs))
 
@@ -372,6 +384,7 @@ func TestPlot_Save_Histogram(t *testing.T) {
 	if err != nil {
 		t.Fatalf("output file not found: %v", err)
 	}
+
 	if info.Size() < 100 {
 		t.Fatalf("histogram output file too small (%d bytes)", info.Size())
 	}
@@ -381,10 +394,12 @@ func TestPlot_Save_AllGeomTypes(t *testing.T) {
 	// End-to-end: build and save a plot for each geom type.
 	xs := make([]float64, 50)
 	ys := make([]float64, 50)
+
 	for i := range xs {
 		xs[i] = float64(i)
 		ys[i] = math.Sin(float64(i) * 0.2)
 	}
+
 	eng7 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng7, eng7.NewFloat64Column("x", xs), eng7.NewFloat64Column("y", ys))
 
@@ -430,10 +445,12 @@ func TestPlot_Save_AllGeomTypes(t *testing.T) {
 
 func TestFacetNone(t *testing.T) {
 	ds := testDataset(t)
+
 	panels, err := facet.None().Split(context.Background(), ds)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(panels) != 1 {
 		t.Errorf("expected 1 panel, got %d", len(panels))
 	}
@@ -443,6 +460,7 @@ func TestFacetNone(t *testing.T) {
 
 func TestCartesianTransform(t *testing.T) {
 	c := coord.Cartesian()
+
 	px, py := c.Transform(0.5, 0.5, 100, 100)
 	if px != 50 || py != 50 {
 		t.Errorf("Cartesian(0.5,0.5): expected (50,50), got (%v,%v)", px, py)
@@ -485,10 +503,12 @@ func TestRender_LargeDataset(t *testing.T) {
 	n := 10000
 	xs := make([]float64, n)
 	ys := make([]float64, n)
+
 	for i := range xs {
 		xs[i] = float64(i)
 		ys[i] = math.Sin(float64(i) * 0.01)
 	}
+
 	eng10 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng10, eng10.NewFloat64Column("x", xs), eng10.NewFloat64Column("y", ys))
 
@@ -536,7 +556,9 @@ func TestRender_ConstantY(t *testing.T) {
 
 func groupedDataset(t *testing.T) dataset.Dataset {
 	t.Helper()
+
 	eng13 := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng13,
 		eng13.NewFloat64Column("x", []float64{1, 2, 3, 1, 2, 3, 1, 2, 3}),
 		eng13.NewFloat64Column("y", []float64{1, 4, 9, 2, 5, 8, 3, 6, 7}),
@@ -545,6 +567,7 @@ func groupedDataset(t *testing.T) dataset.Dataset {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return ds
 }
 
@@ -557,6 +580,7 @@ func TestRender_ColorMapping_Point(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Color mapping point render failed: %v", err)
 	}
+
 	if cv == nil {
 		t.Fatal("canvas is nil")
 	}
@@ -592,11 +616,13 @@ func TestRender_ColorMapping_ManyGroups(t *testing.T) {
 	ys := make([]float64, n)
 	groups := make([]string, n)
 	labels := []string{"g0", "g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8", "g9"}
-	for i := 0; i < n; i++ {
+
+	for i := range n {
 		xs[i] = float64(i % 10)
 		ys[i] = float64(i)
 		groups[i] = labels[i%10]
 	}
+
 	eng14 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng14,
 		eng14.NewFloat64Column("x", xs),
@@ -711,12 +737,16 @@ func TestOrientation_HorizontalBar(t *testing.T) {
 }
 
 func TestOrientation_HorizontalBoxplot(t *testing.T) {
-	var groups []string
-	var vals []float64
-	for i := 0; i < 30; i++ {
+	var (
+		groups []string
+		vals   []float64
+	)
+
+	for i := range 30 {
 		groups = append(groups, "A")
 		vals = append(vals, float64(i))
 	}
+
 	eng17 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng17,
 		eng17.NewStringColumn("g", groups),
@@ -805,10 +835,12 @@ func TestSave_ColorMapping(t *testing.T) {
 		Labs(ggplot.Title("Color Mapping Test"))
 
 	dir := t.TempDir()
+
 	path := filepath.Join(dir, "color_mapping.png")
 	if err := p.Save(context.Background(), path, 600, 400); err != nil {
 		t.Fatalf("Save color mapping failed: %v", err)
 	}
+
 	info, err := os.Stat(path)
 	if err != nil || info.Size() == 0 {
 		t.Fatalf("PNG not created or empty: err=%v, size=%d", err, info.Size())
@@ -824,10 +856,12 @@ func TestSave_XLimYLim(t *testing.T) {
 		Labs(ggplot.Title("Axis Limits Test"))
 
 	dir := t.TempDir()
+
 	path := filepath.Join(dir, "xlim_ylim.png")
 	if err := p.Save(context.Background(), path, 600, 400); err != nil {
 		t.Fatalf("Save XLim/YLim failed: %v", err)
 	}
+
 	info, _ := os.Stat(path)
 	if info.Size() == 0 {
 		t.Fatal("PNG is empty")
@@ -841,10 +875,12 @@ func TestSave_StepWithLegend(t *testing.T) {
 		Labs(ggplot.Title("Step Functions"))
 
 	dir := t.TempDir()
+
 	path := filepath.Join(dir, "step.png")
 	if err := p.Save(context.Background(), path, 600, 400); err != nil {
 		t.Fatalf("Save step failed: %v", err)
 	}
+
 	info, _ := os.Stat(path)
 	if info.Size() == 0 {
 		t.Fatal("PNG is empty")
@@ -990,10 +1026,12 @@ func TestRender_CategoricalBars(t *testing.T) {
 
 func TestRender_CategoricalBars_ManyCategories(t *testing.T) {
 	cities := []string{"London", "Paris", "Berlin", "Madrid", "Rome", "Vienna", "Prague"}
+
 	values := make([]float64, len(cities))
 	for i := range values {
 		values[i] = float64(i+1) * 10
 	}
+
 	eng23 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng23,
 		eng23.NewStringColumn("city", cities),
@@ -1014,10 +1052,12 @@ func TestRender_Boxplot(t *testing.T) {
 	// 3 groups, each with 10 values.
 	x := make([]float64, 30)
 	y := make([]float64, 30)
-	for i := 0; i < 30; i++ {
+
+	for i := range 30 {
 		x[i] = float64(i/10 + 1)
 		y[i] = float64(i*3 + 10)
 	}
+
 	eng24 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng24, eng24.NewFloat64Column("x", x), eng24.NewFloat64Column("y", y))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -1031,10 +1071,12 @@ func TestRender_Boxplot(t *testing.T) {
 
 func TestRender_Boxplot_SingleGroup(t *testing.T) {
 	y := []float64{10, 20, 30, 40, 50, 25, 35}
+
 	x := make([]float64, len(y))
 	for i := range x {
 		x[i] = 1
 	}
+
 	eng25 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng25, eng25.NewFloat64Column("x", x), eng25.NewFloat64Column("y", y))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -1066,13 +1108,16 @@ func TestSave_SVG(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SVG file read failed: %v", err)
 	}
+
 	content := string(data)
 	if !strings.Contains(content, "<svg") {
 		t.Error("SVG output missing <svg> root element")
 	}
+
 	if !strings.Contains(content, "</svg>") {
 		t.Error("SVG output missing </svg> closing tag")
 	}
+
 	if len(data) < 100 {
 		t.Errorf("SVG output suspiciously small: %d bytes", len(data))
 	}
@@ -1096,13 +1141,16 @@ func TestSave_PDF(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PDF file read failed: %v", err)
 	}
+
 	content := string(data)
 	if !strings.HasPrefix(content, "%PDF-") {
 		t.Error("PDF output missing PDF header")
 	}
+
 	if !strings.Contains(content, "%%EOF") {
 		t.Error("PDF output missing EOF trailer")
 	}
+
 	if len(data) < 100 {
 		t.Errorf("PDF output suspiciously small: %d bytes", len(data))
 	}
@@ -1118,13 +1166,16 @@ func TestWriteTo_SVG(t *testing.T) {
 		Layer(geom.Point())
 
 	var buf bytes.Buffer
+
 	n, err := p.WriteTo(context.Background(), &buf, "svg", 300, 200)
 	if err != nil {
 		t.Fatalf("WriteTo SVG failed: %v", err)
 	}
+
 	if n == 0 {
 		t.Error("WriteTo SVG wrote 0 bytes")
 	}
+
 	if !strings.Contains(buf.String(), "<svg") {
 		t.Error("WriteTo SVG output missing <svg> element")
 	}
@@ -1140,13 +1191,16 @@ func TestWriteTo_PDF(t *testing.T) {
 		Layer(geom.Point())
 
 	var buf bytes.Buffer
+
 	n, err := p.WriteTo(context.Background(), &buf, "pdf", 300, 200)
 	if err != nil {
 		t.Fatalf("WriteTo PDF failed: %v", err)
 	}
+
 	if n == 0 {
 		t.Error("WriteTo PDF wrote 0 bytes")
 	}
+
 	if !strings.HasPrefix(buf.String(), "%PDF-") {
 		t.Error("WriteTo PDF output missing %PDF- header")
 	}

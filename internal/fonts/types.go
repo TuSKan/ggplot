@@ -3,6 +3,7 @@ package fonts
 // Weight represents the stroke thickness of a physical font face.
 type Weight int
 
+// WeightThin is the thinnest font weight.
 const (
 	WeightThin       Weight = 100
 	WeightExtraLight Weight = 200
@@ -18,6 +19,7 @@ const (
 // Style represents the slant or italicization.
 type Style int
 
+// StyleNormal represents an upright font style.
 const (
 	StyleNormal Style = iota
 	StyleItalic

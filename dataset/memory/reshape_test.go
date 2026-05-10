@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/TuSKan/ggplot/dataset"
@@ -18,6 +19,7 @@ func TestPivotLonger(t *testing.T) {
 		dataset.FloatCol("Q2"),
 		dataset.FloatCol("Q3"),
 	)
+
 	ds, err := eng.FromColumns(schema,
 		eng.NewStringColumn("id", []string{"A", "B"}),
 		eng.NewFloat64Column("Q1", []float64{10, 40}),
@@ -61,13 +63,15 @@ func TestPivotLonger(t *testing.T) {
 	expectedQs := []string{"Q1", "Q2", "Q3", "Q1", "Q2", "Q3"}
 	expectedVs := []float64{10, 20, 30, 40, 50, 60}
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		if ids[i] != expectedIDs[i] {
 			t.Errorf("row %d: id=%q, want %q", i, ids[i], expectedIDs[i])
 		}
+
 		if quarters[i] != expectedQs[i] {
 			t.Errorf("row %d: quarter=%q, want %q", i, quarters[i], expectedQs[i])
 		}
+
 		if revenues[i] != expectedVs[i] {
 			t.Errorf("row %d: revenue=%v, want %v", i, revenues[i], expectedVs[i])
 		}
@@ -83,6 +87,7 @@ func TestPivotWider(t *testing.T) {
 		dataset.StringCol("quarter"),
 		dataset.FloatCol("revenue"),
 	)
+
 	ds, err := eng.FromColumns(schema,
 		eng.NewStringColumn("id", []string{"A", "A", "A", "B", "B", "B"}),
 		eng.NewStringColumn("quarter", []string{"Q1", "Q2", "Q3", "Q1", "Q2", "Q3"}),
@@ -118,12 +123,15 @@ func TestPivotWider(t *testing.T) {
 	if ids[0] != "A" || ids[1] != "B" {
 		t.Errorf("ids = %v, want [A, B]", ids)
 	}
+
 	if q1[0] != 10 || q1[1] != 40 {
 		t.Errorf("Q1 = %v, want [10, 40]", q1)
 	}
+
 	if q2[0] != 20 || q2[1] != 50 {
 		t.Errorf("Q2 = %v, want [20, 50]", q2)
 	}
+
 	if q3[0] != 30 || q3[1] != 60 {
 		t.Errorf("Q3 = %v, want [30, 60]", q3)
 	}
@@ -150,6 +158,7 @@ func TestPivotRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if long.NumRows() != 4 {
 		t.Fatalf("long: expected 4 rows, got %d", long.NumRows())
 	}
@@ -161,15 +170,18 @@ func TestPivotRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if wide.NumRows() != 2 {
 		t.Fatalf("wide: expected 2 rows, got %d", wide.NumRows())
 	}
 
 	q1 := getFloat64Values(t, wide, "Q1")
+
 	q2 := getFloat64Values(t, wide, "Q2")
 	if q1[0] != 10 || q1[1] != 40 {
 		t.Errorf("round-trip Q1 = %v", q1)
 	}
+
 	if q2[0] != 20 || q2[1] != 50 {
 		t.Errorf("round-trip Q2 = %v", q2)
 	}
@@ -201,9 +213,11 @@ func TestSeparate(t *testing.T) {
 	if years[0] != "2024" || years[2] != "2025" {
 		t.Errorf("years = %v", years)
 	}
+
 	if months[0] != "01" || months[1] != "06" {
 		t.Errorf("months = %v", months)
 	}
+
 	if days[0] != "15" || days[1] != "20" || days[2] != "10" {
 		t.Errorf("days = %v", days)
 	}
@@ -278,6 +292,7 @@ func TestComplete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 4 {
 		t.Fatalf("expected 4 rows (already complete), got %d", result.NumRows())
 	}
@@ -310,13 +325,8 @@ func TestCompleteWithMissing(t *testing.T) {
 
 	// The missing (B, 2025) row should have NaN for value.
 	values := getFloat64Values(t, result, "value")
-	hasNaN := false
-	for _, v := range values {
-		if math.IsNaN(v) {
-			hasNaN = true
-			break
-		}
-	}
+	hasNaN := slices.ContainsFunc(values, math.IsNaN)
+
 	if !hasNaN {
 		t.Error("expected NaN for missing (B, 2025) row")
 	}
@@ -342,6 +352,7 @@ func TestPivotLongerFrameAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 2 {
 		t.Fatalf("expected 2 rows, got %d", result.NumRows())
 	}
@@ -349,13 +360,16 @@ func TestPivotLongerFrameAPI(t *testing.T) {
 
 func getStringValues(t *testing.T, tbl dataset.Table, name string) []string {
 	t.Helper()
+
 	col, err := tbl.Column(name)
 	if err != nil {
 		t.Fatalf("column %q: %v", name, err)
 	}
+
 	c, ok := col.(dataset.Column[string])
 	if !ok {
 		t.Fatalf("column %q is not string", name)
 	}
+
 	return c.Values()
 }

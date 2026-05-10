@@ -24,15 +24,20 @@ import (
 func main() {
 	// Generate sample data: five sin waves with different phase shifts so
 	// the theme palette is visible across multiple series.
-	const n = 80
-	const series = 5
+	const (
+		n      = 80
+		series = 5
+	)
+
 	xs := make([]float64, 0, n*series)
 	ys := make([]float64, 0, n*series)
+
 	groups := make([]string, 0, n*series)
-	for s := 0; s < series; s++ {
+	for s := range series {
 		phase := float64(s) * math.Pi / 4
 		label := []string{"A", "B", "C", "D", "E"}[s]
-		for i := 0; i < n; i++ {
+
+		for i := range n {
 			x := float64(i) / float64(n) * 4 * math.Pi
 			y := math.Sin(x+phase) + rand.NormFloat64()*0.15
 			xs = append(xs, x)
@@ -42,6 +47,7 @@ func main() {
 	}
 
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", xs),
 		eng.NewFloat64Column("y", ys),
@@ -71,6 +77,7 @@ func main() {
 		if err := p.Save(context.Background(), outPath, 800, 600); err != nil {
 			log.Fatalf("theme %q: %v", name, err)
 		}
+
 		log.Printf("Saved %s", outPath)
 	}
 }

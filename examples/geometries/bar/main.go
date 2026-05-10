@@ -1,3 +1,4 @@
+// Example bar demonstrates the geom.bar geometry.
 package main
 
 import (
@@ -15,6 +16,7 @@ import (
 
 func main() {
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
 		eng.NewFloat64Column("count", []float64{10, 25, 15, 30, 20}),

@@ -1,3 +1,4 @@
+// Example line demonstrates the geom.line geometry.
 package main
 
 import (
@@ -17,13 +18,15 @@ import (
 func main() {
 	n := 200
 	xs := make([]float64, n)
+
 	ys := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		xs[i] = float64(i) / float64(n) * 10.0
 		ys[i] = xs[i]*0.3 + rand.NormFloat64()*1.5
 	}
 
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs), eng.NewFloat64Column("y", ys))
 	if err != nil {
 		log.Fatalln(err)

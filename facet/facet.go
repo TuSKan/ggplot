@@ -6,6 +6,7 @@ package facet
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/TuSKan/ggplot/dataset"
 )
@@ -61,6 +62,7 @@ func Wrap(col string, opts ...WrapOpt) Facet {
 	for _, opt := range opts {
 		opt(f)
 	}
+
 	return f
 }
 
@@ -78,29 +80,34 @@ func (f *wrapFacet) Split(ctx context.Context, ds dataset.Dataset) ([]Panel, err
 
 	n := len(vals)
 	groupMasks := make(map[string][]bool)
+
 	var order []string
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		v := vals[i]
 		if _, exists := groupMasks[v]; !exists {
 			groupMasks[v] = make([]bool, n)
 			order = append(order, v)
 		}
+
 		groupMasks[v][i] = true
 	}
 
 	panels := make([]Panel, 0, len(order))
 	for _, label := range order {
 		filtered := ds.Filter(dataset.BoolMask(groupMasks[label]))
+
 		collected, cerr := filtered.Collect(ctx)
 		if cerr != nil {
 			return nil, cerr
 		}
+
 		panels = append(panels, Panel{
 			Label:   label,
 			Dataset: collected,
 		})
 	}
+
 	return panels, nil
 }
 
@@ -111,10 +118,12 @@ func (f *wrapFacet) GridDims(nPanels int) (int, int) {
 	if cols > 0 && rows > 0 {
 		return rows, cols
 	}
+
 	if cols > 0 {
 		rows = (nPanels + cols - 1) / cols
 		return rows, cols
 	}
+
 	if rows > 0 {
 		cols = (nPanels + rows - 1) / rows
 		return rows, cols
@@ -123,6 +132,7 @@ func (f *wrapFacet) GridDims(nPanels int) (int, int) {
 	// Auto: prefer roughly square layouts.
 	cols = ceilSqrt(nPanels)
 	rows = (nPanels + cols - 1) / cols
+
 	return rows, cols
 }
 
@@ -148,6 +158,7 @@ func (g *gridFacet) Split(ctx context.Context, ds dataset.Dataset) ([]Panel, err
 	if err != nil {
 		return nil, err
 	}
+
 	cStrings, err := facetStrings(ds, g.colCol)
 	if err != nil {
 		return nil, err
@@ -166,21 +177,24 @@ func (g *gridFacet) Split(ctx context.Context, ds dataset.Dataset) ([]Panel, err
 	for _, rv := range rowVals {
 		for _, cv := range colVals {
 			mask := make([]bool, n)
-			for i := 0; i < n; i++ {
+			for i := range n {
 				mask[i] = rStrings[i] == rv && cStrings[i] == cv
 			}
 
 			filtered := ds.Filter(dataset.BoolMask(mask))
+
 			collected, cerr := filtered.Collect(ctx)
 			if cerr != nil {
 				return nil, cerr
 			}
+
 			panels = append(panels, Panel{
 				Label:   rv + " | " + cv,
 				Dataset: collected,
 			})
 		}
 	}
+
 	return panels, nil
 }
 
@@ -193,8 +207,10 @@ func (g *gridFacet) GridDims(nPanels int) (int, int) {
 	if nPanels <= 0 {
 		return 1, 1
 	}
+
 	cols := ceilSqrt(nPanels)
 	rows := (nPanels + cols - 1) / cols
+
 	return rows, cols
 }
 func (g *gridFacet) String() string { return "grid(" + g.rowCol + " ~ " + g.colCol + ")" }
@@ -208,6 +224,7 @@ func facetStrings(ds dataset.Dataset, col string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	n := int(c.Len())
 	out := make([]string, n)
 
@@ -220,7 +237,7 @@ func facetStrings(ds dataset.Dataset, col string) ([]string, error) {
 		}
 	case dataset.Column[int64]:
 		for i, v := range tc.Values() {
-			out[i] = fmt.Sprintf("%d", v)
+			out[i] = strconv.FormatInt(v, 10)
 		}
 	case dataset.Column[bool]:
 		for i, v := range tc.Values() {
@@ -233,19 +250,23 @@ func facetStrings(ds dataset.Dataset, col string) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("facet: unsupported column type %T for %q", c, col)
 	}
+
 	return out, nil
 }
 
 // distinctOrdered returns distinct values preserving first-occurrence order.
 func distinctOrdered(vals []string) []string {
 	seen := make(map[string]struct{})
+
 	var order []string
+
 	for _, v := range vals {
 		if _, exists := seen[v]; !exists {
 			seen[v] = struct{}{}
 			order = append(order, v)
 		}
 	}
+
 	return order
 }
 
@@ -253,9 +274,11 @@ func ceilSqrt(n int) int {
 	if n <= 0 {
 		return 1
 	}
+
 	s := 1
 	for s*s < n {
 		s++
 	}
+
 	return s
 }

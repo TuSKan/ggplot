@@ -11,11 +11,12 @@ func score(f Font, q Query) int {
 	}
 
 	// monospace preference constraint checking
-	if q.PreferMonospace && f.IsMonospace {
+	switch {
+	case q.PreferMonospace && f.IsMonospace:
 		score += 500
-	} else if q.PreferMonospace && !f.IsMonospace {
+	case q.PreferMonospace && !f.IsMonospace:
 		score -= 500
-	} else if !q.PreferMonospace && f.IsMonospace {
+	case !q.PreferMonospace && f.IsMonospace:
 		// strongly penalize generic matching attempts grabbing Mono fonts unexpectedly
 		score -= 1000
 	}
@@ -39,12 +40,14 @@ func abs(x int) int {
 	if x < 0 {
 		return -x
 	}
+
 	return x
 }
 
 func normalizeFamily(s string) string {
 	s = strings.ToLower(s)
 	s = strings.TrimSpace(s)
+
 	return s
 }
 

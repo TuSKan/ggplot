@@ -21,6 +21,7 @@ func parallelSortFunc[T any](data []T, cmpFn func(a, b T) int) {
 		slices.SortFunc(data, cmpFn)
 		return
 	}
+
 	pSort(data, cmpFn, maxDepth())
 }
 
@@ -28,10 +29,12 @@ func parallelSortFunc[T any](data []T, cmpFn func(a, b T) int) {
 // Each level doubles the goroutine count, so depth = log2(GOMAXPROCS).
 func maxDepth() int {
 	procs := runtime.GOMAXPROCS(0)
+
 	depth := 0
 	for p := procs; p > 1; p >>= 1 {
 		depth++
 	}
+
 	return depth
 }
 
@@ -45,12 +48,13 @@ func pSort[T any](data []T, cmpFn func(a, b T) int, depth int) {
 	}
 
 	mid := n / 2
+
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+
+	wg.Go(func() {
 		pSort(data[:mid], cmpFn, depth-1)
-	}()
+	})
+
 	pSort(data[mid:], cmpFn, depth-1)
 	wg.Wait()
 
@@ -73,8 +77,10 @@ func pMerge[T any](data []T, mid int, cmpFn func(a, b T) int) {
 			data[k] = data[j]
 			j++
 		}
+
 		k++
 	}
+
 	for i < len(left) {
 		data[k] = left[i]
 		i++

@@ -1,6 +1,7 @@
 package bigquery
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,7 +18,7 @@ import (
 func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (dataset.Table, error) {
 	bq, ok := ds.(*bqDataset)
 	if !ok {
-		return nil, fmt.Errorf("bigquery: PivotLonger requires a BigQuery dataset")
+		return nil, errors.New("bigquery: PivotLonger requires a BigQuery dataset")
 	}
 
 	if len(spec.Cols) == 0 {
@@ -31,6 +32,7 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 	}
 
 	var idCols []string
+
 	for _, f := range bq.schema.Fields() {
 		if !pivotSet[f.Name] {
 			idCols = append(idCols, f.Name)
@@ -62,16 +64,19 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 			outFields = append(outFields, bq.schema.Field(idx))
 		}
 	}
+
 	outFields = append(outFields, dataset.Field{Name: spec.NamesTo, Dtype: dataset.DTypeString})
 
 	// Infer value dtype from first pivot column
 	valueDtype := dataset.DTypeFloat64
+
 	if len(spec.Cols) > 0 {
 		idx := bq.schema.FieldIndex(spec.Cols[0])
 		if idx >= 0 {
 			valueDtype = bq.schema.Field(idx).Dtype
 		}
 	}
+
 	outFields = append(outFields, dataset.Field{Name: spec.ValuesTo, Dtype: valueDtype})
 
 	schema := dataset.NewSchema(outFields...)
@@ -86,7 +91,7 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (dataset.Table, error) {
 	bq, ok := ds.(*bqDataset)
 	if !ok {
-		return nil, fmt.Errorf("bigquery: PivotWider requires a BigQuery dataset")
+		return nil, errors.New("bigquery: PivotWider requires a BigQuery dataset")
 	}
 
 	// PivotWider needs to know the distinct values of NamesFrom.
@@ -102,6 +107,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 		"SELECT DISTINCT `%s` FROM `%s` ORDER BY 1",
 		spec.NamesFrom, mat.table.FullyQualified(),
 	)
+
 	distinctRef, distinctMeta, err := e.execToTempTable(distinctSQL)
 	if err != nil {
 		return nil, fmt.Errorf("bigquery: PivotWider distinct query failed: %w", err)
@@ -114,6 +120,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 		table:   distinctRef,
 		numRows: int64(distinctMeta.NumRows),
 	}
+
 	localDistinct, err := distinctDS.download()
 	if err != nil {
 		return nil, err
@@ -137,6 +144,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 
 	// Build the CASE WHEN pivot SQL
 	var idCols []string
+
 	for _, f := range bq.schema.Fields() {
 		if f.Name != spec.NamesFrom && f.Name != spec.ValuesFrom {
 			idCols = append(idCols, f.Name)
@@ -149,6 +157,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 	for _, c := range idCols {
 		selectParts = append(selectParts, "`"+c+"`")
 	}
+
 	for _, name := range pivotNames {
 		selectParts = append(selectParts, fmt.Sprintf(
 			"MAX(IF(`%s` = '%s', `%s`, NULL)) AS `%s`",
@@ -170,6 +179,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 
 	// Build output schema
 	valueDtype := dataset.DTypeFloat64
+
 	idx := bq.schema.FieldIndex(spec.ValuesFrom)
 	if idx >= 0 {
 		valueDtype = bq.schema.Field(idx).Dtype
@@ -182,11 +192,13 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 			outFields = append(outFields, bq.schema.Field(fidx))
 		}
 	}
+
 	for _, name := range pivotNames {
 		outFields = append(outFields, dataset.Field{Name: name, Dtype: valueDtype, Nullable: true})
 	}
 
 	schema := dataset.NewSchema(outFields...)
+
 	return bq.withSQL(sql, schema, bq.numRows/int64(max(len(pivotNames), 1))), nil
 }
 
@@ -195,11 +207,12 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep string) (dataset.Table, error) {
 	bq, ok := ds.(*bqDataset)
 	if !ok {
-		return nil, fmt.Errorf("bigquery: Separate requires a BigQuery dataset")
+		return nil, errors.New("bigquery: Separate requires a BigQuery dataset")
 	}
 
 	// Build SELECT with SPLIT
 	var selectParts []string
+
 	for _, f := range bq.schema.Fields() {
 		if f.Name == col {
 			for i, name := range into {
@@ -217,6 +230,7 @@ func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep strin
 
 	// Build schema: replace col with into columns
 	var outFields []dataset.Field
+
 	for _, f := range bq.schema.Fields() {
 		if f.Name == col {
 			for _, name := range into {
@@ -235,7 +249,7 @@ func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep strin
 func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep string) (dataset.Table, error) {
 	bq, ok := ds.(*bqDataset)
 	if !ok {
-		return nil, fmt.Errorf("bigquery: Concatenate requires a BigQuery dataset")
+		return nil, errors.New("bigquery: Concatenate requires a BigQuery dataset")
 	}
 
 	fromSet := make(map[string]bool, len(from))
@@ -251,26 +265,31 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 			concatParts[i] += fmt.Sprintf(", '%s'", sep)
 		}
 	}
+
 	concatExpr := "CONCAT(" + strings.Join(concatParts, ", ") + ")"
 
 	// Build SELECT: keep non-from columns + new concat column
 	var selectParts []string
+
 	for _, f := range bq.schema.Fields() {
 		if !fromSet[f.Name] {
 			selectParts = append(selectParts, "`"+f.Name+"`")
 		}
 	}
+
 	selectParts = append(selectParts, fmt.Sprintf("%s AS `%s`", concatExpr, col))
 
 	sql := fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectParts, ", "), bq.sourceRef())
 
 	// Build schema
 	var outFields []dataset.Field
+
 	for _, f := range bq.schema.Fields() {
 		if !fromSet[f.Name] {
 			outFields = append(outFields, f)
 		}
 	}
+
 	outFields = append(outFields, dataset.Field{Name: col, Dtype: dataset.DTypeString})
 
 	return bq.withSQL(sql, dataset.NewSchema(outFields...), bq.numRows), nil
@@ -281,7 +300,7 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, error) {
 	bq, ok := ds.(*bqDataset)
 	if !ok {
-		return nil, fmt.Errorf("bigquery: Complete requires a BigQuery dataset")
+		return nil, errors.New("bigquery: Complete requires a BigQuery dataset")
 	}
 
 	if len(cols) == 0 {
@@ -297,7 +316,7 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 		)
 	}
 
-	sql := fmt.Sprintf("SELECT * FROM %s", strings.Join(crossParts, " CROSS JOIN "))
+	sql := "SELECT * FROM " + strings.Join(crossParts, " CROSS JOIN ")
 
 	// Build schema from selected columns
 	outFields := make([]dataset.Field, len(cols))

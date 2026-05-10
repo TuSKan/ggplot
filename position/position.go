@@ -38,6 +38,7 @@ func (dodge) Adjust(xs, ys []float64, width float64, groupIdx, nGroups int) ([]f
 	if nGroups <= 1 {
 		return xs, ys
 	}
+
 	barWidth := width / float64(nGroups)
 	offset := barWidth*float64(groupIdx) - width/2 + barWidth/2
 
@@ -45,6 +46,7 @@ func (dodge) Adjust(xs, ys []float64, width float64, groupIdx, nGroups int) ([]f
 	for i, x := range xs {
 		adjusted[i] = x + offset
 	}
+
 	return adjusted, ys
 }
 func (dodge) String() string { return "dodge" }
@@ -63,6 +65,7 @@ func (stack) Adjust(xs, ys []float64, _ float64, groupIdx, _ int) ([]float64, []
 	if groupIdx == 0 {
 		return xs, ys
 	}
+
 	panic("position.Stack: stacking for groupIdx > 0 is not yet implemented; " +
 		"use position.Dodge() or position.Identity() instead")
 }
@@ -83,11 +86,12 @@ func (j jitter) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []floa
 	adjY := make([]float64, len(ys))
 
 	// Reproducible PRNG seeded by data length for deterministic-per-dataset behavior.
-	rng := rand.New(rand.NewPCG(42, uint64(len(xs))))
+	rng := rand.New(rand.NewPCG(42, uint64(len(xs)))) //nolint:gosec // G404: reproducible jitter uses math/rand intentionally; crypto not needed.
 	for i := range xs {
 		adjX[i] = xs[i] + (rng.Float64()-0.5)*j.xAmt
 		adjY[i] = ys[i] + (rng.Float64()-0.5)*j.yAmt
 	}
+
 	return adjX, adjY
 }
 func (j jitter) String() string { return "jitter" }
@@ -102,10 +106,12 @@ type nudge struct{ dx, dy float64 }
 func (n nudge) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []float64) {
 	adjX := make([]float64, len(xs))
 	adjY := make([]float64, len(ys))
+
 	for i := range xs {
 		adjX[i] = xs[i] + n.dx
 		adjY[i] = ys[i] + n.dy
 	}
+
 	return adjX, adjY
 }
 func (n nudge) String() string { return "nudge" }

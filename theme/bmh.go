@@ -49,5 +49,6 @@ func newBmh() Theme {
 		hex("F0E442"),
 		hex("0072B2"),
 	}
+
 	return t
 }

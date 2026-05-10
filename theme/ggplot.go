@@ -51,5 +51,6 @@ func newGgplot() Theme {
 		hex("8EBA42"), // green
 		hex("FFB5B8"), // pink
 	}
+
 	return t
 }

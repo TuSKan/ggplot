@@ -1,6 +1,7 @@
 package arrow
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,8 +15,9 @@ import (
 // It supports Inner, Left, Right, Full, Semi, and Anti joins.
 func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset.Table, error) {
 	if len(spec.LeftCols) == 0 || len(spec.RightCols) == 0 {
-		return nil, fmt.Errorf("arrow: Join requires at least one key column")
+		return nil, errors.New("arrow: Join requires at least one key column")
 	}
+
 	if len(spec.LeftCols) != len(spec.RightCols) {
 		return nil, fmt.Errorf("arrow: Join key column count mismatch: left=%d, right=%d",
 			len(spec.LeftCols), len(spec.RightCols))
@@ -27,6 +29,7 @@ func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset
 			return nil, fmt.Errorf("arrow: left dataset has no column %q", name)
 		}
 	}
+
 	for _, name := range spec.RightCols {
 		if !right.Schema().HasField(name) {
 			return nil, fmt.Errorf("arrow: right dataset has no column %q", name)
@@ -53,18 +56,22 @@ func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset
 func arrowBuildHashIndex(ds dataset.Table, cols []string) (map[string][]int, error) {
 	n := int(ds.NumRows())
 	index := make(map[string][]int, n)
+
 	keyCols := make([]dataset.AnyColumn, len(cols))
 	for i, name := range cols {
 		col, err := ds.Column(name)
 		if err != nil {
 			return nil, err
 		}
+
 		keyCols[i] = col
 	}
-	for row := 0; row < n; row++ {
+
+	for row := range n {
 		key := arrowHashKey(keyCols, row)
 		index[key] = append(index[key], row)
 	}
+
 	return index, nil
 }
 
@@ -73,13 +80,17 @@ func arrowHashKey(cols []dataset.AnyColumn, row int) string {
 	if len(cols) == 1 {
 		return arrowColValueString(cols[0], row)
 	}
+
 	var b strings.Builder
+
 	for i, col := range cols {
 		if i > 0 {
 			b.WriteByte('\x00')
 		}
+
 		b.WriteString(arrowColValueString(col, row))
 	}
+
 	return b.String()
 }
 
@@ -96,22 +107,23 @@ func arrowColValueString(col dataset.AnyColumn, row int) string {
 		if c.arr.Value(row) {
 			return "T"
 		}
+
 		return "F"
 	default:
-		return fmt.Sprintf("%v", row)
+		return strconv.Itoa(row)
 	}
 }
 
 // arrowProbeJoin probes left against right hash index and produces row pairs.
 func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 	rightIndex map[string][]int) (leftIdx, rightIdx []int, err error) {
-
 	leftKeyCols := make([]dataset.AnyColumn, len(spec.LeftCols))
 	for i, name := range spec.LeftCols {
 		col, err := left.Column(name)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		leftKeyCols[i] = col
 	}
 
@@ -120,7 +132,7 @@ func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 
 	switch spec.Type {
 	case dataset.JoinInner:
-		for i := 0; i < nLeft; i++ {
+		for i := range nLeft {
 			key := arrowHashKey(leftKeyCols, i)
 			if matches, ok := rightIndex[key]; ok {
 				for _, j := range matches {
@@ -131,7 +143,7 @@ func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 		}
 
 	case dataset.JoinLeft:
-		for i := 0; i < nLeft; i++ {
+		for i := range nLeft {
 			key := arrowHashKey(leftKeyCols, i)
 			if matches, ok := rightIndex[key]; ok {
 				for _, j := range matches {
@@ -146,7 +158,8 @@ func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 
 	case dataset.JoinRight:
 		rightMatched := make([]bool, nRight)
-		for i := 0; i < nLeft; i++ {
+
+		for i := range nLeft {
 			key := arrowHashKey(leftKeyCols, i)
 			if matches, ok := rightIndex[key]; ok {
 				for _, j := range matches {
@@ -156,7 +169,8 @@ func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 				}
 			}
 		}
-		for j := 0; j < nRight; j++ {
+
+		for j := range nRight {
 			if !rightMatched[j] {
 				leftIdx = append(leftIdx, -1)
 				rightIdx = append(rightIdx, j)
@@ -165,7 +179,8 @@ func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 
 	case dataset.JoinFull:
 		rightMatched := make([]bool, nRight)
-		for i := 0; i < nLeft; i++ {
+
+		for i := range nLeft {
 			key := arrowHashKey(leftKeyCols, i)
 			if matches, ok := rightIndex[key]; ok {
 				for _, j := range matches {
@@ -178,7 +193,8 @@ func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 				rightIdx = append(rightIdx, -1)
 			}
 		}
-		for j := 0; j < nRight; j++ {
+
+		for j := range nRight {
 			if !rightMatched[j] {
 				leftIdx = append(leftIdx, -1)
 				rightIdx = append(rightIdx, j)
@@ -186,7 +202,7 @@ func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 		}
 
 	case dataset.JoinSemi:
-		for i := 0; i < nLeft; i++ {
+		for i := range nLeft {
 			key := arrowHashKey(leftKeyCols, i)
 			if _, ok := rightIndex[key]; ok {
 				leftIdx = append(leftIdx, i)
@@ -194,7 +210,7 @@ func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 		}
 
 	case dataset.JoinAnti:
-		for i := 0; i < nLeft; i++ {
+		for i := range nLeft {
 			key := arrowHashKey(leftKeyCols, i)
 			if _, ok := rightIndex[key]; !ok {
 				leftIdx = append(leftIdx, i)
@@ -211,7 +227,6 @@ func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 // arrowBuildJoinResult constructs the output dataset from row index pairs.
 func arrowBuildJoinResult(e *Engine, left, right dataset.Table, spec dataset.JoinSpec,
 	leftIdx, rightIdx []int) (dataset.Table, error) {
-
 	isSemiAnti := spec.Type == dataset.JoinSemi || spec.Type == dataset.JoinAnti
 	n := len(leftIdx)
 
@@ -223,10 +238,12 @@ func arrowBuildJoinResult(e *Engine, left, right dataset.Table, spec dataset.Joi
 
 	// Build output schema.
 	var fields []dataset.Field
+
 	leftSchema := left.Schema()
 	for i := 0; i < leftSchema.NumFields(); i++ {
 		fields = append(fields, leftSchema.Field(i))
 	}
+
 	if !isSemiAnti {
 		rightSchema := right.Schema()
 		for i := 0; i < rightSchema.NumFields(); i++ {
@@ -234,13 +251,16 @@ func arrowBuildJoinResult(e *Engine, left, right dataset.Table, spec dataset.Joi
 			if rightKeySet[f.Name] {
 				continue
 			}
+
 			finalName := f.Name
 			if leftSchema.HasField(f.Name) {
 				finalName = f.Name + "_right"
 			}
+
 			fields = append(fields, dataset.Field{Name: finalName, Dtype: f.Dtype, Nullable: true})
 		}
 	}
+
 	outSchema := dataset.NewSchema(fields...)
 
 	// Gather columns.
@@ -262,11 +282,14 @@ func arrowBuildJoinResult(e *Engine, left, right dataset.Table, spec dataset.Joi
 			if rightKeySet[f.Name] {
 				continue
 			}
+
 			col, _ := right.Column(f.Name)
+
 			finalName := f.Name
 			if leftSchema.HasField(f.Name) {
 				finalName = f.Name + "_right"
 			}
+
 			gathered := e.arrowGatherColumn(col, rightIdx, n, finalName)
 			outCols = append(outCols, gathered)
 		}
@@ -282,7 +305,9 @@ func (e *Engine) arrowGatherColumn(col dataset.AnyColumn, indices []int, n int, 
 	case *arrowFloat64Column:
 		b := array.NewFloat64Builder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(n)
+
 		for _, idx := range indices {
 			if idx < 0 {
 				b.AppendNull()
@@ -290,12 +315,15 @@ func (e *Engine) arrowGatherColumn(col dataset.AnyColumn, indices []int, n int, 
 				b.Append(c.arr.Value(idx))
 			}
 		}
+
 		return &arrowFloat64Column{name: name, arr: b.NewFloat64Array()}
 
 	case *arrowInt64Column:
 		b := array.NewInt64Builder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(n)
+
 		for _, idx := range indices {
 			if idx < 0 {
 				b.AppendNull()
@@ -303,12 +331,15 @@ func (e *Engine) arrowGatherColumn(col dataset.AnyColumn, indices []int, n int, 
 				b.Append(c.arr.Value(idx))
 			}
 		}
+
 		return &arrowInt64Column{name: name, arr: b.NewInt64Array(), dtype: c.dtype}
 
 	case *arrowStringColumn:
 		b := array.NewStringBuilder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(n)
+
 		for _, idx := range indices {
 			if idx < 0 {
 				b.AppendNull()
@@ -316,12 +347,15 @@ func (e *Engine) arrowGatherColumn(col dataset.AnyColumn, indices []int, n int, 
 				b.Append(c.arr.Value(idx))
 			}
 		}
+
 		return &arrowStringColumn{name: name, arr: b.NewStringArray()}
 
 	case *arrowBoolColumn:
 		b := array.NewBooleanBuilder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(n)
+
 		for _, idx := range indices {
 			if idx < 0 {
 				b.AppendNull()
@@ -329,6 +363,7 @@ func (e *Engine) arrowGatherColumn(col dataset.AnyColumn, indices []int, n int, 
 				b.Append(c.arr.Value(idx))
 			}
 		}
+
 		return &arrowBoolColumn{name: name, arr: b.NewBooleanArray()}
 
 	default:

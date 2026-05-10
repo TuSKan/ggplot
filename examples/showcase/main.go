@@ -47,7 +47,7 @@ func stepExample(dir string) {
 	ys := make([]float64, 0, n*3)
 	labels := make([]string, 0, n*3)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		t := float64(i)
 		xs = append(xs, t, t, t)
 		ys = append(ys,
@@ -59,6 +59,7 @@ func stepExample(dir string) {
 	}
 
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("time", xs),
 		eng.NewFloat64Column("level", ys),
@@ -86,6 +87,7 @@ func stepExample(dir string) {
 	if err := p.Save(context.Background(), out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
@@ -96,8 +98,9 @@ func limitsExample(dir string) {
 	ys := make([]float64, n)
 	groups := make([]string, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		t := float64(i) / float64(n) * 10
+
 		xs[i] = t
 		if i < n/2 {
 			ys[i] = math.Sin(t) + 0.3*math.Sin(t*3)
@@ -135,6 +138,7 @@ func limitsExample(dir string) {
 	if err := p.Save(context.Background(), out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
@@ -163,6 +167,7 @@ func flipExample(dir string) {
 	if err := p.Save(context.Background(), out, 700, 500); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
@@ -172,7 +177,7 @@ func rugExample(dir string) {
 	ys := make([]float64, n)
 	groups := make([]string, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if i < n/2 {
 			xs[i] = 2 + 3*math.Sin(float64(i)*0.15)
 			ys[i] = 1.5 + 2*math.Cos(float64(i)*0.2)
@@ -209,5 +214,6 @@ func rugExample(dir string) {
 	if err := p.Save(context.Background(), out, 800, 600); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }

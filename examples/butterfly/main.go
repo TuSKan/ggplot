@@ -32,7 +32,7 @@ func main() {
 	yData := make([]float64, numPoints)
 	zData := make([]float64, numPoints)
 
-	for i := 0; i < numPoints; i++ {
+	for i := range numPoints {
 		t := float64(i) * step
 
 		eCosT := math.Exp(math.Cos(t))
@@ -48,6 +48,7 @@ func main() {
 	}
 
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", xData),
 		eng.NewFloat64Column("y", yData),
@@ -75,5 +76,6 @@ func main() {
 	if err := p.Save(context.Background(), out, 800, 800); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }

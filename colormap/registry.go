@@ -1,6 +1,7 @@
 package colormap
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -61,21 +62,27 @@ var (
 // Names are looked up case-insensitively; the canonical form is lowercase.
 func Register(c Cmap) error {
 	if c == nil {
-		return fmt.Errorf("colormap: cannot register nil Cmap")
+		return errors.New("colormap: cannot register nil Cmap")
 	}
+
 	name := normalizeName(c.Name())
 	if name == "" {
-		return fmt.Errorf("colormap: cannot register Cmap with empty name")
+		return errors.New("colormap: cannot register Cmap with empty name")
 	}
+
 	registryMu.Lock()
 	defer registryMu.Unlock()
+
 	if existing, ok := registry[name]; ok {
 		if existing == c {
 			return nil
 		}
+
 		return fmt.Errorf("colormap: name %q already registered", name)
 	}
+
 	registry[name] = c
+
 	return nil
 }
 
@@ -92,22 +99,29 @@ func MustRegister(c Cmap) {
 func Resolve(name string) (Cmap, error) {
 	key := normalizeName(name)
 	if key == "" {
-		return nil, fmt.Errorf("colormap: empty cmap name")
+		return nil, errors.New("colormap: empty cmap name")
 	}
+
 	reversed := false
 	if strings.HasSuffix(key, "_r") {
 		reversed = true
 		key = strings.TrimSuffix(key, "_r")
 	}
+
 	registryMu.RLock()
+
 	c, ok := registry[key]
+
 	registryMu.RUnlock()
+
 	if !ok {
 		return nil, fmt.Errorf("colormap: unknown cmap %q", name)
 	}
+
 	if reversed {
 		return c.Reversed(), nil
 	}
+
 	return c, nil
 }
 
@@ -117,6 +131,7 @@ func MustResolve(name string) Cmap {
 	if err != nil {
 		panic(err)
 	}
+
 	return c
 }
 
@@ -124,12 +139,15 @@ func MustResolve(name string) Cmap {
 // reversed forms are not enumerated — they are derivable from each base name.
 func Names() []string {
 	registryMu.RLock()
+
 	out := make([]string, 0, len(registry))
 	for k := range registry {
 		out = append(out, k)
 	}
+
 	registryMu.RUnlock()
 	sort.Strings(out)
+
 	return out
 }
 
@@ -137,14 +155,17 @@ func Names() []string {
 // the argument, sorted alphabetically.
 func NamesByCategory(cat Category) []string {
 	registryMu.RLock()
+
 	out := make([]string, 0, len(registry)/4)
 	for k, c := range registry {
 		if c.Category() == cat {
 			out = append(out, k)
 		}
 	}
+
 	registryMu.RUnlock()
 	sort.Strings(out)
+
 	return out
 }
 

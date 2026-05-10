@@ -74,6 +74,7 @@ func SliceAbs[T Lanes](dst, src []T) {
 		if v < 0 {
 			v = -v
 		}
+
 		dst[i] = v
 	}
 }

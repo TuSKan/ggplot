@@ -13,8 +13,9 @@ import (
 )
 
 // ReadCSV reads CSV data using go-simdcsv with schema inference.
-func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig) (dataset.Table, error) {
+func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) (dataset.Table, error) {
 	reader := csv.NewReader(r)
+
 	reader.Comma = cfg.Comma
 	if cfg.Comment != 0 {
 		reader.Comment = cfg.Comment
@@ -31,12 +32,14 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 
 	// Extract headers.
 	startRow := 0
+
 	var headers []string
 	if cfg.HasHeader {
 		headers = records[0]
 		startRow = 1
 	} else {
 		nCols := len(records[0])
+
 		headers = make([]string, nCols)
 		for i := range headers {
 			headers[i] = fmt.Sprintf("V%d", i+1)
@@ -50,10 +53,12 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 	if nRows == 0 {
 		fields := make([]dataset.Field, nCols)
 		cols := make([]dataset.AnyColumn, nCols)
+
 		for i, name := range headers {
 			fields[i] = dataset.StringCol(name)
 			cols[i] = e.NewStringColumn(name, nil)
 		}
+
 		return e.FromColumns(dataset.NewSchema(fields...), cols...)
 	}
 
@@ -68,6 +73,7 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 	for i := range rawCols {
 		rawCols[i] = make([]string, nRows)
 	}
+
 	for row, rec := range dataRows {
 		for col := 0; col < nCols && col < len(rec); col++ {
 			rawCols[col][row] = rec[col]
@@ -75,14 +81,17 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 	}
 
 	// Infer types and build columns.
-	var fields []dataset.Field
-	var cols []dataset.AnyColumn
+	var (
+		fields []dataset.Field
+		cols   []dataset.AnyColumn
+	)
 
 	for i, name := range headers {
 		dtype := inferType(rawCols[i], nullSet)
 		switch dtype {
 		case dataset.DTypeFloat64:
 			data := make([]float64, nRows)
+
 			for j, s := range rawCols[i] {
 				if nullSet[s] {
 					data[j] = math.NaN()
@@ -95,46 +104,54 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 					}
 				}
 			}
+
 			fields = append(fields, dataset.FloatCol(name))
 			cols = append(cols, e.NewFloat64Column(name, data))
 
 		case dataset.DTypeInt64:
 			data := make([]int64, nRows)
+
 			for j, s := range rawCols[i] {
 				if !nullSet[s] {
 					v, _ := strconv.ParseInt(s, 10, 64)
 					data[j] = v
 				}
 			}
+
 			fields = append(fields, dataset.IntCol(name))
 			cols = append(cols, e.NewInt64Column(name, data))
 
 		case dataset.DTypeBool:
 			data := make([]bool, nRows)
+
 			for j, s := range rawCols[i] {
 				if !nullSet[s] {
 					v, _ := strconv.ParseBool(s)
 					data[j] = v
 				}
 			}
+
 			fields = append(fields, dataset.BoolCol(name))
 			cols = append(cols, e.NewBoolColumn(name, data))
 
 		default:
 			data := make([]string, nRows)
 			copy(data, rawCols[i])
+
 			fields = append(fields, dataset.StringCol(name))
 			cols = append(cols, e.NewStringColumn(name, data))
 		}
 	}
 
 	schema := dataset.NewSchema(fields...)
+
 	return e.FromColumns(schema, cols...)
 }
 
 // WriteCSV writes a Dataset as CSV using go-simdcsv.
-func (e *Engine) WriteCSV(ctx context.Context, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
+func (e *Engine) WriteCSV(_ context.Context, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
 	writer := csv.NewWriter(w)
+
 	writer.Comma = cfg.Comma
 	defer writer.Flush()
 
@@ -145,9 +162,10 @@ func (e *Engine) WriteCSV(ctx context.Context, w io.Writer, ds dataset.Table, cf
 	// Write header.
 	if cfg.HasHeader {
 		header := make([]string, nCols)
-		for i := 0; i < nCols; i++ {
+		for i := range nCols {
 			header[i] = schema.Field(i).Name
 		}
+
 		if err := writer.Write(header); err != nil {
 			return err
 		}
@@ -155,21 +173,24 @@ func (e *Engine) WriteCSV(ctx context.Context, w io.Writer, ds dataset.Table, cf
 
 	// Build column formatters.
 	formatters := make([]func(int) string, nCols)
-	for i := 0; i < nCols; i++ {
+	for i := range nCols {
 		f := schema.Field(i)
+
 		col, err := ds.Column(f.Name)
 		if err != nil {
 			return err
 		}
+
 		formatters[i] = makeFormatter(col)
 	}
 
 	// Write data rows.
 	row := make([]string, nCols)
-	for r := 0; r < nRows; r++ {
-		for c := 0; c < nCols; c++ {
+	for r := range nRows {
+		for c := range nCols {
 			row[c] = formatters[c](r)
 		}
+
 		if err := writer.Write(row); err != nil {
 			return err
 		}
@@ -183,30 +204,35 @@ func makeFormatter(col dataset.AnyColumn) func(int) string {
 	switch c := col.(type) {
 	case dataset.Column[float64]:
 		vals := c.Values()
+
 		return func(row int) string {
 			v := vals[row]
 			if math.IsNaN(v) {
 				return "NA"
 			}
+
 			return strconv.FormatFloat(v, 'g', -1, 64)
 		}
 	case dataset.Column[int64]:
 		vals := c.Values()
+
 		return func(row int) string {
 			return strconv.FormatInt(vals[row], 10)
 		}
 	case dataset.Column[bool]:
 		vals := c.Values()
+
 		return func(row int) string {
 			return strconv.FormatBool(vals[row])
 		}
 	case dataset.Column[string]:
 		vals := c.Values()
+
 		return func(row int) string {
 			return vals[row]
 		}
 	default:
-		return func(row int) string { return "" }
+		return func(_ int) string { return "" }
 	}
 }
 
@@ -222,6 +248,7 @@ func inferType(vals []string, nullSet map[string]bool) dataset.DType {
 		if nullSet[s] {
 			continue
 		}
+
 		nonNull++
 
 		if canBool {
@@ -230,11 +257,13 @@ func inferType(vals []string, nullSet map[string]bool) dataset.DType {
 				canBool = false
 			}
 		}
+
 		if canInt {
 			if _, err := strconv.ParseInt(s, 10, 64); err != nil {
 				canInt = false
 			}
 		}
+
 		if canFloat {
 			if _, err := strconv.ParseFloat(s, 64); err != nil {
 				canFloat = false
@@ -254,11 +283,14 @@ func inferType(vals []string, nullSet map[string]bool) dataset.DType {
 	if canBool && !canInt {
 		return dataset.DTypeBool
 	}
+
 	if canInt {
 		return dataset.DTypeInt64
 	}
+
 	if canFloat {
 		return dataset.DTypeFloat64
 	}
+
 	return dataset.DTypeString
 }

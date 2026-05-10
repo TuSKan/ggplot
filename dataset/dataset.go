@@ -47,10 +47,12 @@ type Table interface {
 // Names returns the column names from a dataset's schema.
 func Names(ds Table) []string {
 	fields := ds.Schema().Fields()
+
 	names := make([]string, len(fields))
 	for i, f := range fields {
 		names[i] = f.Name
 	}
+
 	return names
 }
 
@@ -66,6 +68,7 @@ func Close(ds Table) error {
 	if c, ok := ds.(Closer); ok {
 		return c.Close()
 	}
+
 	return nil
 }
 

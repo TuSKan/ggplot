@@ -58,6 +58,7 @@ func TestValidateColName(t *testing.T) {
 func TestCompPred_Expr_Escaping(t *testing.T) {
 	// Normal usage
 	expr := Eq("name", "test").Expr()
+
 	want := "`name` = 'test'"
 	if expr != want {
 		t.Errorf("Eq(name, test).Expr() = %q, want %q", expr, want)
@@ -65,6 +66,7 @@ func TestCompPred_Expr_Escaping(t *testing.T) {
 
 	// SQL injection attempt
 	expr = Eq("name", "x' OR 1=1 --").Expr()
+
 	want = "`name` = 'x'' OR 1=1 --'"
 	if expr != want {
 		t.Errorf("Eq(name, injection).Expr() = %q, want %q", expr, want)
@@ -72,6 +74,7 @@ func TestCompPred_Expr_Escaping(t *testing.T) {
 
 	// Column name injection attempt — non-identifier chars stripped
 	expr = Eq("x`; DROP TABLE", "test").Expr()
+
 	want = "`xDROPTABLE` = 'test'"
 	if expr != want {
 		t.Errorf("Eq(malicious_col, test).Expr() = %q, want %q", expr, want)
@@ -87,6 +90,7 @@ func TestBetweenPred_Expr_Escaping(t *testing.T) {
 
 func TestInPred_Expr_Escaping(t *testing.T) {
 	expr := In("name", "Alice", "O'Brien", "x'; DROP--").Expr()
+
 	want := "`name` IN ('Alice', 'O''Brien', 'x''; DROP--')"
 	if expr != want {
 		t.Errorf("In escaping: got %q, want %q", expr, want)

@@ -1,8 +1,9 @@
 package fonts
 
 import (
-	"github.com/gogpu/gg/text"
 	"sync"
+
+	"github.com/gogpu/gg/text"
 )
 
 // FontCache provides thread-safe heuristic memoization for resolved system fonts.
@@ -22,7 +23,9 @@ func newFontCache() *FontCache {
 func (c *FontCache) Get(q Query) (*Font, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	f, ok := c.entries[q]
+
 	return f, ok
 }
 
@@ -30,6 +33,7 @@ func (c *FontCache) Get(q Query) (*Font, bool) {
 func (c *FontCache) Set(q Query, f *Font) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.entries[q] = f
 }
 
@@ -49,7 +53,9 @@ func newFaceCache() *FaceCache {
 func (c *FaceCache) Get(r FaceRequest) (*FaceHandle, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	f, ok := c.entries[r]
+
 	return f, ok
 }
 
@@ -57,6 +63,7 @@ func (c *FaceCache) Get(r FaceRequest) (*FaceHandle, bool) {
 func (c *FaceCache) Set(r FaceRequest, f *FaceHandle) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.entries[r] = f
 }
 
@@ -76,7 +83,9 @@ func newSourceCache() *SourceCache {
 func (c *SourceCache) Get(path string) (*text.FontSource, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	f, ok := c.entries[path]
+
 	return f, ok
 }
 
@@ -84,5 +93,6 @@ func (c *SourceCache) Get(path string) (*text.FontSource, bool) {
 func (c *SourceCache) Set(path string, f *text.FontSource) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.entries[path] = f
 }

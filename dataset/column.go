@@ -20,10 +20,19 @@ type Field struct {
 
 // Field constructors — return a single field descriptor.
 
-func FloatCol(name string) Field     { return Field{Name: name, Dtype: DTypeFloat64} }
-func IntCol(name string) Field       { return Field{Name: name, Dtype: DTypeInt64} }
-func StringCol(name string) Field    { return Field{Name: name, Dtype: DTypeString} }
-func BoolCol(name string) Field      { return Field{Name: name, Dtype: DTypeBool} }
+// FloatCol creates a float64 field descriptor.
+func FloatCol(name string) Field { return Field{Name: name, Dtype: DTypeFloat64} }
+
+// IntCol creates an int64 field descriptor.
+func IntCol(name string) Field { return Field{Name: name, Dtype: DTypeInt64} }
+
+// StringCol creates a string field descriptor.
+func StringCol(name string) Field { return Field{Name: name, Dtype: DTypeString} }
+
+// BoolCol creates a bool field descriptor.
+func BoolCol(name string) Field { return Field{Name: name, Dtype: DTypeBool} }
+
+// TimestampCol creates a timestamp field descriptor.
 func TimestampCol(name string) Field { return Field{Name: name, Dtype: DTypeTimestamp} }
 
 // NullableFloatCol creates a nullable float64 field.
@@ -69,12 +78,15 @@ func NewSchema(fields ...Field) *Schema {
 		index:  make(map[string]int, len(fields)),
 	}
 	copy(s.fields, fields)
+
 	for i, f := range s.fields {
 		if _, exists := s.index[f.Name]; exists {
 			panic(fmt.Sprintf("dataset: duplicate field name %q", f.Name))
 		}
+
 		s.index[f.Name] = i
 	}
+
 	return s
 }
 
@@ -82,6 +94,7 @@ func NewSchema(fields ...Field) *Schema {
 func (s *Schema) Fields() []Field {
 	out := make([]Field, len(s.fields))
 	copy(out, s.fields)
+
 	return out
 }
 
@@ -96,6 +109,7 @@ func (s *Schema) FieldIndex(name string) int {
 	if i, ok := s.index[name]; ok {
 		return i
 	}
+
 	return -1
 }
 
@@ -137,10 +151,12 @@ func GetColumn[T any](ds Table, name string) (Column[T], error) {
 	if err != nil {
 		return nil, err
 	}
+
 	typed, ok := raw.(Column[T])
 	if !ok {
 		return nil, fmt.Errorf("dataset: column %q (%s) is not Column[%T]",
 			name, raw.DType(), *new(T))
 	}
+
 	return typed, nil
 }

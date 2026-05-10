@@ -1,15 +1,18 @@
-// draw.go contains geometry rendering functions for the ggplot rendering pipeline.
+// draw.go provides geometry rendering functions for the plotting pipeline.
 // Each draw function maps data coordinates to pixel positions using a coordinate
 // system and renders shapes via the canvas abstraction.
 //
 // The Drawer interface enables extensible geometry dispatch: third-party geoms
 // can register their own draw functions via [RegisterDrawer].
+
 package ggplot
 
 import (
 	"fmt"
 	"math"
 	"sort"
+
+	"github.com/gogpu/gg"
 
 	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/coord"
@@ -18,7 +21,6 @@ import (
 	"github.com/TuSKan/ggplot/internal/canvas"
 	"github.com/TuSKan/ggplot/internal/grammar"
 	"github.com/TuSKan/ggplot/theme"
-	"github.com/gogpu/gg"
 )
 
 // DrawContext holds the rendering parameters passed to a [Drawer].
@@ -101,11 +103,13 @@ func drawLayer(
 ) {
 	// If a group colour was assigned, override the layer's fixed color.
 	params := g.Params
+
 	if groupColor != nil {
 		hex := fmt.Sprintf("#%02X%02X%02X",
 			uint8(groupColor.R*255+0.5),
 			uint8(groupColor.G*255+0.5),
 			uint8(groupColor.B*255+0.5))
+
 		params.Color = hex
 		if params.Fill == "" {
 			params.Fill = hex
@@ -116,6 +120,7 @@ func drawLayer(
 	if d == nil {
 		return // unknown geom type — silently skip (validated at construction)
 	}
+
 	d.Draw(DrawContext{
 		Canvas:       cv,
 		Coord:        c,
@@ -189,6 +194,7 @@ func drawBoxplotFn(dc DrawContext) {
 
 func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, contColorCol string, contScale *colormap.Scale, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
 	xVals, errX := ds.Float64(xCol)
+
 	yVals, errY := ds.Float64(yCol)
 	if errX != nil || errY != nil {
 		return
@@ -198,6 +204,7 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 	if r <= 0 {
 		r = 3
 	}
+
 	alpha := p.Alpha
 	if alpha <= 0 {
 		alpha = 1
@@ -208,13 +215,12 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 	if contColorCol != "" {
 		zVals, _ = ds.Float64(contColorCol)
 	}
+
 	cr, cg, cb := colormap.ParseRGB(p.Color, 0.3, 0.5, 0.8)
 
-	n := len(xVals)
-	if len(yVals) < n {
-		n = len(yVals)
-	}
-	for i := 0; i < n; i++ {
+	n := min(len(yVals), len(xVals))
+
+	for i := range n {
 		nx := normalize(xVals[i], xMin, xMax)
 		ny := normalize(yVals[i], yMin, yMax)
 		px, py := orientedTransform(c, nx, ny, w, h, p.Orientation)
@@ -225,6 +231,7 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 		} else {
 			cv.SetRGBA(cr, cg, cb, alpha)
 		}
+
 		cv.DrawCircle(px, py, r)
 		cv.Fill()
 	}
@@ -232,6 +239,7 @@ func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol,
 
 func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, contColorCol string, contScale *colormap.Scale, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
 	xVals, errX := ds.Float64(xCol)
+
 	yVals, errY := ds.Float64(yCol)
 	if errX != nil || errY != nil {
 		return
@@ -241,6 +249,7 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 	if lw <= 0 {
 		lw = 2
 	}
+
 	alpha := p.Alpha
 	if alpha <= 0 {
 		alpha = 1.0
@@ -248,14 +257,14 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 
 	// Collect all points.
 	type linePt struct{ x, y float64 }
-	n := len(xVals)
-	if len(yVals) < n {
-		n = len(yVals)
-	}
+
+	n := min(len(yVals), len(xVals))
+
 	pts := make([]linePt, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		pts[i] = linePt{xVals[i], yVals[i]}
 	}
+
 	if len(pts) < 2 {
 		return
 	}
@@ -288,16 +297,19 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 		// Uniform color polyline.
 		cr, cg, cb := colormap.ParseRGB(p.Color, 0.8, 0.2, 0.2)
 		cv.SetRGBA(cr, cg, cb, alpha)
+
 		nx := normalize(pts[0].x, xMin, xMax)
 		ny := normalize(pts[0].y, yMin, yMax)
 		px, py := orientedTransform(c, nx, ny, w, h, p.Orientation)
 		cv.MoveTo(px, py)
+
 		for i := 1; i < len(pts); i++ {
 			nx = normalize(pts[i].x, xMin, xMax)
 			ny = normalize(pts[i].y, yMin, yMax)
 			px, py = orientedTransform(c, nx, ny, w, h, p.Orientation)
 			cv.LineTo(px, py)
 		}
+
 		cv.Stroke()
 	}
 }
@@ -305,6 +317,7 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, th theme.Theme) {
 	// Collect all points first so we can compute spacing.
 	type barPt struct{ x, y float64 }
+
 	var pts []barPt
 
 	xVals, err := ds.Float64(xCol)
@@ -322,6 +335,7 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 		if yVals != nil && i < len(yVals) {
 			y = yVals[i]
 		}
+
 		pts = append(pts, barPt{x, y})
 	}
 
@@ -351,6 +365,7 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	} else {
 		minSpacing = dataRange
 	}
+
 	if minSpacing <= 0 {
 		minSpacing = 1
 	}
@@ -366,7 +381,9 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	if p.Orientation == geom.Horizontal {
 		barAxisLen = h
 	}
+
 	pixPerUnit := barAxisLen / dataRange
+
 	halfBarPx := (minSpacing * pixPerUnit * relW) / 2
 	if halfBarPx < 1 {
 		halfBarPx = 1
@@ -380,6 +397,7 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 			alpha = 0.85
 		}
 	}
+
 	fr, fg, fb := colormap.ParseRGB(p.Fill, 0.2, 0.4, 0.8)
 
 	// Baseline in normalized space (value=0).
@@ -420,11 +438,13 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 		if edgeW <= 0 {
 			edgeW = 0.5
 		}
+
 		if th.Geom.PatchEdgeColor != nil {
 			cv.SetColor(th.Geom.PatchEdgeColor)
 		} else {
 			cv.SetRGBA(fr*0.7, fg*0.7, fb*0.7, alpha)
 		}
+
 		cv.SetLineWidth(edgeW)
 		cv.Stroke()
 	}
@@ -432,6 +452,7 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 
 func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
 	xVals, errX := ds.Float64(xCol)
+
 	yVals, errY := ds.Float64(yCol)
 	if errX != nil || errY != nil {
 		return
@@ -439,12 +460,11 @@ func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 
 	// Collect normalized data points and their corresponding baselines.
 	type normPt struct{ nx, ny float64 }
-	n := len(xVals)
-	if len(yVals) < n {
-		n = len(yVals)
-	}
+
+	n := min(len(yVals), len(xVals))
+
 	npts := make([]normPt, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		npts[i] = normPt{
 			nx: normalize(xVals[i], xMin, xMax),
 			ny: normalize(yVals[i], yMin, yMax),
@@ -461,6 +481,7 @@ func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	// Build the polygon path: baseline start → data points → baseline end.
 	bx0, by0 := orientedTransform(c, npts[0].nx, baseNy, w, h, p.Orientation)
 	cv.MoveTo(bx0, by0)
+
 	for _, np := range npts {
 		px, py := orientedTransform(c, np.nx, np.ny, w, h, p.Orientation)
 		cv.LineTo(px, py)
@@ -474,6 +495,7 @@ func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	if alpha <= 0 {
 		alpha = 0.6
 	}
+
 	fr, fg, fb := colormap.ParseRGB(p.Fill, 0.1, 0.7, 0.3)
 	cv.SetRGBA(fr, fg, fb, alpha)
 	cv.FillPreserve()
@@ -486,6 +508,7 @@ func drawArea(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 
 func drawStep(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
 	xVals, errX := ds.Float64(xCol)
+
 	yVals, errY := ds.Float64(yCol)
 	if errX != nil || errY != nil {
 		return
@@ -495,20 +518,21 @@ func drawStep(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	if lw <= 0 {
 		lw = 2
 	}
+
 	alpha := p.Alpha
 	if alpha <= 0 {
 		alpha = 1
 	}
+
 	cr, cg, cb := colormap.ParseRGB(p.Color, 0.3, 0.5, 0.8)
 
 	// Collect normalized data points.
 	type normPt struct{ nx, ny float64 }
-	n := len(xVals)
-	if len(yVals) < n {
-		n = len(yVals)
-	}
+
+	n := min(len(yVals), len(xVals))
+
 	npts := make([]normPt, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		npts[i] = normPt{
 			nx: normalize(xVals[i], xMin, xMax),
 			ny: normalize(yVals[i], yMin, yMax),
@@ -526,6 +550,7 @@ func drawStep(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	// then advance Y. Transform each intermediate point through coord.
 	px0, py0 := orientedTransform(c, npts[0].nx, npts[0].ny, w, h, p.Orientation)
 	cv.MoveTo(px0, py0)
+
 	for i := 1; i < len(npts); i++ {
 		// Horizontal step: move to next X, keep previous Y.
 		sx, sy := orientedTransform(c, npts[i].nx, npts[i-1].ny, w, h, p.Orientation)
@@ -534,6 +559,7 @@ func drawStep(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 		vx, vy := orientedTransform(c, npts[i].nx, npts[i].ny, w, h, p.Orientation)
 		cv.LineTo(vx, vy)
 	}
+
 	cv.Stroke()
 }
 
@@ -542,10 +568,12 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 	if lw <= 0 {
 		lw = 0.5
 	}
+
 	alpha := p.Alpha
 	if alpha <= 0 {
 		alpha = 0.5
 	}
+
 	cr, cg, cb := colormap.ParseRGB(p.Color, 0.2, 0.2, 0.2)
 
 	const rugFrac = 0.02 // 2% of panel extent
@@ -554,10 +582,12 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 	if xVals, err := ds.Float64(xCol); err == nil {
 		cv.SetRGBA(cr, cg, cb, alpha)
 		cv.SetLineWidth(lw)
+
 		for _, x := range xVals {
 			nx := normalize(x, xMin, xMax)
 			px1, py1 := orientedTransform(c, nx, 0, w, h, p.Orientation)
 			px2, py2 := orientedTransform(c, nx, rugFrac, w, h, p.Orientation)
+
 			cv.MoveTo(px1, py1)
 			cv.LineTo(px2, py2)
 			cv.Stroke()
@@ -568,10 +598,12 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 	if yVals, err := ds.Float64(yCol); err == nil {
 		cv.SetRGBA(cr, cg, cb, alpha)
 		cv.SetLineWidth(lw)
+
 		for _, y := range yVals {
 			ny := normalize(y, yMin, yMax)
 			px1, py1 := orientedTransform(c, 0, ny, w, h, p.Orientation)
 			px2, py2 := orientedTransform(c, rugFrac, ny, w, h, p.Orientation)
+
 			cv.MoveTo(px1, py1)
 			cv.LineTo(px2, py2)
 			cv.Stroke()
@@ -579,7 +611,7 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 	}
 }
 
-func drawHLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
+func drawHLine(cv canvas.Canvas, c coord.Coord, w, h, _, _, yMin, yMax float64, p geom.Params) {
 	ny := normalize(p.Intercept, yMin, yMax)
 	if ny < 0 || ny > 1 {
 		return // outside visible range
@@ -589,10 +621,12 @@ func drawHLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax flo
 	if lw <= 0 {
 		lw = 1
 	}
+
 	alpha := p.Alpha
 	if alpha <= 0 {
 		alpha = 0.8
 	}
+
 	cr, cg, cb := colormap.ParseRGB(p.Color, 0.6, 0.1, 0.1)
 
 	// Draw from left (X=0) to right (X=1) in normalized space.
@@ -606,7 +640,7 @@ func drawHLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax flo
 	cv.Stroke()
 }
 
-func drawVLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
+func drawVLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, _, _ float64, p geom.Params) {
 	nx := normalize(p.Intercept, xMin, xMax)
 	if nx < 0 || nx > 1 {
 		return // outside visible range
@@ -616,10 +650,12 @@ func drawVLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax flo
 	if lw <= 0 {
 		lw = 1
 	}
+
 	alpha := p.Alpha
 	if alpha <= 0 {
 		alpha = 0.8
 	}
+
 	cr, cg, cb := colormap.ParseRGB(p.Color, 0.1, 0.1, 0.6)
 
 	// Draw from bottom (Y=0) to top (Y=1) in normalized space.
@@ -696,10 +732,12 @@ func drawABLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax fl
 	if lw <= 0 {
 		lw = 1
 	}
+
 	alpha := p.Alpha
 	if alpha <= 0 {
 		alpha = 0.8
 	}
+
 	cr, cg, cb := colormap.ParseRGB(p.Color, 0.5, 0.2, 0.7)
 
 	px1, py1 := orientedTransform(c, nx0, ny0, w, h, p.Orientation)
@@ -714,6 +752,7 @@ func drawABLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax fl
 
 func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, mapping grammar.AesMap, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
 	xVals, errX := ds.Float64(xCol)
+
 	yVals, errY := ds.Float64(yCol)
 	if errX != nil || errY != nil {
 		return
@@ -724,7 +763,9 @@ func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	if labelCol == "" {
 		labelCol = "label" // fallback for backwards compat
 	}
+
 	var labels []string
+
 	if col, err := ds.Column(labelCol); err == nil {
 		if sc, ok := col.(dataset.Column[string]); ok {
 			labels = sc.Values()
@@ -735,20 +776,20 @@ func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	if fontSize <= 0 {
 		fontSize = 10
 	}
+
 	alpha := p.Alpha
 	if alpha <= 0 {
 		alpha = 1
 	}
+
 	cr, cg, cb := colormap.ParseRGB(p.Color, 0.1, 0.1, 0.1)
 
 	cv.SetFontSize(fontSize)
 	cv.SetRGBA(cr, cg, cb, alpha)
 
-	n := len(xVals)
-	if len(yVals) < n {
-		n = len(yVals)
-	}
-	for i := 0; i < n; i++ {
+	n := min(len(yVals), len(xVals))
+
+	for i := range n {
 		nx := normalize(xVals[i], xMin, xMax)
 		ny := normalize(yVals[i], yMin, yMax)
 		px, py := orientedTransform(c, nx, ny, w, h, p.Orientation)
@@ -765,13 +806,14 @@ func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	}
 }
 
-func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, th theme.Theme) {
+func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, _ theme.Theme) {
 	// Read stat_boxplot output columns.
 	xVals, errX := ds.Float64("x")
 	lowerVals, errL := ds.Float64("lower")
 	q1Vals, errQ1 := ds.Float64("q1")
 	midVals, errM := ds.Float64("middle")
 	q3Vals, errQ3 := ds.Float64("q3")
+
 	upperVals, errU := ds.Float64("upper")
 	if errX != nil || errL != nil || errQ1 != nil || errM != nil || errQ3 != nil || errU != nil {
 		return
@@ -781,14 +823,17 @@ func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin
 	if boxW <= 0 || boxW > 1 {
 		boxW = 0.5
 	}
+
 	alpha := p.Alpha
 	if alpha <= 0 {
 		alpha = 0.8
 	}
+
 	lw := p.LineWidth
 	if lw <= 0 {
 		lw = 1.5
 	}
+
 	fr, fg, fb := colormap.ParseRGB(p.Fill, 0.9, 0.9, 0.9)
 	cr, cg, cb := colormap.ParseRGB(p.Color, 0.2, 0.2, 0.2)
 
@@ -797,6 +842,7 @@ func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin
 	if xRange <= 0 {
 		xRange = 1
 	}
+
 	pixPerUnit := w / xRange
 
 	groupSpacing := 1.0
@@ -806,12 +852,13 @@ func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin
 	if halfPixel > maxHalf {
 		halfPixel = maxHalf
 	}
+
 	if halfPixel < 3 {
 		halfPixel = 3
 	}
 
 	n := len(xVals)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if i >= len(lowerVals) || i >= len(q1Vals) || i >= len(midVals) || i >= len(q3Vals) || i >= len(upperVals) {
 			break
 		}
@@ -939,13 +986,15 @@ func orientedTransform(c coord.Coord, nx, ny, w, h float64, o geom.Orientation) 
 	if o == geom.Horizontal {
 		nx, ny = ny, nx
 	}
+
 	return c.Transform(nx, ny, w, h)
 }
 
-// normalize maps a value to [0, 1] within [min, max].
-func normalize(v, min, max float64) float64 {
-	if max == min {
+// normalize maps a value to [0, 1] within [lo, hi].
+func normalize(v, lo, hi float64) float64 {
+	if hi == lo {
 		return 0.5
 	}
-	return (v - min) / (max - min)
+
+	return (v - lo) / (hi - lo)
 }

@@ -15,8 +15,9 @@ import (
 )
 
 // ReadParquet reads Parquet data using pqarrow for zero-copy columnar ingest.
-func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg dataset.ParquetConfig) (dataset.Table, error) {
+func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, _ dataset.ParquetConfig) (dataset.Table, error) {
 	sr := io.NewSectionReader(r, 0, size)
+
 	pf, err := file.NewParquetReader(sr)
 	if err != nil {
 		return nil, fmt.Errorf("arrow: parquet open: %w", err)
@@ -47,10 +48,12 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 		return eng.FromColumns(dataset.NewSchema())
 	}
 
-	var fields []dataset.Field
-	var cols []dataset.AnyColumn
+	var (
+		fields []dataset.Field
+		cols   []dataset.AnyColumn
+	)
 
-	for i := 0; i < nCols; i++ {
+	for i := range nCols {
 		f := schema.Field(i)
 		chunked := tbl.Column(i)
 		name := f.Name
@@ -58,9 +61,11 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 		switch f.Type.ID() {
 		case arrow.FLOAT64:
 			data := make([]float64, 0, nRows)
+
 			for _, chunk := range chunked.Data().Chunks() {
 				arr := chunk.(*arrowarray.Float64)
 				start := len(data)
+
 				data = append(data, arr.Float64Values()...)
 				for j := 0; j < arr.Len(); j++ {
 					if arr.IsNull(j) {
@@ -68,37 +73,44 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 					}
 				}
 			}
+
 			fields = append(fields, dataset.FloatCol(name))
 			cols = append(cols, eng.NewFloat64Column(name, data))
 
 		case arrow.INT64:
 			data := make([]int64, 0, nRows)
+
 			for _, chunk := range chunked.Data().Chunks() {
 				arr := chunk.(*arrowarray.Int64)
 				data = append(data, arr.Int64Values()...)
 			}
+
 			fields = append(fields, dataset.IntCol(name))
 			cols = append(cols, eng.NewInt64Column(name, data))
 
 		case arrow.BOOL:
 			data := make([]bool, 0, nRows)
+
 			for _, chunk := range chunked.Data().Chunks() {
 				arr := chunk.(*arrowarray.Boolean)
 				for j := 0; j < arr.Len(); j++ {
 					data = append(data, arr.Value(j))
 				}
 			}
+
 			fields = append(fields, dataset.BoolCol(name))
 			cols = append(cols, eng.NewBoolColumn(name, data))
 
 		default: // string
 			data := make([]string, 0, nRows)
+
 			for _, chunk := range chunked.Data().Chunks() {
 				arr := chunk.(*arrowarray.String)
 				for j := 0; j < arr.Len(); j++ {
 					data = append(data, arr.Value(j))
 				}
 			}
+
 			fields = append(fields, dataset.StringCol(name))
 			cols = append(cols, eng.NewStringColumn(name, data))
 		}
@@ -108,29 +120,32 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 }
 
 // WriteParquet writes a Dataset as Parquet using pqarrow.WriteTable.
-func (e *Engine) WriteParquet(ctx context.Context, w io.Writer, ds dataset.Table, cfg dataset.ParquetConfig) error {
+func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, _ dataset.ParquetConfig) error {
 	schema := ds.Schema()
 	nCols := schema.NumFields()
 	nRows := int(ds.NumRows())
 
 	// Build arrow schema.
 	arrowFields := make([]arrow.Field, nCols)
-	for i := 0; i < nCols; i++ {
+	for i := range nCols {
 		f := schema.Field(i)
 		arrowFields[i] = arrow.Field{Name: f.Name, Type: dtypeToArrowType(f.Dtype), Nullable: true}
 	}
+
 	arrowSchema := arrow.NewSchema(arrowFields, nil)
 
 	// Build arrow record batch.
 	bld := arrowarray.NewRecordBuilder(e.alloc, arrowSchema)
 	defer bld.Release()
 
-	for i := 0; i < nCols; i++ {
+	for i := range nCols {
 		f := schema.Field(i)
+
 		col, err := ds.Column(f.Name)
 		if err != nil {
 			return err
 		}
+
 		appendToBuilder(bld.Field(i), col, nRows)
 	}
 
@@ -158,10 +173,11 @@ func dtypeToArrowType(dt dataset.DType) arrow.DataType {
 	}
 }
 
-func appendToBuilder(bldr arrowarray.Builder, col dataset.AnyColumn, nRows int) {
+func appendToBuilder(bldr arrowarray.Builder, col dataset.AnyColumn, _ int) {
 	switch c := col.(type) {
 	case dataset.Column[float64]:
 		fb := bldr.(*arrowarray.Float64Builder)
+
 		vals := c.Values()
 		for _, v := range vals {
 			if math.IsNaN(v) {

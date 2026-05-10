@@ -1,8 +1,9 @@
-// Package canvas — PDF export backend.
+// export_pdf.go — PDF export backend.
 //
 // Implements recording.Backend against gg v0.43.2's current Path API (Iterate).
 // The official gogpu/gg-pdf v0.1.0 is incompatible with gg >= v0.40 due to
 // path.Elements removal. This backend replaces it until upstream is fixed.
+
 package canvas
 
 import (
@@ -47,6 +48,7 @@ func (b *pdfBackend) SetClip(path *gg.Path, rule recording.FillRule) {
 	if d == "" {
 		return
 	}
+
 	b.streams = append(b.streams, d)
 	if rule == recording.FillRuleEvenOdd {
 		b.streams = append(b.streams, "W* n\n")
@@ -62,7 +64,9 @@ func (b *pdfBackend) FillPath(path *gg.Path, brush recording.Brush, rule recordi
 	if d == "" {
 		return
 	}
+
 	b.streams = append(b.streams, pdfSetFillColor(brush))
+
 	b.streams = append(b.streams, d)
 	if rule == recording.FillRuleEvenOdd {
 		b.streams = append(b.streams, "f*\n")
@@ -76,10 +80,12 @@ func (b *pdfBackend) StrokePath(path *gg.Path, brush recording.Brush, stroke rec
 	if d == "" {
 		return
 	}
+
 	lw := stroke.Width
 	if lw <= 0 {
 		lw = 1
 	}
+
 	b.streams = append(b.streams, fmt.Sprintf("%.2f w\n", lw))
 	b.streams = append(b.streams, pdfSetStrokeColor(brush))
 	b.streams = append(b.streams, d)
@@ -89,19 +95,21 @@ func (b *pdfBackend) StrokePath(path *gg.Path, brush recording.Brush, stroke rec
 func (b *pdfBackend) FillRect(rect recording.Rect, brush recording.Brush) {
 	h := float64(b.h)
 	y := h - rect.Y() - rect.Height()
+
 	b.streams = append(b.streams, pdfSetFillColor(brush))
 	b.streams = append(b.streams, fmt.Sprintf("%.2f %.2f %.2f %.2f re f\n",
 		rect.X(), y, rect.Width(), rect.Height()))
 }
 
-func (b *pdfBackend) DrawImage(img image.Image, src, dst recording.Rect, opts recording.ImageOptions) {
+func (b *pdfBackend) DrawImage(_ image.Image, _, _ recording.Rect, _ recording.ImageOptions) {
 	// Inline image / XObject embedding deferred.
 }
 
-func (b *pdfBackend) DrawText(s string, x, y float64, face text.Face, brush recording.Brush) {
+func (b *pdfBackend) DrawText(s string, x, y float64, _ text.Face, brush recording.Brush) {
 	h := float64(b.h)
 	py := h - y // PDF Y-up
 	escaped := pdfEscapeStr(s)
+
 	b.streams = append(b.streams, pdfSetFillColor(brush))
 	b.streams = append(b.streams, "BT\n")
 	b.streams = append(b.streams, "/F1 12 Tf\n")
@@ -114,6 +122,7 @@ func (b *pdfBackend) DrawText(s string, x, y float64, face text.Face, brush reco
 func (b *pdfBackend) WriteTo(w io.Writer) (int64, error) {
 	cw := &pdfWriter{w: w}
 	b.writePDF(cw)
+
 	return cw.n, cw.err
 }
 
@@ -146,9 +155,11 @@ func (b *pdfBackend) writePDF(w *pdfWriter) {
 
 	xrefOff := int(w.n)
 	w.s("xref\n0 6\n0000000000 65535 f \n")
+
 	for i := 1; i <= 5; i++ {
 		w.s(fmt.Sprintf("%010d 00000 n \n", off[i]))
 	}
+
 	w.s("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n")
 	w.s(fmt.Sprintf("%d\n%%%%EOF\n", xrefOff))
 }
@@ -163,6 +174,7 @@ func (w *pdfWriter) s(str string) {
 	if w.err != nil {
 		return
 	}
+
 	n, err := io.WriteString(w.w, str)
 	w.n += int64(n)
 	w.err = err
@@ -174,7 +186,9 @@ func pathToPDFOps(path *gg.Path, pageH float64) string {
 	if path == nil {
 		return ""
 	}
+
 	var sb strings.Builder
+
 	path.Iterate(func(verb gg.PathVerb, coords []float64) {
 		switch verb {
 		case gg.MoveTo:
@@ -196,6 +210,7 @@ func pathToPDFOps(path *gg.Path, pageH float64) string {
 			sb.WriteString("h\n")
 		}
 	})
+
 	return sb.String()
 }
 
@@ -227,13 +242,15 @@ func pdfEscapeStr(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, "(", "\\(")
 	s = strings.ReplaceAll(s, ")", "\\)")
+
 	return s
 }
 
 func exportPDF(r *recording.Recording, w io.Writer) (int64, error) {
 	b := newPDFBackend()
 	if err := r.Playback(b); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("canvas: PDF playback: %w", err)
 	}
+
 	return b.WriteTo(w)
 }

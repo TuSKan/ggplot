@@ -5,51 +5,86 @@ package colormap
 // init() so Resolve(name) returns the same value.
 
 var (
-	// PerceptuallyUniform — matplotlib defaults.
+	// Viridis is a perceptually-uniform sequential colormap (matplotlib default).
 	Viridis Cmap
-	Plasma  Cmap
+	// Plasma is a perceptually-uniform sequential colormap.
+	Plasma Cmap
+	// Inferno is a perceptually-uniform sequential colormap.
 	Inferno Cmap
-	Magma   Cmap
+	// Magma is a perceptually-uniform sequential colormap.
+	Magma Cmap
+	// Cividis is a perceptually-uniform sequential colormap (colorblind-safe).
 	Cividis Cmap
 
-	// Sequential — ColorBrewer 9-class.
-	Greys   Cmap
-	Blues   Cmap
-	Greens  Cmap
+	// Greys is a sequential single-hue colormap (ColorBrewer 9-class).
+	Greys Cmap
+	// Blues is a sequential single-hue colormap (ColorBrewer 9-class).
+	Blues Cmap
+	// Greens is a sequential single-hue colormap (ColorBrewer 9-class).
+	Greens Cmap
+	// Oranges is a sequential single-hue colormap (ColorBrewer 9-class).
 	Oranges Cmap
-	Reds    Cmap
+	// Reds is a sequential single-hue colormap (ColorBrewer 9-class).
+	Reds Cmap
+	// Purples is a sequential single-hue colormap (ColorBrewer 9-class).
 	Purples Cmap
-	YlGn    Cmap
-	YlGnBu  Cmap
-	YlOrBr  Cmap
-	YlOrRd  Cmap
+	// YlGn is a sequential multi-hue colormap (ColorBrewer 9-class).
+	YlGn Cmap
+	// YlGnBu is a sequential multi-hue colormap (ColorBrewer 9-class).
+	YlGnBu Cmap
+	// YlOrBr is a sequential multi-hue colormap (ColorBrewer 9-class).
+	YlOrBr Cmap
+	// YlOrRd is a sequential multi-hue colormap (ColorBrewer 9-class).
+	YlOrRd Cmap
 
-	// Diverging — ColorBrewer 11-class + matplotlib originals.
-	RdBu     Cmap
-	RdYlBu   Cmap
-	RdYlGn   Cmap
+	// RdBu is a diverging colormap from red through white to blue.
+	RdBu Cmap
+	// RdYlBu is a diverging colormap from red through yellow to blue.
+	RdYlBu Cmap
+	// RdYlGn is a diverging colormap from red through yellow to green.
+	RdYlGn Cmap
+	// Spectral is a diverging rainbow-like colormap.
 	Spectral Cmap
-	BrBG     Cmap
-	PiYG     Cmap
-	PRGn     Cmap
-	PuOr     Cmap
-	RdGy     Cmap
+	// BrBG is a diverging colormap from brown through white to blue-green.
+	BrBG Cmap
+	// PiYG is a diverging colormap from pink through white to yellow-green.
+	PiYG Cmap
+	// PRGn is a diverging colormap from purple through white to green.
+	PRGn Cmap
+	// PuOr is a diverging colormap from purple through white to orange.
+	PuOr Cmap
+	// RdGy is a diverging colormap from red through white to grey.
+	RdGy Cmap
+	// Coolwarm is a diverging colormap from cool blue to warm red.
 	Coolwarm Cmap
-	Bwr      Cmap
+	// Bwr is a diverging colormap from blue through white to red.
+	Bwr Cmap
 
-	// Qualitative.
-	Tab10    Cmap
-	Tab20    Cmap
-	Tab20b   Cmap
-	Tab20c   Cmap
-	Set1     Cmap
-	Set2     Cmap
-	Set3     Cmap
-	Paired   Cmap
-	Pastel1  Cmap
-	Pastel2  Cmap
-	Accent   Cmap
-	Dark2    Cmap
+	// Tab10 is a 10-color qualitative palette from Tableau.
+	Tab10 Cmap
+	// Tab20 is a 20-color qualitative palette from Tableau.
+	Tab20 Cmap
+	// Tab20b is a 20-color qualitative palette (variant b) from Tableau.
+	Tab20b Cmap
+	// Tab20c is a 20-color qualitative palette (variant c) from Tableau.
+	Tab20c Cmap
+	// Set1 is a qualitative palette from ColorBrewer.
+	Set1 Cmap
+	// Set2 is a qualitative palette from ColorBrewer.
+	Set2 Cmap
+	// Set3 is a qualitative palette from ColorBrewer.
+	Set3 Cmap
+	// Paired is a qualitative paired-color palette from ColorBrewer.
+	Paired Cmap
+	// Pastel1 is a qualitative pastel palette from ColorBrewer.
+	Pastel1 Cmap
+	// Pastel2 is a qualitative pastel palette from ColorBrewer.
+	Pastel2 Cmap
+	// Accent is a qualitative accent palette from ColorBrewer.
+	Accent Cmap
+	// Dark2 is a qualitative dark palette from ColorBrewer.
+	Dark2 Cmap
+	// OkabeIto is a colorblind-safe qualitative palette.
 	OkabeIto Cmap
 )
 

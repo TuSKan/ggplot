@@ -40,6 +40,7 @@ func (polarCoord) Transform(x, y, w, h float64) (float64, float64) {
 	cx, cy := w/2, h/2
 	px := cx + r*math.Cos(theta)
 	py := cy - r*math.Sin(theta) // y-inverted for screen coords
+
 	return px, py
 }
 func (polarCoord) String() string { return "polar" }

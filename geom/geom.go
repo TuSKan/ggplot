@@ -41,6 +41,7 @@ func (l *Layer) Warnings() []string { return l.warnings }
 // Type identifies the kind of geometry.
 type Type string
 
+// TypePoint identifies a scatter point geometry.
 const (
 	TypePoint     Type = "point"
 	TypeLine      Type = "line"
@@ -65,6 +66,7 @@ const (
 // Orientation controls which axis a directional geom extends along.
 type Orientation string
 
+// Vertical is the default orientation: bars grow upward.
 const (
 	Vertical   Orientation = "v" // default: bars grow upward, boxplots are vertical
 	Horizontal Orientation = "h" // bars grow rightward, boxplots are horizontal
@@ -121,6 +123,7 @@ type Params struct {
 // [RegisterGeomType].
 type OptFlag uint32
 
+// OptColor tracks whether WithColor was set.
 const (
 	OptColor       OptFlag = 1 << iota // common
 	OptFill                            // common
@@ -208,6 +211,7 @@ func (l *Layer) Validate() []string {
 	if l.setFlags == 0 {
 		return nil
 	}
+
 	relevant, ok := paramRelevance[l.Geom]
 	if !ok {
 		return nil // unknown geom type, skip validation
@@ -219,22 +223,28 @@ func (l *Layer) Validate() []string {
 	}
 
 	var warnings []string
+
 	for flag := OptFlag(1); flag <= OptPoints; flag <<= 1 {
 		if irrelevant&flag == 0 {
 			continue
 		}
+
 		name := optName[flag]
+
 		var relevantGeoms []string
+
 		for geomType, mask := range paramRelevance {
 			if mask&flag != 0 {
 				relevantGeoms = append(relevantGeoms, string(geomType))
 			}
 		}
+
 		warnings = append(warnings, fmt.Sprintf(
 			"geom_%s: %s has no effect (relevant for: %s)",
 			l.Geom, name, strings.Join(relevantGeoms, ", "),
 		))
 	}
+
 	return warnings
 }
 
@@ -295,9 +305,11 @@ func WithGap(g float64) Opt {
 		if g < 0 {
 			g = 0
 		}
+
 		if g > 1 {
 			g = 1
 		}
+
 		l.Params.Gap = g
 		l.Params.Width = 1 - g
 		l.setFlags |= OptWidth
@@ -373,6 +385,7 @@ func applyOpts(l *Layer, opts []Opt) {
 	for _, o := range opts {
 		o(l)
 	}
+
 	l.warnings = l.Validate()
 }
 
@@ -388,6 +401,7 @@ func Point(opts ...Opt) Layer {
 		Params:   Params{Size: 3, Alpha: 1.0, Shape: "circle"},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -402,6 +416,7 @@ func Line(opts ...Opt) Layer {
 		Params:   Params{LineWidth: 2, Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -417,6 +432,7 @@ func Bar(opts ...Opt) Layer {
 		Params:   Params{Width: 0.8, Alpha: 0.8},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -435,6 +451,7 @@ func Col(opts ...Opt) Layer {
 		Params:   Params{Width: 0.7},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -450,6 +467,7 @@ func Histogram(opts ...Opt) Layer {
 		Params:   Params{Bins: 30, Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -464,6 +482,7 @@ func Area(opts ...Opt) Layer {
 		Params:   Params{Alpha: 0.6},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -478,6 +497,7 @@ func Polygon(opts ...Opt) Layer {
 		Params:   Params{Alpha: 0.6, LineWidth: 2},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -493,6 +513,7 @@ func Smooth(opts ...Opt) Layer {
 		Params:   Params{LineWidth: 3, Alpha: 1.0, Method: "lm", Points: 80},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -507,6 +528,7 @@ func Density(opts ...Opt) Layer {
 		Params:   Params{Alpha: 0.6, Points: 512},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -521,6 +543,7 @@ func Text(opts ...Opt) Layer {
 		Params:   Params{FontSize: 10, Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -535,6 +558,7 @@ func Step(opts ...Opt) Layer {
 		Params:   Params{LineWidth: 2, Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -551,6 +575,7 @@ func Boxplot(opts ...Opt) Layer {
 		Params:   Params{Width: 0.5, Alpha: 0.8, LineWidth: 1.5},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -565,6 +590,7 @@ func Rug(opts ...Opt) Layer {
 		Params:   Params{LineWidth: 1, Alpha: 0.5},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -583,6 +609,7 @@ func HLine(opts ...Opt) Layer {
 		Params:   Params{LineWidth: 1, Alpha: 0.8},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -601,6 +628,7 @@ func VLine(opts ...Opt) Layer {
 		Params:   Params{LineWidth: 1, Alpha: 0.8},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }
 
@@ -625,5 +653,6 @@ func ABLine(opts ...Opt) Layer {
 		Params:   Params{LineWidth: 1, Alpha: 0.8, Slope: 1},
 	}
 	applyOpts(&l, opts)
+
 	return l
 }

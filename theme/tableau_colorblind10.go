@@ -1,4 +1,4 @@
-package theme
+package theme //nolint:dupl // Each theme preset is intentionally self-contained, mirroring upstream mplstyle files.
 
 import "image/color"
 
@@ -42,5 +42,6 @@ func newTableauColorblind10() Theme {
 		hex("FFBC79"),
 		hex("CFCFCF"),
 	}
+
 	return t
 }

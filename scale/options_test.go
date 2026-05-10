@@ -12,6 +12,7 @@ import (
 func trainLinear(mn, mx float64) Scale {
 	s := NewLinear()
 	s.(*LinearScale).SetBounds(mn, mx)
+
 	return s
 }
 
@@ -22,10 +23,12 @@ func TestConfiguredScale_Breaks(t *testing.T) {
 	cs := Configure(inner, WithBreaks([]float64{10, 30, 50, 70, 90}))
 
 	ticks := cs.Ticks(5)
+
 	want := []float64{10, 30, 50, 70, 90}
 	if len(ticks) != len(want) {
 		t.Fatalf("Ticks: got %v, want %v", ticks, want)
 	}
+
 	for i := range ticks {
 		if ticks[i] != want[i] {
 			t.Errorf("Ticks[%d] = %v, want %v", i, ticks[i], want[i])
@@ -151,6 +154,7 @@ func TestConfiguredScale_Expand(t *testing.T) {
 	if math.Abs(mn-(-5)) > 1e-10 {
 		t.Errorf("Bounds min = %v, want -5", mn)
 	}
+
 	if math.Abs(mx-105) > 1e-10 {
 		t.Errorf("Bounds max = %v, want 105", mx)
 	}
@@ -165,6 +169,7 @@ func TestConfiguredScale_Expand_Additive(t *testing.T) {
 	if math.Abs(mn-8) > 1e-10 {
 		t.Errorf("Bounds min = %v, want 8", mn)
 	}
+
 	if math.Abs(mx-22) > 1e-10 {
 		t.Errorf("Bounds max = %v, want 22", mx)
 	}
@@ -179,6 +184,7 @@ func TestConfiguredScale_Expand_Combined(t *testing.T) {
 	if math.Abs(mn-(-15)) > 1e-10 {
 		t.Errorf("Bounds min = %v, want -15", mn)
 	}
+
 	if math.Abs(mx-115) > 1e-10 {
 		t.Errorf("Bounds max = %v, want 115", mx)
 	}
@@ -210,11 +216,14 @@ func TestConfiguredScale_MinorBreaks_Explicit(t *testing.T) {
 	if !ok {
 		t.Fatal("ConfiguredScale does not implement MinorTicker")
 	}
+
 	minor := mt.MinorTicks()
+
 	want := []float64{5, 15, 25, 35}
 	if len(minor) != len(want) {
 		t.Fatalf("MinorTicks: got %v, want %v", minor, want)
 	}
+
 	for i := range minor {
 		if minor[i] != want[i] {
 			t.Errorf("MinorTicks[%d] = %v, want %v", i, minor[i], want[i])
@@ -234,6 +243,7 @@ func TestConfiguredScale_MinorBreaks_Auto(t *testing.T) {
 	if len(minor) != len(want) {
 		t.Fatalf("auto MinorTicks: got %v, want %v", minor, want)
 	}
+
 	for i := range minor {
 		if math.Abs(minor[i]-want[i]) > 1e-10 {
 			t.Errorf("auto MinorTicks[%d] = %v, want %v", i, minor[i], want[i])
@@ -266,6 +276,7 @@ func TestConfiguredScale_ClipBounds_PartialNaN(t *testing.T) {
 	if mn != 0 {
 		t.Errorf("min should remain 0 (NaN = auto), got %v", mn)
 	}
+
 	if mx != 50 {
 		t.Errorf("max should be 50, got %v", mx)
 	}
@@ -274,8 +285,8 @@ func TestConfiguredScale_ClipBounds_PartialNaN(t *testing.T) {
 func TestConfiguredScale_ClipBounds_OverridesExpand(t *testing.T) {
 	inner := trainLinear(0, 100)
 	cs := Configure(inner,
-		WithExpand(0.1, 0),       // would make [-10, 110]
-		WithClipBounds(10, 90),   // clip overrides expand
+		WithExpand(0.1, 0),     // would make [-10, 110]
+		WithClipBounds(10, 90), // clip overrides expand
 	)
 
 	mn, mx := cs.Bounds()
@@ -338,6 +349,7 @@ func TestConfiguredScale_BoundsSetter(t *testing.T) {
 	if math.Abs(mn-8) > 1e-10 {
 		t.Errorf("after SetBounds: min = %v, want 8", mn)
 	}
+
 	if math.Abs(mx-52) > 1e-10 {
 		t.Errorf("after SetBounds: max = %v, want 52", mx)
 	}
@@ -362,6 +374,7 @@ func TestConfiguredScale_MapInverse_Roundtrip(t *testing.T) {
 
 	for _, v := range []float64{0, 25, 50, 75, 100} {
 		norm := cs.Map(v)
+
 		back := cs.Inverse(norm)
 		if math.Abs(back-v) > 1e-10 {
 			t.Errorf("roundtrip failed: %v → %v → %v", v, norm, back)

@@ -12,7 +12,7 @@ import (
 )
 
 // ReadParquet reads Parquet data using parquet-go (row-based reader).
-func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg dataset.ParquetConfig) (dataset.Table, error) {
+func (e *Engine) ReadParquet(_ context.Context, r io.ReaderAt, size int64, _ dataset.ParquetConfig) (dataset.Table, error) {
 	f, err := pq.OpenFile(r, size)
 	if err != nil {
 		return nil, fmt.Errorf("memory: parquet open: %w", err)
@@ -33,13 +33,17 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg
 		dtype dataset.DType
 		leaf  pq.Node
 	}
+
 	cols := make([]colInfo, nCols)
+
 	for i, path := range leafColumns {
 		name := path[len(path)-1] // leaf name
+
 		node, ok := schema.Lookup(path...)
 		if !ok {
 			return nil, fmt.Errorf("memory: parquet column not found: %v", path)
 		}
+
 		cols[i] = colInfo{
 			name:  name,
 			dtype: parquetNodeToDType(node.Node),
@@ -52,22 +56,26 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg
 	defer reader.Close()
 
 	rows := make([]pq.Row, 0, nRows)
+
 	rowBuf := make([]pq.Row, 256)
 	for {
 		n, err := reader.ReadRows(rowBuf)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			row := make(pq.Row, len(rowBuf[i]))
 			copy(row, rowBuf[i])
 			rows = append(rows, row)
 		}
+
 		if err != nil {
 			break
 		}
 	}
 
 	// Build dataset columns from rows.
-	var fields []dataset.Field
-	var dsCols []dataset.AnyColumn
+	var (
+		fields []dataset.Field
+		dsCols []dataset.AnyColumn
+	)
 
 	for colIdx, ci := range cols {
 		switch ci.dtype {
@@ -80,6 +88,7 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg
 					data[i] = math.NaN()
 				}
 			}
+
 			fields = append(fields, dataset.FloatCol(ci.name))
 			dsCols = append(dsCols, e.NewFloat64Column(ci.name, data))
 
@@ -90,6 +99,7 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg
 					data[i] = row[colIdx].Int64()
 				}
 			}
+
 			fields = append(fields, dataset.IntCol(ci.name))
 			dsCols = append(dsCols, e.NewInt64Column(ci.name, data))
 
@@ -100,6 +110,7 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg
 					data[i] = row[colIdx].Boolean()
 				}
 			}
+
 			fields = append(fields, dataset.BoolCol(ci.name))
 			dsCols = append(dsCols, e.NewBoolColumn(ci.name, data))
 
@@ -110,6 +121,7 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg
 					data[i] = row[colIdx].String()
 				}
 			}
+
 			fields = append(fields, dataset.StringCol(ci.name))
 			dsCols = append(dsCols, e.NewStringColumn(ci.name, data))
 		}
@@ -119,7 +131,7 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg
 }
 
 // WriteParquet writes a Dataset as Parquet using parquet-go.
-func (e *Engine) WriteParquet(ctx context.Context, w io.Writer, ds dataset.Table, cfg dataset.ParquetConfig) error {
+func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, _ dataset.ParquetConfig) error {
 	schema := ds.Schema()
 	nCols := schema.NumFields()
 	nRows := int(ds.NumRows())
@@ -130,28 +142,34 @@ func (e *Engine) WriteParquet(ctx context.Context, w io.Writer, ds dataset.Table
 	// Resolve the actual column indices assigned by the parquet schema
 	// (pq.Group is a map — ordering is NOT guaranteed to match our field order).
 	colIndices := make([]int, nCols)
+
 	colData := make([]dataset.AnyColumn, nCols)
-	for i := 0; i < nCols; i++ {
+	for i := range nCols {
 		f := schema.Field(i)
+
 		col, err := ds.Column(f.Name)
 		if err != nil {
 			return err
 		}
+
 		colData[i] = col
+
 		leaf, ok := pqSchema.Lookup(f.Name)
 		if !ok {
 			return fmt.Errorf("memory: parquet schema missing column %q", f.Name)
 		}
+
 		colIndices[i] = leaf.ColumnIndex
 	}
 
 	// Build all rows.
 	rows := make([]pq.Row, nRows)
-	for r := 0; r < nRows; r++ {
+	for r := range nRows {
 		row := make(pq.Row, nCols)
-		for c := 0; c < nCols; c++ {
+		for c := range nCols {
 			row[c] = makeParquetValue(colData[c], r, colIndices[c])
 		}
+
 		rows[r] = row
 	}
 
@@ -165,6 +183,7 @@ func (e *Engine) WriteParquet(ctx context.Context, w io.Writer, ds dataset.Table
 	if _, err := writer.WriteRowGroup(buf); err != nil {
 		return fmt.Errorf("memory: parquet write row group: %w", err)
 	}
+
 	return writer.Close()
 }
 
@@ -173,6 +192,7 @@ func parquetNodeToDType(node pq.Node) dataset.DType {
 	if node.Type() == nil {
 		return dataset.DTypeString
 	}
+
 	kind := node.Type().Kind()
 	switch kind {
 	case pq.Double, pq.Float:
@@ -201,11 +221,13 @@ func dtypeToParquetNode(dt dataset.DType) pq.Node {
 
 func buildParquetSchema(schema *dataset.Schema) *pq.Schema {
 	nCols := schema.NumFields()
+
 	groupFields := make(pq.Group, nCols)
-	for i := 0; i < nCols; i++ {
+	for i := range nCols {
 		f := schema.Field(i)
 		groupFields[f.Name] = dtypeToParquetNode(f.Dtype)
 	}
+
 	return pq.NewSchema("dataset", groupFields)
 }
 
@@ -216,6 +238,7 @@ func makeParquetValue(col dataset.AnyColumn, row, colIdx int) pq.Value {
 		if math.IsNaN(v) {
 			return pq.Value{}.Level(0, 0, colIdx) // def=0 → null
 		}
+
 		return pq.DoubleValue(v).Level(0, 1, colIdx) // def=1 → present
 	case dataset.Column[int64]:
 		return pq.Int64Value(c.Values()[row]).Level(0, 0, colIdx)

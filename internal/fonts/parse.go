@@ -1,8 +1,9 @@
 package fonts
 
 import (
-	"golang.org/x/image/font/sfnt"
 	"strings"
+
+	"golang.org/x/image/font/sfnt"
 )
 
 // parseFontFile loads a byte slice against the true-type schema evaluating collections.
@@ -11,17 +12,18 @@ func parseFontFile(path string, data []byte) ([]Font, error) {
 		var fonts []Font
 
 		n := coll.NumFonts()
-		for i := 0; i < n; i++ {
+		for i := range n {
 			f, err := coll.Font(i)
 			if err != nil {
 				continue
 			}
 
-			font, err := extractFontMetadata(path, f, i)
-			if err == nil {
+			font := extractFontMetadata(path, f, i)
+			if font != nil {
 				fonts = append(fonts, *font)
 			}
 		}
+
 		return fonts, nil
 	}
 
@@ -30,16 +32,13 @@ func parseFontFile(path string, data []byte) ([]Font, error) {
 		return nil, ErrInvalidFontData
 	}
 
-	font, err := extractFontMetadata(path, f, 0)
-	if err != nil {
-		return nil, err
-	}
+	font := extractFontMetadata(path, f, 0)
 
 	return []Font{*font}, nil
 }
 
-// Iterates across multiple TrueType label tables computing implicit rendering tags.
-func extractFontMetadata(path string, f *sfnt.Font, index int) (*Font, error) {
+// extractFontMetadata iterates across TrueType label tables computing implicit rendering tags.
+func extractFontMetadata(path string, f *sfnt.Font, index int) *Font {
 	var buf sfnt.Buffer
 
 	family, _ := f.Name(&buf, sfnt.NameIDFamily)
@@ -80,5 +79,5 @@ func extractFontMetadata(path string, f *sfnt.Font, index int) (*Font, error) {
 		Stretch:     stretch,
 		IsMonospace: isMono,
 		IsSymbol:    isSym,
-	}, nil
+	}
 }

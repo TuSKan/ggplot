@@ -114,6 +114,7 @@ var (
 // FontWeight describes font weight for text rendering.
 type FontWeight int
 
+// FontWeight constants for common weights.
 const (
 	WeightNormal FontWeight = 400
 	WeightBold   FontWeight = 700

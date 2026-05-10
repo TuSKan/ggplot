@@ -27,6 +27,7 @@ func referenceLines(dir string) {
 	// Generate sine wave data.
 	n := 100
 	x := make([]float64, n)
+
 	y := make([]float64, n)
 	for i := range x {
 		t := float64(i) / float64(n-1) * 4 * math.Pi
@@ -74,6 +75,7 @@ func referenceLines(dir string) {
 	if err := p.Save(context.Background(), out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
@@ -104,5 +106,6 @@ func textLabels(dir string) {
 	if err := p.Save(context.Background(), out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }

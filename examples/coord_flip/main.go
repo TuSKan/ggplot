@@ -32,6 +32,7 @@ func main() {
 			eng.NewStringColumn("category", []string{"Go", "Rust", "Python", "Java", "C++"}),
 			eng.NewFloat64Column("value", []float64{72, 68, 91, 54, 47}),
 		)
+
 		return ds
 	}
 
@@ -39,15 +40,18 @@ func main() {
 		rng := rand.New(rand.NewSource(seed))
 		xs := make([]float64, n)
 		ys := make([]float64, n)
+
 		for i := range xs {
 			xs[i] = float64(i)
 			ys[i] = math.Sin(float64(i)*0.15) + rng.Float64()*0.4
 		}
+
 		return xs, ys
 	}
 
 	// ---------- 1. Horizontal Bar (Col) ----------
 	log.Println("01_horizontal_bar.png")
+
 	pBar := ggplot.New(catDS(), aes.X("category"), aes.Y("value")).
 		Layer(geom.Col(
 			geom.WithFill("#3b82f6"), geom.WithAlpha(0.85),
@@ -59,11 +63,14 @@ func main() {
 
 	// ---------- 2. Horizontal Histogram ----------
 	log.Println("02_horizontal_histogram.png")
+
 	rng := rand.New(rand.NewSource(99))
+
 	vals := make([]float64, 500)
 	for i := range vals {
 		vals[i] = rng.NormFloat64()*15 + 50
 	}
+
 	dsHist, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", vals),
 	)
@@ -78,6 +85,7 @@ func main() {
 
 	// ---------- 3. Horizontal Points (scatter) ----------
 	log.Println("03_horizontal_scatter.png")
+
 	xs, ys := numDS(80, 42)
 	dsPt, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", xs),
@@ -92,6 +100,7 @@ func main() {
 
 	// ---------- 4. Horizontal Line ----------
 	log.Println("04_horizontal_line.png")
+
 	xs2, ys2 := numDS(60, 7)
 	dsLine, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", xs2),
@@ -106,11 +115,13 @@ func main() {
 
 	// ---------- 5. Horizontal Multi-Line (color groups) ----------
 	log.Println("05_horizontal_multiline.png")
+
 	n := 50
 	mlx := make([]float64, 0, n*3)
 	mly := make([]float64, 0, n*3)
+
 	mlg := make([]string, 0, n*3)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		t := float64(i) * 0.15
 		mlx = append(mlx, float64(i), float64(i), float64(i))
 		mly = append(mly,
@@ -120,6 +131,7 @@ func main() {
 		)
 		mlg = append(mlg, "Signal A", "Signal B", "Signal C")
 	}
+
 	dsML, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("t", mlx),
 		eng.NewFloat64Column("v", mly),
@@ -134,12 +146,15 @@ func main() {
 
 	// ---------- 6. Horizontal Step ----------
 	log.Println("06_horizontal_step.png")
+
 	stepX := make([]float64, 20)
 	stepY := make([]float64, 20)
+
 	for i := range stepX {
 		stepX[i] = float64(i)
 		stepY[i] = math.Floor(math.Sin(float64(i)*0.4)*3) + 5
 	}
+
 	dsStep, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", stepX),
 		eng.NewFloat64Column("y", stepY),
@@ -153,12 +168,15 @@ func main() {
 
 	// ---------- 7. Horizontal Area ----------
 	log.Println("07_horizontal_area.png")
+
 	areaX := make([]float64, 40)
 	areaY := make([]float64, 40)
+
 	for i := range areaX {
 		areaX[i] = float64(i)
 		areaY[i] = math.Sin(float64(i)*0.2)*3 + 5
 	}
+
 	dsArea, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", areaX),
 		eng.NewFloat64Column("y", areaY),
@@ -174,11 +192,14 @@ func main() {
 
 	// ---------- 8. Horizontal Density ----------
 	log.Println("08_horizontal_density.png")
+
 	dVals := make([]float64, 300)
+
 	rng2 := rand.New(rand.NewSource(123))
 	for i := range dVals {
 		dVals[i] = rng2.NormFloat64()*10 + 50
 	}
+
 	dsDens, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", dVals),
 	)
@@ -193,16 +214,22 @@ func main() {
 
 	// ---------- 9. Horizontal Boxplot ----------
 	log.Println("09_horizontal_boxplot.png")
-	var bxGroups []string
-	var bxVals []float64
+
+	var (
+		bxGroups []string
+		bxVals   []float64
+	)
+
 	rng3 := rand.New(rand.NewSource(77))
-	for i := 0; i < 60; i++ {
+
+	for range 60 {
 		bxGroups = append(bxGroups, "Control", "Treatment")
 		bxVals = append(bxVals,
 			rng3.NormFloat64()*5+20,
 			rng3.NormFloat64()*8+35,
 		)
 	}
+
 	dsBox, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("group", bxGroups),
 		eng.NewFloat64Column("score", bxVals),
@@ -218,13 +245,16 @@ func main() {
 
 	// ---------- 10. Horizontal Smooth (LOESS) ----------
 	log.Println("10_horizontal_smooth.png")
+
 	smX := make([]float64, 100)
 	smY := make([]float64, 100)
 	rng4 := rand.New(rand.NewSource(55))
+
 	for i := range smX {
 		smX[i] = float64(i) * 0.1
 		smY[i] = math.Sin(smX[i]) + rng4.NormFloat64()*0.3
 	}
+
 	dsSm, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", smX),
 		eng.NewFloat64Column("y", smY),
@@ -239,6 +269,7 @@ func main() {
 
 	// ---------- 11. Flipped HLine / VLine ----------
 	log.Println("11_flipped_reflines.png")
+
 	dsPt2, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8}),
 		eng.NewFloat64Column("y", []float64{12, 18, 15, 22, 20, 25, 23, 28}),
@@ -254,13 +285,16 @@ func main() {
 
 	// ---------- 12. Flipped Rug ----------
 	log.Println("12_flipped_rug.png")
+
 	rugX := make([]float64, 80)
 	rugY := make([]float64, 80)
+
 	rng5 := rand.New(rand.NewSource(33))
 	for i := range rugX {
 		rugX[i] = rng5.NormFloat64()*3 + 5
 		rugY[i] = rng5.NormFloat64()*2 + 3
 	}
+
 	dsRug, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", rugX),
 		eng.NewFloat64Column("y", rugY),

@@ -15,11 +15,11 @@ package compute
 
 import "github.com/ajroetker/go-highway/hwy"
 
-// Re-export core types so callers never import hwy directly.
-type (
-	Vec[T hwy.Lanes]  = hwy.Vec[T]
-	Mask[T hwy.Lanes] = hwy.Mask[T]
-)
+// Vec is a re-export of hwy.Vec so callers never import hwy directly.
+type Vec[T hwy.Lanes] = hwy.Vec[T]
+
+// Mask is a re-export of hwy.Mask.
+type Mask[T hwy.Lanes] = hwy.Mask[T]
 
 // Lanes is the constraint for types supported by SIMD vectors.
 type Lanes = hwy.Lanes

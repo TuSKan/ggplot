@@ -50,5 +50,6 @@ func newFivethirtyeight() Theme {
 		hex("8B8B8B"),
 		hex("810F7C"),
 	}
+
 	return t
 }

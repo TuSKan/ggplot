@@ -22,6 +22,7 @@ func NewRegistry() (*Registry, error) {
 // using a scoring heuristic that prefers exact matches over partial ones.
 func (r *Registry) Match(q Query) *Font {
 	bestScore := -1 << 31
+
 	var best *Font
 
 	for i := range r.fonts {
@@ -51,6 +52,7 @@ func (r *Registry) Match(q Query) *Font {
 			}
 		}
 	}
+
 	return best
 }
 

@@ -45,5 +45,6 @@ func newColorblind() Theme {
 		hex("D55E00"), // Vermillion
 		hex("CC79A7"), // Reddish Purple
 	}
+
 	return t
 }

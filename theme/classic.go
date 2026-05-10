@@ -50,5 +50,6 @@ func newClassic() Theme {
 		hex("BFBF00"), // y — yellow
 		hex("000000"), // k — black
 	}
+
 	return t
 }

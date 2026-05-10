@@ -30,5 +30,6 @@ func newSolarizeLight() Theme {
 		hex("073642"), // base02
 		hex("002B36"), // base03 — darkest
 	}
+
 	return t
 }

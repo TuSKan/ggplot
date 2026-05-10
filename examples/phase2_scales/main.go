@@ -31,17 +31,20 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 	if err := p.Save(context.Background(), out, w, h); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
 // Linear scale (default)
 func linearScale(dir string) {
 	n := 50
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i)
 		ys[i] = float64(i) * 2.5
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs), eng.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -54,11 +57,13 @@ func linearScale(dir string) {
 // Log10 scale
 func log10Scale(dir string) {
 	n := 50
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i + 1)
 		ys[i] = math.Pow(10, float64(i)*0.08)
 	}
+
 	eng2 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng2, eng2.NewFloat64Column("x", xs), eng2.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -73,11 +78,13 @@ func log10Scale(dir string) {
 // Sqrt scale
 func sqrtScale(dir string) {
 	n := 40
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i)
 		ys[i] = float64(i * i)
 	}
+
 	eng3 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng3, eng3.NewFloat64Column("x", xs), eng3.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -91,11 +98,13 @@ func sqrtScale(dir string) {
 // Reverse scale
 func reverseScale(dir string) {
 	n := 30
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i)
 		ys[i] = math.Sin(float64(i) * 0.3)
 	}
+
 	eng4 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng4, eng4.NewFloat64Column("x", xs), eng4.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).

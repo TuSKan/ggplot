@@ -2,7 +2,7 @@ package compute
 
 import "github.com/ajroetker/go-highway/hwy"
 
-// Re-export additional type constraints for use by callers.
+// Integers is a re-export of hwy.Integers for use by callers.
 type (
 	Integers = hwy.Integers
 )

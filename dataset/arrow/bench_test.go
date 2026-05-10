@@ -6,13 +6,15 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/apache/arrow-go/v18/arrow/memory"
+
 	"github.com/TuSKan/ggplot/dataset"
 	arroweng "github.com/TuSKan/ggplot/dataset/arrow"
-	"github.com/apache/arrow-go/v18/arrow/memory"
 )
 
 func makeBenchDS(b *testing.B, n int) dataset.Table {
 	b.Helper()
+
 	eng := arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
 
 	rng := rand.New(rand.NewSource(42))
@@ -20,6 +22,7 @@ func makeBenchDS(b *testing.B, n int) dataset.Table {
 	ids := make([]int64, n)
 	groups := make([]string, n)
 	labels := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
+
 	for i := range xs {
 		xs[i] = rng.Float64() * 1000
 		ids[i] = int64(rng.Intn(1_000_000))
@@ -31,6 +34,7 @@ func makeBenchDS(b *testing.B, n int) dataset.Table {
 		dataset.IntCol("id"),
 		dataset.StringCol("group"),
 	)
+
 	ds, err := eng.FromColumns(schema,
 		eng.NewFloat64Column("x", xs),
 		eng.NewInt64Column("id", ids),
@@ -39,31 +43,37 @@ func makeBenchDS(b *testing.B, n int) dataset.Table {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	return ds
 }
 
 // makeBenchDSWithNulls creates a dataset where ~10% of float values are null.
 func makeBenchDSWithNulls(b *testing.B, n int) (dataset.Table, dataset.AnyColumn) {
 	b.Helper()
+
 	eng := arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(dataset.FloatCol("x"))
 	builder := eng.NewBuilder(schema)
 	xApp := builder.Float64("x")
 	xApp.Reserve(n)
+
 	rng := rand.New(rand.NewSource(42))
-	for i := 0; i < n; i++ {
+	for range n {
 		if rng.Float64() < 0.1 {
 			xApp.AppendNull()
 		} else {
 			xApp.Append(rng.Float64() * 1000)
 		}
 	}
+
 	ds, err := builder.Build()
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	col, _ := ds.Column("x")
+
 	return ds, col
 }
 
@@ -75,9 +85,11 @@ func BenchmarkArrowSum(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Sum(col)
 			}
 		})
@@ -90,9 +102,11 @@ func BenchmarkArrowMean(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Mean(col)
 			}
 		})
@@ -105,9 +119,11 @@ func BenchmarkArrowMinMax(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _, _ = eng.MinMax(col)
 			}
 		})
@@ -120,9 +136,11 @@ func BenchmarkArrowMedian(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Median(col)
 			}
 		})
@@ -135,9 +153,11 @@ func BenchmarkArrowVariance(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Variance(col)
 			}
 		})
@@ -152,9 +172,11 @@ func BenchmarkArrowSlice(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Slice(col, 0, n/2)
 			}
 		})
@@ -170,6 +192,7 @@ func BenchmarkArrowTake(b *testing.B) {
 
 			rng := rand.New(rand.NewSource(99))
 			half := n / 2
+
 			indices := make([]int, half)
 			for i := range indices {
 				indices[i] = rng.Intn(n)
@@ -177,7 +200,8 @@ func BenchmarkArrowTake(b *testing.B) {
 
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Select(col, indices)
 			}
 		})
@@ -190,9 +214,11 @@ func BenchmarkArrowSortIndices(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.SortIndices(col)
 			}
 		})
@@ -204,9 +230,11 @@ func BenchmarkArrowFilter(b *testing.B) {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			pred := dataset.Gt("x", 500.0)
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = dataset.From(ds).Filter(pred).Collect(context.Background())
 			}
 		})
@@ -220,9 +248,11 @@ func BenchmarkArrowFillDown(b *testing.B) {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			_, col := makeBenchDSWithNulls(b, n)
 			eng := arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Fill(col, dataset.FillDown)
 			}
 		})
@@ -234,9 +264,11 @@ func BenchmarkArrowFillUp(b *testing.B) {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			_, col := makeBenchDSWithNulls(b, n)
 			eng := arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Fill(col, dataset.FillUp)
 			}
 		})
@@ -248,9 +280,11 @@ func BenchmarkArrowReplaceNA(b *testing.B) {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			_, col := makeBenchDSWithNulls(b, n)
 			eng := arroweng.NewEngine(context.Background(), memory.DefaultAllocator)
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.ReplaceNA(col, 0)
 			}
 		})
@@ -265,9 +299,11 @@ func BenchmarkArrowLag(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Lag(col, 1)
 			}
 		})
@@ -280,9 +316,11 @@ func BenchmarkArrowLead(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Lead(col, 1)
 			}
 		})
@@ -295,9 +333,11 @@ func BenchmarkArrowCumSum(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.CumSum(col)
 			}
 		})
@@ -310,9 +350,11 @@ func BenchmarkArrowCumMax(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.CumMax(col)
 			}
 		})
@@ -325,9 +367,11 @@ func BenchmarkArrowCumMin(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.CumMin(col)
 			}
 		})
@@ -340,9 +384,11 @@ func BenchmarkArrowRank(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.Rank(col)
 			}
 		})
@@ -355,9 +401,11 @@ func BenchmarkArrowDenseRank(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.DenseRank(col)
 			}
 		})
@@ -372,7 +420,8 @@ func BenchmarkArrowFrameHead(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = dataset.From(ds).Head(100).Collect(context.Background())
 			}
 		})
@@ -385,7 +434,8 @@ func BenchmarkArrowGroupBySummarize(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = dataset.From(ds).
 					GroupBy("group").
 					Summarize(
@@ -400,15 +450,17 @@ func BenchmarkArrowGroupBySummarize(b *testing.B) {
 
 // --- MathKernel Benchmarks ---
 
-func benchMathUnary(b *testing.B, name string, fn func(*arroweng.Engine, dataset.AnyColumn) (dataset.AnyColumn, error)) {
+func benchMathUnary(b *testing.B, _ string, fn func(*arroweng.Engine, dataset.AnyColumn) (dataset.AnyColumn, error)) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = fn(eng, col)
 			}
 		})
@@ -463,9 +515,11 @@ func BenchmarkArrowAddCols(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.AddCols(col, col)
 			}
 		})
@@ -478,9 +532,11 @@ func BenchmarkArrowMulScalar(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("x")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.MulScalar(col, 3.14)
 			}
 		})
@@ -493,9 +549,11 @@ func BenchmarkArrowBitShiftLeft(b *testing.B) {
 			ds := makeBenchDS(b, n)
 			eng := dataset.GetEngine(ds).(*arroweng.Engine)
 			col, _ := ds.Column("id")
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = eng.BitShiftLeft(col, 4)
 			}
 		})

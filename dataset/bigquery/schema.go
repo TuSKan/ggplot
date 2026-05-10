@@ -2,6 +2,7 @@ package bigquery
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"cloud.google.com/go/bigquery"
@@ -22,6 +23,7 @@ func bqSchemaToDataset(bqSchema bigquery.Schema) *dataset.Schema {
 			fields = append(fields, f)
 		}
 	}
+
 	return dataset.NewSchema(fields...)
 }
 
@@ -61,6 +63,7 @@ func datasetSchemaToBQ(schema *dataset.Schema) bigquery.Schema {
 		f := schema.Field(i)
 		bqFields[i] = datasetFieldToBQ(f)
 	}
+
 	return bqFields
 }
 
@@ -96,7 +99,7 @@ func arrowRecordToDataset(eng *arrowEngine.Engine, rec arrow.RecordBatch) (datas
 	cols := make([]dataset.AnyColumn, nCols)
 	fields := make([]dataset.Field, nCols)
 
-	for i := 0; i < nCols; i++ {
+	for i := range nCols {
 		arrowField := schema.Field(i)
 		col := rec.Column(i)
 		name := arrowField.Name
@@ -109,6 +112,7 @@ func arrowRecordToDataset(eng *arrowEngine.Engine, rec arrow.RecordBatch) (datas
 		}
 
 		var err error
+
 		cols[i], err = arrowArrayToColumn(eng, name, col, dtype)
 		if err != nil {
 			return nil, fmt.Errorf("bigquery: column %q: %w", name, err)
@@ -116,6 +120,7 @@ func arrowRecordToDataset(eng *arrowEngine.Engine, rec arrow.RecordBatch) (datas
 	}
 
 	dsSchema := dataset.NewSchema(fields...)
+
 	return eng.FromColumns(dsSchema, cols...)
 }
 
@@ -163,6 +168,7 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 		default:
 			return nil, fmt.Errorf("unsupported arrow type %T for float64", arr)
 		}
+
 		return eng.NewFloat64Column(name, vals), nil
 
 	case dataset.DTypeInt64:
@@ -179,6 +185,7 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 		default:
 			return nil, fmt.Errorf("unsupported arrow type %T for int64", arr)
 		}
+
 		return eng.NewInt64Column(name, vals), nil
 
 	case dataset.DTypeString:
@@ -195,6 +202,7 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 		default:
 			return nil, fmt.Errorf("unsupported arrow type %T for string", arr)
 		}
+
 		return eng.NewStringColumn(name, vals), nil
 
 	case dataset.DTypeBool:
@@ -204,14 +212,16 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 				vals[i] = a.Value(i)
 			}
 		}
+
 		return eng.NewBoolColumn(name, vals), nil
 
 	default:
 		// Fallback: treat as string
 		vals := make([]string, arr.Len())
 		for i := 0; i < arr.Len(); i++ {
-			vals[i] = fmt.Sprintf("%v", arr.ValueStr(i))
+			vals[i] = arr.ValueStr(i)
 		}
+
 		return eng.NewStringColumn(name, vals), nil
 	}
 }
@@ -228,10 +238,11 @@ func decodeArrowBatch(eng *arrowEngine.Engine, schemaBytes, batchBytes []byte) (
 	defer reader.Release()
 
 	if !reader.Next() {
-		return nil, fmt.Errorf("no record batches in IPC stream")
+		return nil, errors.New("no record batches in IPC stream")
 	}
 
 	rec := reader.RecordBatch()
+
 	rec.Retain()
 	defer rec.Release()
 
@@ -253,5 +264,6 @@ func buildIPCStream(schemaBytes, batchBytes []byte) *bytes.Reader {
 	combined := make([]byte, 0, len(schemaBytes)+len(batchBytes))
 	combined = append(combined, schemaBytes...)
 	combined = append(combined, batchBytes...)
+
 	return bytes.NewReader(combined)
 }

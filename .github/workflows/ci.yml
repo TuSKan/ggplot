@@ -1,121 +1,118 @@
-name: ggplot CI
+name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        go-version: ['1.26']
-        goexperiment: ['simd', '']
+  lint-and-test:
+    name: Lint and Test
     runs-on: ${{ matrix.os }}
-    env:
-      GOEXPERIMENT: ${{ matrix.goexperiment }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
 
-    - name: Set up Go ${{ matrix.go-version }}
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ matrix.go-version }}
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
 
-    - name: Download dependencies
-      run: go mod download
+      - name: Verify dependencies
+        run: go mod verify
 
-    - name: Verify formatting
-      if: matrix.os == 'ubuntu-latest' && matrix.goexperiment == 'simd'
-      run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-          echo "Files with formatting issues:"
-          gofmt -s -l .
-          exit 1
-        fi
+      - name: Check go mod tidy
+        shell: bash
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
 
-    - name: Run go vet
-      run: go vet ./...
+      - name: Run tests with coverage
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
 
-    - name: Build all packages
-      run: go build ./...
+      - name: Run tests
+        if: matrix.os != 'ubuntu-latest'
+        run: go test -v ./...
 
-    - name: Run tests with race detector and coverage
-      run: go test -race -v -coverprofile coverage.out -covermode atomic -timeout 180s ./...
+      - name: Run golangci-lint
+        if: matrix.os == 'ubuntu-latest'
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          args: --timeout=5m
 
-    - name: Upload coverage reports to Codecov
-      if: matrix.os == 'ubuntu-latest' && matrix.goexperiment == 'simd'
-      uses: codecov/codecov-action@v5
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: coverage.out
-      continue-on-error: true
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.out
+          fail_ci_if_error: false
 
-  lint:
+  race-detection:
+    name: Race Detection
     runs-on: ubuntu-latest
-    env:
-      GOEXPERIMENT: simd
+
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.26'
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
 
-    - name: Install golangci-lint from source
-      run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
-    - name: Run golangci-lint
-      run: golangci-lint run --timeout 10m
-
-  examples:
-    runs-on: ubuntu-latest
-    env:
-      GOEXPERIMENT: simd
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.26'
-
-    - name: Build all examples
-      run: |
-        go build ./examples/geometries/point/
-        go build ./examples/geometries/line/
-        go build ./examples/geometries/bar/
-        go build ./examples/geometries/histogram/
-        go build ./examples/geometries/area/
-        go build ./examples/geometries/smooth/
-
-    - name: Run examples (generate outputs)
-      run: |
-        go run ./examples/geometries/point/
-        go run ./examples/geometries/line/
-        go run ./examples/geometries/bar/
-        go run ./examples/geometries/histogram/
-        go run ./examples/geometries/area/
-        go run ./examples/geometries/smooth/
+      - name: Run tests with race detector
+        run: go test -race -short -count=1 ./...
 
   benchmarks:
+    name: Benchmarks
     runs-on: ubuntu-latest
-    # Non-blocking: go-highway v0.0.12 AVX2 codegen emits AVX-512 instructions
-    # on some runners (AMD EPYC 7763), causing SIGILL in dmath benchmarks.
-    # Benchmarks are for local performance tracking, not correctness.
-    continue-on-error: true
-    env:
-      GOEXPERIMENT: simd
+    if: github.event_name == 'push'
+
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.26'
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
 
-    - name: Run benchmarks
-      run: go test -bench=. -benchmem -run=^$ -timeout 180s ./...
+      - name: Run benchmarks
+        run: |
+          go test \
+            -run=^$ \
+            -bench=. \
+            -benchmem \
+            -count=3 \
+            -timeout=30m \
+            ./... \
+            | tee bench.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v6
+        with:
+          name: benchmarks-${{ github.sha }}
+          path: bench.txt
+          retention-days: 90

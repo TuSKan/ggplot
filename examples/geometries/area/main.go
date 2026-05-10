@@ -1,3 +1,4 @@
+// Example area demonstrates the geom.area geometry.
 package main
 
 import (
@@ -17,6 +18,7 @@ import (
 func main() {
 	n := 100
 	xs := make([]float64, n)
+
 	ys := make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i) / float64(n) * 4 * math.Pi
@@ -24,6 +26,7 @@ func main() {
 	}
 
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs), eng.NewFloat64Column("y", ys))
 	if err != nil {
 		log.Fatalln(err)

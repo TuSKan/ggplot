@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/TuSKan/ggplot/dataset"
 	"github.com/apache/arrow-go/v18/arrow/memory"
+
+	"github.com/TuSKan/ggplot/dataset"
 )
 
 func TestArrowPivotLonger(t *testing.T) {
@@ -17,6 +18,7 @@ func TestArrowPivotLonger(t *testing.T) {
 		dataset.FloatCol("Q2"),
 		dataset.FloatCol("Q3"),
 	)
+
 	ds, err := eng.FromColumns(schema,
 		eng.NewStringColumn("id", []string{"A", "B"}),
 		eng.NewFloat64Column("Q1", []float64{10, 40}),
@@ -37,6 +39,7 @@ func TestArrowPivotLonger(t *testing.T) {
 	if result.NumRows() != 6 {
 		t.Fatalf("expected 6 rows, got %d", result.NumRows())
 	}
+
 	if result.Schema().NumFields() != 3 {
 		t.Fatalf("expected 3 fields, got %d", result.Schema().NumFields())
 	}
@@ -49,13 +52,15 @@ func TestArrowPivotLonger(t *testing.T) {
 	expectedQs := []string{"Q1", "Q2", "Q3", "Q1", "Q2", "Q3"}
 	expectedVs := []float64{10, 20, 30, 40, 50, 60}
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		if ids[i] != expectedIDs[i] {
 			t.Errorf("row %d: id=%q, want %q", i, ids[i], expectedIDs[i])
 		}
+
 		if quarters[i] != expectedQs[i] {
 			t.Errorf("row %d: quarter=%q, want %q", i, quarters[i], expectedQs[i])
 		}
+
 		if revenues[i] != expectedVs[i] {
 			t.Errorf("row %d: revenue=%v, want %v", i, revenues[i], expectedVs[i])
 		}
@@ -86,6 +91,7 @@ func TestArrowPivotWider(t *testing.T) {
 	if result.NumRows() != 2 {
 		t.Fatalf("expected 2 rows, got %d", result.NumRows())
 	}
+
 	if result.Schema().NumFields() != 4 {
 		t.Fatalf("expected 4 fields, got %d", result.Schema().NumFields())
 	}
@@ -97,9 +103,11 @@ func TestArrowPivotWider(t *testing.T) {
 	if q1[0] != 10 || q1[1] != 40 {
 		t.Errorf("Q1 = %v, want [10, 40]", q1)
 	}
+
 	if q2[0] != 20 || q2[1] != 50 {
 		t.Errorf("Q2 = %v", q2)
 	}
+
 	if q3[0] != 30 || q3[1] != 60 {
 		t.Errorf("Q3 = %v", q3)
 	}
@@ -125,6 +133,7 @@ func TestArrowPivotRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if long.NumRows() != 4 {
 		t.Fatalf("long: expected 4, got %d", long.NumRows())
 	}
@@ -135,15 +144,18 @@ func TestArrowPivotRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if wide.NumRows() != 2 {
 		t.Fatalf("wide: expected 2, got %d", wide.NumRows())
 	}
 
 	q1 := joinFloat64(t, wide, "Q1")
+
 	q2 := joinFloat64(t, wide, "Q2")
 	if q1[0] != 10 || q1[1] != 40 {
 		t.Errorf("Q1 = %v", q1)
 	}
+
 	if q2[0] != 20 || q2[1] != 50 {
 		t.Errorf("Q2 = %v", q2)
 	}
@@ -174,9 +186,11 @@ func TestArrowSeparate(t *testing.T) {
 	if years[0] != "2024" || years[2] != "2025" {
 		t.Errorf("years = %v", years)
 	}
+
 	if months[0] != "01" || months[1] != "06" {
 		t.Errorf("months = %v", months)
 	}
+
 	if days[0] != "15" || days[1] != "20" || days[2] != "10" {
 		t.Errorf("days = %v", days)
 	}
@@ -248,6 +262,7 @@ func TestArrowComplete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 4 {
 		t.Fatalf("expected 4 rows, got %d", result.NumRows())
 	}
@@ -279,12 +294,14 @@ func TestArrowCompleteWithMissing(t *testing.T) {
 	// Arrow uses null bitmap for missing values.
 	nulls := joinIsNull(t, result, "value")
 	hasNull := false
+
 	for _, v := range nulls {
 		if v {
 			hasNull = true
 			break
 		}
 	}
+
 	if !hasNull {
 		t.Error("expected null for missing (B, 2025) row")
 	}
@@ -310,6 +327,7 @@ func TestArrowPivotLongerFrameAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 2 {
 		t.Fatalf("expected 2 rows, got %d", result.NumRows())
 	}
@@ -317,13 +335,16 @@ func TestArrowPivotLongerFrameAPI(t *testing.T) {
 
 func reshapeStrings(t *testing.T, tbl dataset.Table, name string) []string {
 	t.Helper()
+
 	col, err := tbl.Column(name)
 	if err != nil {
 		t.Fatalf("column %q: %v", name, err)
 	}
+
 	c, ok := col.(dataset.Column[string])
 	if !ok {
 		t.Fatalf("column %q is not string", name)
 	}
+
 	return c.Values()
 }

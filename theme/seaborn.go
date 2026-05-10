@@ -60,6 +60,7 @@ func seabornBase(name string) Theme {
 	t.Geom.PatchAlpha = 0.8
 
 	t.Palette = seabornDeepPalette()
+
 	return t
 }
 
@@ -87,6 +88,7 @@ func newSeabornDarkgrid() Theme {
 	// Gray panel + white grid → white patch edges (same as ggplot logic).
 	t.Geom.PatchEdgeColor = color.White
 	t.Geom.PatchAlpha = 0.8
+
 	return t
 }
 
@@ -104,6 +106,7 @@ func newSeabornWhitegrid() Theme {
 	// White panel + gray grid → gray patch edge (subtle outline).
 	t.Geom.PatchEdgeColor = gray(204)
 	t.Geom.PatchAlpha = 0.8
+
 	return t
 }
 
@@ -120,6 +123,7 @@ func newSeabornDark() Theme {
 	// Same gray panel as darkgrid → white edges.
 	t.Geom.PatchEdgeColor = color.White
 	t.Geom.PatchAlpha = 0.8
+
 	return t
 }
 
@@ -133,6 +137,7 @@ func newSeabornWhite() Theme {
 	t.Grid.MajorWidth = 0
 	t.Grid.MinorColor = color.Transparent
 	t.Grid.MinorWidth = 0
+
 	return t
 }
 
@@ -142,6 +147,7 @@ func newSeabornTicks() Theme {
 	t.Name = "seaborn_ticks"
 	t.Ticks.Length = 6
 	t.Ticks.Width = 1
+
 	return t
 }
 
@@ -151,6 +157,7 @@ func newSeabornDeep() Theme {
 	t := newSeabornDarkgrid()
 	t.Name = "seaborn_deep"
 	t.Palette = seabornDeepPalette()
+
 	return t
 }
 
@@ -161,6 +168,7 @@ func newSeabornMuted() Theme {
 		hex("4878CF"), hex("6ACC65"), hex("D65F5F"),
 		hex("B47CC7"), hex("C4AD66"), hex("77BEDB"),
 	}
+
 	return t
 }
 
@@ -171,6 +179,7 @@ func newSeabornBright() Theme {
 		hex("003FFF"), hex("03ED3A"), hex("E8000B"),
 		hex("8A2BE2"), hex("FFC400"), hex("00D7FF"),
 	}
+
 	return t
 }
 
@@ -181,6 +190,7 @@ func newSeabornColorblind() Theme {
 		hex("0072B2"), hex("009E73"), hex("D55E00"),
 		hex("CC79A7"), hex("F0E442"), hex("56B4E9"),
 	}
+
 	return t
 }
 
@@ -191,6 +201,7 @@ func newSeabornPastel() Theme {
 		hex("92C6FF"), hex("97F0AA"), hex("FF9F9A"),
 		hex("D0BBFF"), hex("FFFEA3"), hex("B0E0E6"),
 	}
+
 	return t
 }
 
@@ -201,6 +212,7 @@ func newSeabornDarkPalette() Theme {
 		hex("001C7F"), hex("017517"), hex("8C0900"),
 		hex("7600A1"), hex("B8860B"), hex("006374"),
 	}
+
 	return t
 }
 
@@ -213,29 +225,34 @@ func scaleSeabornFonts(t Theme, base, label float64) Theme {
 	t.Text.TickLabel.Size = label - 1
 	t.Text.Legend.Size = label - 1
 	t.Text.Annotation.Size = label - 1
+
 	return t
 }
 
 func newSeabornPaper() Theme {
 	t := newSeabornDarkgrid()
 	t.Name = "seaborn_paper"
+
 	return scaleSeabornFonts(t, 9, 8.4)
 }
 
 func newSeabornNotebook() Theme {
 	t := newSeabornDarkgrid()
 	t.Name = "seaborn_notebook"
+
 	return scaleSeabornFonts(t, 12, 11)
 }
 
 func newSeabornTalk() Theme {
 	t := newSeabornDarkgrid()
 	t.Name = "seaborn_talk"
+
 	return scaleSeabornFonts(t, 15, 13.5)
 }
 
 func newSeabornPoster() Theme {
 	t := newSeabornDarkgrid()
 	t.Name = "seaborn_poster"
+
 	return scaleSeabornFonts(t, 18, 16.5)
 }

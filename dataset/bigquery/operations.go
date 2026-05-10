@@ -1,6 +1,7 @@
 package bigquery
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -12,18 +13,22 @@ import (
 // All aggregation returns lazy bqDatasets/bqColumns backed by pending SQL.
 // No SQL Job executes until Values() is called.
 
+// Sum returns a single-element column containing the SQL SUM.
 func (e *Engine) Sum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.lazyAgg("SUM", col)
 }
 
+// Mean returns a single-element column containing the SQL AVG.
 func (e *Engine) Mean(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.lazyAgg("AVG", col)
 }
 
+// Count returns a single-element int64 column with the SQL COUNT.
 func (e *Engine) Count(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.lazyAgg("COUNT", col)
 }
 
+// Median returns the approximate median via BQ APPROX_QUANTILES.
 func (e *Engine) Median(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
@@ -38,13 +43,16 @@ func (e *Engine) Median(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 		dataset.NewSchema(dataset.FloatCol(bqCol.name)),
 		1,
 	)
+
 	return &bqColumn{ds: ds, name: bqCol.name, dtype: dataset.DTypeFloat64}, nil
 }
 
+// Variance returns a single-element column containing the SQL VARIANCE.
 func (e *Engine) Variance(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.lazyAgg("VARIANCE", col)
 }
 
+// MinMax returns two single-element columns containing SQL MIN and MAX.
 func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
@@ -65,6 +73,7 @@ func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyCo
 	ds := bqCol.ds.withSQL(sql, schema, 1)
 	minCol := &bqColumn{ds: ds, name: minName, dtype: bqCol.dtype}
 	maxCol := &bqColumn{ds: ds, name: maxName, dtype: bqCol.dtype}
+
 	return minCol, maxCol, nil
 }
 
@@ -96,6 +105,7 @@ func (e *Engine) lazyAgg(fn string, col dataset.AnyColumn) (dataset.AnyColumn, e
 	if fn == "AVG" || fn == "VARIANCE" {
 		dtype = dataset.DTypeFloat64
 	}
+
 	if fn == "COUNT" {
 		dtype = dataset.DTypeInt64
 	}
@@ -104,17 +114,19 @@ func (e *Engine) lazyAgg(fn string, col dataset.AnyColumn) (dataset.AnyColumn, e
 		dataset.NewSchema(dataset.Field{Name: bqCol.name, Dtype: dtype}),
 		1,
 	)
+
 	return &bqColumn{ds: ds, name: bqCol.name, dtype: dtype}, nil
 }
 
 // --- Joiner ---
 
+// Join creates a lazy SQL JOIN between two BigQuery datasets.
 func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset.Table, error) {
 	leftBQ, leftOK := left.(*bqDataset)
 	rightBQ, rightOK := right.(*bqDataset)
 
 	if !leftOK || !rightOK {
-		return nil, fmt.Errorf("bigquery: Join requires both datasets to be BigQuery datasets")
+		return nil, errors.New("bigquery: Join requires both datasets to be BigQuery datasets")
 	}
 
 	// Map JoinType → SQL
@@ -126,6 +138,7 @@ func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset
 	}
 
 	joinSQL := "INNER JOIN"
+
 	switch spec.Type {
 	case dataset.JoinLeft:
 		joinSQL = "LEFT JOIN"
@@ -140,6 +153,7 @@ func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset
 	for i := range spec.LeftCols {
 		onParts[i] = fmt.Sprintf("L.`%s` = R.`%s`", spec.LeftCols[i], spec.RightCols[i])
 	}
+
 	onClause := strings.Join(onParts, " AND ")
 
 	sql := fmt.Sprintf(
@@ -164,6 +178,7 @@ func (e *Engine) lazySemiAntiJoin(left, right *bqDataset, spec dataset.JoinSpec,
 	for i := range spec.LeftCols {
 		onParts[i] = fmt.Sprintf("L.`%s` = R.`%s`", spec.LeftCols[i], spec.RightCols[i])
 	}
+
 	onClause := strings.Join(onParts, " AND ")
 
 	exists := "EXISTS"
@@ -181,18 +196,20 @@ func (e *Engine) lazySemiAntiJoin(left, right *bqDataset, spec dataset.JoinSpec,
 
 // --- Composer ---
 
+// Stack vertically concatenates BigQuery datasets via UNION ALL.
 func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
-		return nil, fmt.Errorf("bigquery: Stack requires at least one dataset")
+		return nil, errors.New("bigquery: Stack requires at least one dataset")
 	}
 
 	parts := make([]string, len(datasets))
 	for i, ds := range datasets {
 		bq, ok := ds.(*bqDataset)
 		if !ok {
-			return nil, fmt.Errorf("bigquery: Stack requires all BigQuery datasets")
+			return nil, errors.New("bigquery: Stack requires all BigQuery datasets")
 		}
-		parts[i] = fmt.Sprintf("SELECT * FROM %s", bq.sourceRef())
+
+		parts[i] = "SELECT * FROM " + bq.sourceRef()
 	}
 
 	sql := strings.Join(parts, " UNION ALL ")
@@ -206,9 +223,10 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	return first.withSQL(sql, first.schema, totalRows), nil
 }
 
+// Combine horizontally concatenates datasets (downloads then delegates).
 func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
-		return nil, fmt.Errorf("bigquery: Combine requires at least one dataset")
+		return nil, errors.New("bigquery: Combine requires at least one dataset")
 	}
 
 	// Column bind — download and delegate to arrow engine
@@ -217,6 +235,7 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 		bq, ok := ds.(*bqDataset)
 		if ok {
 			var err error
+
 			localDS[i], err = bq.download()
 			if err != nil {
 				return nil, err
@@ -227,15 +246,18 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 	}
 
 	var eng dataset.Engine = e.localEngine()
+
 	composer, ok := eng.(dataset.Composer)
 	if !ok {
-		return nil, fmt.Errorf("bigquery: local engine does not support Composer")
+		return nil, errors.New("bigquery: local engine does not support Composer")
 	}
+
 	return composer.Combine(localDS...)
 }
 
 // --- Filler ---
 
+// Fill forward- or backward-fills null values (downloads then delegates).
 func (e *Engine) Fill(col dataset.AnyColumn, dir dataset.FillDirection) (dataset.AnyColumn, error) {
 	// Window-based fill is complex — download and delegate
 	if bqCol, ok := col.(*bqColumn); ok {
@@ -243,15 +265,19 @@ func (e *Engine) Fill(col dataset.AnyColumn, dir dataset.FillDirection) (dataset
 		if err != nil {
 			return nil, err
 		}
+
 		localCol, err := ds.Column(bqCol.name)
 		if err != nil {
 			return nil, err
 		}
+
 		return e.localEngine().Fill(localCol, dir)
 	}
+
 	return e.localEngine().Fill(col, dir)
 }
 
+// DropNA returns a dataset with rows filtered by IS NOT NULL.
 func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error) {
 	if bq, ok := ds.(*bqDataset); ok {
 		// Pure RowRestriction — fully lazy
@@ -259,11 +285,14 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 		for i, c := range cols {
 			parts[i] = fmt.Sprintf("`%s` IS NOT NULL", c)
 		}
+
 		return bq.withRestriction(strings.Join(parts, " AND ")), nil
 	}
+
 	return e.localEngine().DropNA(ds, cols...)
 }
 
+// ReplaceNA replaces null values with a default via SQL COALESCE.
 func (e *Engine) ReplaceNA(col dataset.AnyColumn, defaultVal float64) (dataset.AnyColumn, error) {
 	if bqCol, ok := col.(*bqColumn); ok {
 		// COALESCE — lazy SQL
@@ -275,7 +304,9 @@ func (e *Engine) ReplaceNA(col dataset.AnyColumn, defaultVal float64) (dataset.A
 			dataset.NewSchema(dataset.Field{Name: bqCol.name, Dtype: bqCol.dtype}),
 			bqCol.ds.numRows,
 		)
+
 		return &bqColumn{ds: ds, name: bqCol.name, dtype: bqCol.dtype}, nil
 	}
+
 	return e.localEngine().ReplaceNA(col, defaultVal)
 }

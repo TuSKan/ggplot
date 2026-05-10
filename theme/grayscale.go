@@ -46,5 +46,6 @@ func newGrayscale() Theme {
 		gray(153),
 		gray(178),
 	}
+
 	return t
 }

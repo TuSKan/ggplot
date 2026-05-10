@@ -13,8 +13,10 @@ import (
 // right: id=[2,3,5]    y=[200,300,500]
 func makeJoinDatasets(t *testing.T) (dataset.Table, dataset.Table) {
 	t.Helper()
+
 	eng := NewEngine(context.Background())
 	schema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
+
 	left, err := eng.FromColumns(schema,
 		eng.NewInt64Column("id", []int64{1, 2, 3, 4}),
 		eng.NewFloat64Column("x", []float64{10, 20, 30, 40}),
@@ -24,6 +26,7 @@ func makeJoinDatasets(t *testing.T) (dataset.Table, dataset.Table) {
 	}
 
 	rSchema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("y"))
+
 	right, err := eng.FromColumns(rSchema,
 		eng.NewInt64Column("id", []int64{2, 3, 5}),
 		eng.NewFloat64Column("y", []float64{200, 300, 500}),
@@ -31,32 +34,39 @@ func makeJoinDatasets(t *testing.T) (dataset.Table, dataset.Table) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return left, right
 }
 
 func getFloat64Values(t *testing.T, ds dataset.Table, name string) []float64 {
 	t.Helper()
+
 	col, err := ds.Column(name)
 	if err != nil {
 		t.Fatalf("column %q: %v", name, err)
 	}
+
 	c, ok := col.(dataset.Column[float64])
 	if !ok {
 		t.Fatalf("column %q is not float64", name)
 	}
+
 	return c.Values()
 }
 
 func getInt64Values(t *testing.T, ds dataset.Table, name string) []int64 {
 	t.Helper()
+
 	col, err := ds.Column(name)
 	if err != nil {
 		t.Fatalf("column %q: %v", name, err)
 	}
+
 	c, ok := col.(dataset.Column[int64])
 	if !ok {
 		t.Fatalf("column %q is not int64", name)
 	}
+
 	return c.Values()
 }
 
@@ -66,6 +76,7 @@ func TestInnerJoin(t *testing.T) {
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinInner
+
 	result, err := eng.Join(left, right, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -84,9 +95,11 @@ func TestInnerJoin(t *testing.T) {
 	if ids[0] != 2 || ids[1] != 3 {
 		t.Errorf("ids = %v, want [2, 3]", ids)
 	}
+
 	if xs[0] != 20 || xs[1] != 30 {
 		t.Errorf("xs = %v, want [20, 30]", xs)
 	}
+
 	if ys[0] != 200 || ys[1] != 300 {
 		t.Errorf("ys = %v, want [200, 300]", ys)
 	}
@@ -98,6 +111,7 @@ func TestLeftJoin(t *testing.T) {
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinLeft
+
 	result, err := eng.Join(left, right, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -114,12 +128,15 @@ func TestLeftJoin(t *testing.T) {
 	if ids[0] != 1 || ids[1] != 2 || ids[2] != 3 || ids[3] != 4 {
 		t.Errorf("ids = %v, want [1,2,3,4]", ids)
 	}
+
 	if !math.IsNaN(ys[0]) {
 		t.Errorf("y[0] = %v, want NaN", ys[0])
 	}
+
 	if ys[1] != 200 || ys[2] != 300 {
 		t.Errorf("y[1:3] = %v, want [200, 300]", ys[1:3])
 	}
+
 	if !math.IsNaN(ys[3]) {
 		t.Errorf("y[3] = %v, want NaN", ys[3])
 	}
@@ -131,6 +148,7 @@ func TestRightJoin(t *testing.T) {
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinRight
+
 	result, err := eng.Join(left, right, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -148,9 +166,11 @@ func TestRightJoin(t *testing.T) {
 	if xs[0] != 20 || xs[1] != 30 {
 		t.Errorf("xs[0:2] = %v, want [20,30]", xs[:2])
 	}
+
 	if !math.IsNaN(xs[2]) {
 		t.Errorf("xs[2] = %v, want NaN", xs[2])
 	}
+
 	if ys[0] != 200 || ys[1] != 300 || ys[2] != 500 {
 		t.Errorf("ys = %v, want [200,300,500]", ys)
 	}
@@ -162,6 +182,7 @@ func TestFullJoin(t *testing.T) {
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinFull
+
 	result, err := eng.Join(left, right, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -181,12 +202,15 @@ func TestFullJoin(t *testing.T) {
 	if ids[0] != 1 || ids[1] != 2 || ids[2] != 3 || ids[3] != 4 {
 		t.Errorf("ids[0:4] = %v, want [1,2,3,4]", ids[:4])
 	}
+
 	if ys[1] != 200 || ys[2] != 300 || ys[4] != 500 {
 		t.Errorf("ys = %v", ys)
 	}
+
 	if !math.IsNaN(ys[0]) || !math.IsNaN(ys[3]) {
 		t.Errorf("unmatched ys should be NaN: %v", ys)
 	}
+
 	if !math.IsNaN(xs[4]) {
 		t.Errorf("unmatched right x should be NaN: %v", xs[4])
 	}
@@ -198,6 +222,7 @@ func TestSemiJoin(t *testing.T) {
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinSemi
+
 	result, err := eng.Join(left, right, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -225,6 +250,7 @@ func TestAntiJoin(t *testing.T) {
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinAnti
+
 	result, err := eng.Join(left, right, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -264,6 +290,7 @@ func TestJoinCompositeKey(t *testing.T) {
 
 	spec := dataset.On("year", "month")
 	spec.Type = dataset.JoinInner
+
 	result, err := eng.Join(left, right, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -273,11 +300,14 @@ func TestJoinCompositeKey(t *testing.T) {
 	if result.NumRows() != 2 {
 		t.Fatalf("expected 2 rows, got %d", result.NumRows())
 	}
+
 	xs := getFloat64Values(t, result, "x")
+
 	ys := getFloat64Values(t, result, "y")
 	if xs[0] != 2 || xs[1] != 3 {
 		t.Errorf("x = %v, want [2,3]", xs)
 	}
+
 	if ys[0] != 200 || ys[1] != 300 {
 		t.Errorf("y = %v, want [200,300]", ys)
 	}
@@ -300,6 +330,7 @@ func TestJoinDuplicateKeys(t *testing.T) {
 
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinInner
+
 	result, err := eng.Join(left, right, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -329,23 +360,28 @@ func TestJoinNoMatch(t *testing.T) {
 	// Inner with no matches → 0 rows.
 	spec := dataset.On("id")
 	spec.Type = dataset.JoinInner
+
 	result, err := eng.Join(left, right, spec)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 0 {
 		t.Fatalf("expected 0 rows for inner join with no matches, got %d", result.NumRows())
 	}
 
 	// Left with no matches → all left rows, y=NaN.
 	spec.Type = dataset.JoinLeft
+
 	result, err = eng.Join(left, right, spec)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 2 {
 		t.Fatalf("expected 2 rows for left join, got %d", result.NumRows())
 	}
+
 	ys := getFloat64Values(t, result, "y")
 	if !math.IsNaN(ys[0]) || !math.IsNaN(ys[1]) {
 		t.Errorf("all ys should be NaN: %v", ys)
@@ -362,6 +398,7 @@ func TestJoinFrameAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 4 {
 		t.Fatalf("Frame LeftJoin: expected 4 rows, got %d", result.NumRows())
 	}
@@ -373,6 +410,7 @@ func TestJoinFrameAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 2 {
 		t.Fatalf("Frame InnerJoin: expected 2 rows, got %d", result.NumRows())
 	}

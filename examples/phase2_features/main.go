@@ -36,6 +36,7 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 	if err := p.Save(context.Background(), out, w, h); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
@@ -43,11 +44,13 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 
 func coordCartesian(dir string) {
 	n := 60
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i) * 0.1
 		ys[i] = math.Sin(xs[i]) * 3
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs), eng.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -75,16 +78,21 @@ func coordFlipped(dir string) {
 
 func facetWrap(dir string) {
 	rng := rand.New(rand.NewSource(42))
-	var xs, ys []float64
-	var seasons []string
+
+	var (
+		xs, ys  []float64
+		seasons []string
+	)
+
 	for _, s := range []string{"Spring", "Summer", "Autumn", "Winter"} {
-		for i := 0; i < 30; i++ {
+		for i := range 30 {
 			xs = append(xs, float64(i))
 			base := map[string]float64{"Spring": 15, "Summer": 28, "Autumn": 18, "Winter": 5}[s]
 			ys = append(ys, base+rng.NormFloat64()*3)
 			seasons = append(seasons, s)
 		}
 	}
+
 	eng3 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng3,
 		eng3.NewFloat64Column("day", xs),
@@ -101,25 +109,33 @@ func facetWrap(dir string) {
 
 func facetGrid(dir string) {
 	rng := rand.New(rand.NewSource(42))
-	var xs, ys []float64
-	var regions, types []string
+
+	var (
+		xs, ys         []float64
+		regions, types []string
+	)
+
 	for _, r := range []string{"North", "South"} {
 		for _, t := range []string{"Urban", "Rural"} {
-			for i := 0; i < 20; i++ {
+			for i := range 20 {
 				xs = append(xs, float64(i))
+
 				base := 50.0
 				if r == "North" {
 					base += 10
 				}
+
 				if t == "Urban" {
 					base += 15
 				}
+
 				ys = append(ys, base+rng.NormFloat64()*5)
 				regions = append(regions, r)
 				types = append(types, t)
 			}
 		}
 	}
+
 	eng4 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng4,
 		eng4.NewFloat64Column("month", xs),
@@ -139,11 +155,13 @@ func facetGrid(dir string) {
 
 func allThemes(dir string) {
 	n := 50
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i) * 0.15
 		ys[i] = math.Sin(xs[i]) * 5
 	}
+
 	eng5 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng5, eng5.NewFloat64Column("x", xs), eng5.NewFloat64Column("y", ys))
 
@@ -160,16 +178,21 @@ func allThemes(dir string) {
 
 func legendPositions(dir string) {
 	rng := rand.New(rand.NewSource(42))
-	var xs, ys []float64
-	var groups []string
+
+	var (
+		xs, ys []float64
+		groups []string
+	)
+
 	for _, g := range []string{"Alpha", "Beta", "Gamma"} {
-		for i := 0; i < 30; i++ {
+		for i := range 30 {
 			xs = append(xs, float64(i)*0.2)
 			base := map[string]float64{"Alpha": 0, "Beta": 2, "Gamma": 4}[g]
 			ys = append(ys, base+math.Sin(float64(i)*0.2)+rng.NormFloat64()*0.3)
 			groups = append(groups, g)
 		}
 	}
+
 	eng6 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng6,
 		eng6.NewFloat64Column("x", xs),
@@ -193,10 +216,13 @@ func aestheticsShowcase(dir string) {
 	rng := rand.New(rand.NewSource(42))
 	n := 60
 	xs, ys, sizes := make([]float64, n), make([]float64, n), make([]float64, n)
+
 	var groups []string
+
 	for i := range xs {
 		xs[i] = rng.Float64() * 10
 		ys[i] = xs[i]*0.8 + rng.NormFloat64()*2
+
 		sizes[i] = rng.Float64()*4 + 1
 		if i < n/3 {
 			groups = append(groups, "Group A")
@@ -206,6 +232,7 @@ func aestheticsShowcase(dir string) {
 			groups = append(groups, "Group C")
 		}
 	}
+
 	eng7 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng7,
 		eng7.NewFloat64Column("x", xs),

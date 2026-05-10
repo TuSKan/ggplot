@@ -66,6 +66,7 @@ func (a AesMap) Merge(other AesMap) AesMap {
 	result := make(AesMap, len(a)+len(other))
 	maps.Copy(result, other)
 	maps.Copy(result, a)
+
 	return result
 }
 
@@ -75,6 +76,7 @@ func ToAesMap(mappings []aes.Mapping) AesMap {
 	for _, am := range mappings {
 		m[am.Channel] = am.Column
 	}
+
 	return m
 }
 
@@ -88,7 +90,7 @@ type LayerSpec struct {
 type ScaleOverride struct {
 	Type   scale.Type        // e.g., scale.Log10, scale.Sqrt, scale.Reverse
 	Params map[string]string // type-specific parameters
-	Opts   []scale.ScaleOpt  // functional options (WithBreaks, WithLabels, etc.)
+	Opts   []scale.Opt       // functional options (WithBreaks, WithLabels, etc.)
 }
 
 // Labels holds all text annotations for a plot.

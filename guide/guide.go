@@ -8,11 +8,12 @@ import (
 	"image/color"
 	"math"
 
+	"github.com/gogpu/gg"
+
 	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/internal/canvas"
 	"github.com/TuSKan/ggplot/scale"
 	"github.com/TuSKan/ggplot/theme"
-	"github.com/gogpu/gg"
 )
 
 // DrawXAxis renders a horizontal axis at the bottom of the data area.
@@ -34,6 +35,7 @@ func DrawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, 
 		if frac < 0 || frac > 1 {
 			continue
 		}
+
 		px := x + frac*w
 
 		// Tick mark.
@@ -76,11 +78,13 @@ func DrawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 
 	// Measure + draw tick labels.
 	cv.SetFontSize(th.Text.TickLabel.Size)
+
 	for _, v := range ticks {
 		frac := (v - yMin) / (yMax - yMin)
 		if frac < 0 || frac > 1 {
 			continue
 		}
+
 		py := y + h - frac*h // invert y
 
 		// Tick mark (always drawn).
@@ -91,10 +95,12 @@ func DrawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 		// Label — skip if too close to previous label.
 		if math.Abs(py-lastPy) >= minSpacing {
 			lbl := sc.Format(v)
+
 			tw, _ := cv.MeasureString(lbl)
 			if tw > maxLabelW {
 				maxLabelW = tw
 			}
+
 			cv.SetRGBA(tr, tg, tb, 1)
 			cv.SetFontSize(th.Text.TickLabel.Size)
 			cv.DrawStringAnchored(lbl, x-tickLen-5, py, 1.0, 0.5)
@@ -116,6 +122,7 @@ func DrawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 		if titleOffset < 30 {
 			titleOffset = 30 // minimum offset for short labels
 		}
+
 		cv.Translate(x-tickLen-titleOffset, y+h/2)
 		cv.Rotate(-math.Pi / 2)
 		cv.DrawStringAnchored(label, 0, 0, 0.5, 0.5)
@@ -150,6 +157,7 @@ func DrawGrid(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h float64, 
 		if frac < 0 || frac > 1 {
 			continue
 		}
+
 		px := x + frac*w
 		cv.DrawLine(px, y, px, y+h)
 		cv.Stroke()
@@ -162,6 +170,7 @@ func DrawGrid(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h float64, 
 		if frac < 0 || frac > 1 {
 			continue
 		}
+
 		py := y + h - frac*h
 		cv.DrawLine(x, py, x+w, py)
 		cv.Stroke()
@@ -180,6 +189,7 @@ func drawMinorLines(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h flo
 	if th.Grid.MinorColor == nil {
 		return
 	}
+
 	mr, mg, mb, ma := rgbaOf(th.Grid.MinorColor)
 	cv.SetRGBA(mr, mg, mb, ma)
 	cv.SetLineWidth(th.Grid.MinorWidth)
@@ -194,6 +204,7 @@ func drawMinorLines(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h flo
 			if frac < 0 || frac > 1 {
 				continue
 			}
+
 			px := x + frac*w
 			cv.DrawLine(px, y, px, y+h)
 			cv.Stroke()
@@ -207,6 +218,7 @@ func drawMinorLines(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h flo
 			if frac < 0 || frac > 1 {
 				continue
 			}
+
 			py := y + h - frac*h
 			cv.DrawLine(x, py, x+w, py)
 			cv.Stroke()
@@ -285,12 +297,10 @@ func DrawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th th
 	}
 
 	// Draw gradient bar as thin horizontal strips (top = max, bottom = min).
-	nStrips := int(barH)
-	if nStrips < 2 {
-		nStrips = 2
-	}
+	nStrips := max(int(barH), 2)
+
 	stripH := barH / float64(nStrips)
-	for i := 0; i < nStrips; i++ {
+	for i := range nStrips {
 		// t=1 at top (max), t=0 at bottom (min).
 		t := 1.0 - float64(i)/float64(nStrips-1)
 		c := cm.At(t)
@@ -309,13 +319,16 @@ func DrawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th th
 	// bounds when available; otherwise fall back to "high" / "low".
 	cv.SetRGBA(tr, tg, tb, 1)
 	cv.SetFontSize(th.Text.Legend.Size * 0.9)
+
 	labelX := x + barW + 4
 	hi, lo := "high", "low"
+
 	if spec.Norm != nil {
 		vmin, vmax := spec.Norm.Bounds()
 		hi = formatNum(vmax)
 		lo = formatNum(vmin)
 	}
+
 	cv.DrawStringAnchored(hi, labelX, y+4, 0, 0.5)
 	cv.DrawStringAnchored(lo, labelX, y+barH-4, 0, 0.5)
 }
@@ -324,6 +337,7 @@ func formatNum(v float64) string {
 	if v == float64(int(v)) {
 		return fmt.Sprintf("%.1f", v)
 	}
+
 	return fmt.Sprintf("%.2g", v)
 }
 
@@ -350,6 +364,7 @@ func DrawLegendHorizontal(cv canvas.Canvas, title string, entries []LegendEntry,
 		if curX > x+maxW {
 			break
 		}
+
 		cv.SetRGBA(e.Color.R, e.Color.G, e.Color.B, e.Color.A)
 		cv.DrawRectangle(curX, y-swatchSize/2, swatchSize, swatchSize)
 		cv.Fill()
@@ -370,6 +385,7 @@ func DrawColorBarHorizontal(cv canvas.Canvas, spec ColorBarSpec, x, y, barW floa
 
 	// Title to the left.
 	startX := x
+
 	if spec.Title != "" {
 		cv.SetRGBA(tr, tg, tb, 1)
 		cv.SetFontSize(th.Text.Legend.Size)
@@ -389,12 +405,10 @@ func DrawColorBarHorizontal(cv canvas.Canvas, spec ColorBarSpec, x, y, barW floa
 	}
 
 	// Draw gradient bar as thin vertical strips.
-	nStrips := int(availW)
-	if nStrips < 2 {
-		nStrips = 2
-	}
+	nStrips := max(int(availW), 2)
+
 	stripW := availW / float64(nStrips)
-	for i := 0; i < nStrips; i++ {
+	for i := range nStrips {
 		t := float64(i) / float64(nStrips-1)
 		c := cm.At(t)
 		cv.SetRGBA(c.R, c.G, c.B, c.A)
@@ -411,12 +425,15 @@ func DrawColorBarHorizontal(cv canvas.Canvas, spec ColorBarSpec, x, y, barW floa
 	// Min / Max labels.
 	cv.SetRGBA(tr, tg, tb, 1)
 	cv.SetFontSize(th.Text.Legend.Size * 0.85)
+
 	lo, hi := "low", "high"
+
 	if spec.Norm != nil {
 		vmin, vmax := spec.Norm.Bounds()
 		lo = formatNum(vmin)
 		hi = formatNum(vmax)
 	}
+
 	cv.DrawStringAnchored(lo, startX, y+barH+10, 0.5, 0.5)
 	cv.DrawStringAnchored(hi, startX+availW, y+barH+10, 0.5, 0.5)
 }
@@ -427,6 +444,8 @@ func rgbaOf(c color.Color) (float64, float64, float64, float64) {
 	if c == nil {
 		return 0, 0, 0, 1
 	}
+
 	r, g, b, a := c.RGBA()
+
 	return float64(r) / 65535.0, float64(g) / 65535.0, float64(b) / 65535.0, float64(a) / 65535.0
 }

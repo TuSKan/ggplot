@@ -10,6 +10,7 @@ package scale
 import (
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/TuSKan/ggplot/dataset"
 )
@@ -17,6 +18,7 @@ import (
 // Type identifies a scale transformation.
 type Type string
 
+// Linear is the standard linear scale type.
 const (
 	Linear  Type = "linear"
 	Log10   Type = "log10"
@@ -85,21 +87,27 @@ func (d *domain) train(col dataset.AnyColumn) error {
 		if len(vals) == 0 {
 			return nil
 		}
+
 		mn, mx := math.Inf(1), math.Inf(-1)
+
 		for _, v := range vals {
 			if math.IsNaN(v) {
 				continue
 			}
+
 			if v < mn {
 				mn = v
 			}
+
 			if v > mx {
 				mx = v
 			}
 		}
+
 		if math.IsInf(mn, 1) {
 			return nil // all NaN
 		}
+
 		return d.update(mn, mx)
 
 	case dataset.Column[int64]:
@@ -107,16 +115,19 @@ func (d *domain) train(col dataset.AnyColumn) error {
 		if len(vals) == 0 {
 			return nil
 		}
+
 		mn, mx := float64(vals[0]), float64(vals[0])
 		for _, v := range vals[1:] {
 			fv := float64(v)
 			if fv < mn {
 				mn = fv
 			}
+
 			if fv > mx {
 				mx = fv
 			}
 		}
+
 		return d.update(mn, mx)
 
 	default:
@@ -132,10 +143,12 @@ func (d *domain) update(mn, mx float64) error {
 		if mn < d.min {
 			d.min = mn
 		}
+
 		if mx > d.max {
 			d.max = mx
 		}
 	}
+
 	return nil
 }
 
@@ -151,28 +164,38 @@ type LinearScale struct {
 	domain
 }
 
+// Train updates the linear domain from column data.
 func (s *LinearScale) Train(col dataset.AnyColumn) error {
-	return s.domain.train(col)
+	return s.train(col)
 }
 
+// Map transforms v to a [0, 1] linear fraction of the domain.
 func (s *LinearScale) Map(v float64) float64 {
 	if s.max == s.min {
 		return 0.5
 	}
+
 	return (v - s.min) / (s.max - s.min)
 }
 
+// Inverse maps a [0, 1] fraction back to data space.
 func (s *LinearScale) Inverse(v float64) float64 {
 	return s.min + v*(s.max-s.min)
 }
 
+// Ticks generates n nicely spaced tick positions.
 func (s *LinearScale) Ticks(n int) []float64 {
 	return NiceSequence(s.min, s.max, n)
 }
 
-func (s *LinearScale) Format(v float64) string    { return FormatNumber(v) }
+// Format converts a data value to a display string.
+func (s *LinearScale) Format(v float64) string { return FormatNumber(v) }
+
+// Bounds returns the trained domain [min, max].
 func (s *LinearScale) Bounds() (float64, float64) { return s.min, s.max }
-func (s *LinearScale) String() string             { return "linear" }
+
+// String returns "linear".
+func (s *LinearScale) String() string { return "linear" }
 
 // SetBounds manually overrides the scale domain. Used by the rendering
 // pipeline for padding and forcing Y=0.
@@ -188,18 +211,20 @@ func NewLog10() Scale {
 }
 
 type logScale struct {
-	base float64
 	domain
+
+	base float64
 }
 
 func (s *logScale) Train(col dataset.AnyColumn) error {
-	if err := s.domain.train(col); err != nil {
+	if err := s.train(col); err != nil {
 		return err
 	}
 	// Clamp min to avoid log(0).
 	if s.min <= 0 {
 		s.min = 1e-6
 	}
+
 	return nil
 }
 
@@ -207,30 +232,37 @@ func (s *logScale) Map(v float64) float64 {
 	if v <= 0 {
 		v = 1e-6
 	}
+
 	logMin := math.Log10(s.min)
+
 	logMax := math.Log10(s.max)
 	if logMax == logMin {
 		return 0.5
 	}
+
 	return (math.Log10(v) - logMin) / (logMax - logMin)
 }
 
 func (s *logScale) Inverse(v float64) float64 {
 	logMin := math.Log10(s.min)
 	logMax := math.Log10(s.max)
+
 	return math.Pow(10, logMin+v*(logMax-logMin))
 }
 
-func (s *logScale) Ticks(n int) []float64 {
+func (s *logScale) Ticks(_ int) []float64 {
 	if s.min <= 0 || s.max <= 0 {
 		return nil
 	}
+
 	logMin := math.Floor(math.Log10(s.min))
 	logMax := math.Ceil(math.Log10(s.max))
+
 	var ticks []float64
 	for e := logMin; e <= logMax; e++ {
 		ticks = append(ticks, math.Pow(10, e))
 	}
+
 	return ticks
 }
 
@@ -241,6 +273,7 @@ func (s *logScale) SetBounds(mn, mx float64) {
 	if mn <= 0 {
 		mn = 1e-6
 	}
+
 	s.min = mn
 	s.max = mx
 	s.trained = true
@@ -256,12 +289,14 @@ type sqrtScale struct {
 }
 
 func (s *sqrtScale) Train(col dataset.AnyColumn) error {
-	if err := s.domain.train(col); err != nil {
+	if err := s.train(col); err != nil {
 		return err
 	}
+
 	if s.min < 0 {
 		s.min = 0
 	}
+
 	return nil
 }
 
@@ -269,11 +304,14 @@ func (s *sqrtScale) Map(v float64) float64 {
 	if v < 0 {
 		v = 0
 	}
+
 	sqrtMin := math.Sqrt(s.min)
+
 	sqrtMax := math.Sqrt(s.max)
 	if sqrtMax == sqrtMin {
 		return 0.5
 	}
+
 	return (math.Sqrt(v) - sqrtMin) / (sqrtMax - sqrtMin)
 }
 
@@ -281,16 +319,19 @@ func (s *sqrtScale) Inverse(v float64) float64 {
 	sqrtMin := math.Sqrt(s.min)
 	sqrtMax := math.Sqrt(s.max)
 	val := sqrtMin + v*(sqrtMax-sqrtMin)
+
 	return val * val
 }
 
 func (s *sqrtScale) Ticks(n int) []float64 {
 	// Generate nice tick values in sqrt-space, then square back to data-space.
 	sqrtTicks := NiceSequence(math.Sqrt(s.min), math.Sqrt(s.max), n)
+
 	ticks := make([]float64, len(sqrtTicks))
 	for i, st := range sqrtTicks {
 		ticks[i] = st * st
 	}
+
 	return ticks
 }
 
@@ -301,6 +342,7 @@ func (s *sqrtScale) SetBounds(mn, mx float64) {
 	if mn < 0 {
 		mn = 0
 	}
+
 	s.min = mn
 	s.max = mx
 	s.trained = true
@@ -315,11 +357,12 @@ type reverseScale struct {
 	domain
 }
 
-func (s *reverseScale) Train(col dataset.AnyColumn) error { return s.domain.train(col) }
+func (s *reverseScale) Train(col dataset.AnyColumn) error { return s.train(col) }
 func (s *reverseScale) Map(v float64) float64 {
 	if s.max == s.min {
 		return 0.5
 	}
+
 	return 1.0 - (v-s.min)/(s.max-s.min)
 }
 func (s *reverseScale) Inverse(v float64) float64 {
@@ -331,6 +374,7 @@ func (s *reverseScale) Ticks(n int) []float64 {
 	for i, j := 0, len(ticks)-1; i < j; i, j = i+1, j-1 {
 		ticks[i], ticks[j] = ticks[j], ticks[i]
 	}
+
 	return ticks
 }
 func (s *reverseScale) Format(v float64) string    { return FormatNumber(v) }
@@ -381,8 +425,10 @@ func (m *Manager) Get(channel string) Scale {
 	if s, ok := m.scales[channel]; ok {
 		return s
 	}
+
 	s := NewLinear()
 	m.scales[channel] = s
+
 	return s
 }
 
@@ -395,9 +441,11 @@ func NiceSequence(lo, hi float64, n int) []float64 {
 	if n <= 0 {
 		n = 5
 	}
+
 	if lo == hi {
 		return []float64{lo}
 	}
+
 	return extendedWilkinson(lo, hi, n)
 }
 
@@ -412,10 +460,12 @@ func niceNum(x float64, round bool) float64 {
 	if x <= 0 {
 		return 1
 	}
+
 	exp := math.Floor(math.Log10(x))
 	frac := x / math.Pow(10, exp)
 
 	var nice float64
+
 	if round {
 		switch {
 		case frac < 1.5:
@@ -439,6 +489,7 @@ func niceNum(x float64, round bool) float64 {
 			nice = 10
 		}
 	}
+
 	return nice * math.Pow(10, exp)
 }
 
@@ -451,8 +502,9 @@ func roundTo(v float64, digits int) float64 {
 // Integers are shown without decimals, floats use compact notation.
 func FormatNumber(v float64) string {
 	if v == math.Floor(v) && math.Abs(v) < 1e12 {
-		return fmt.Sprintf("%d", int64(v))
+		return strconv.FormatInt(int64(v), 10)
 	}
+
 	return fmt.Sprintf("%.4g", v)
 }
 

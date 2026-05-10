@@ -14,6 +14,8 @@ import (
 // when sampling or interpolating colormaps.
 type Color = gg.RGBA
 
+// Cmap is a colormap that maps values in [0, 1] to RGBA colors.
+//
 // Implementations should:
 //   - Clamp t outside [0,1] to At(0)/At(1), or substitute Under/Over if set
 //     via WithExtremes.
@@ -64,6 +66,7 @@ func (e extremes) resolve(t float64) (gg.RGBA, bool) {
 		if e.bad != nil {
 			return *e.bad, true
 		}
+
 		return gg.RGBA{}, true
 	case t < 0:
 		if e.under != nil {
@@ -74,6 +77,7 @@ func (e extremes) resolve(t float64) (gg.RGBA, bool) {
 			return *e.over, true
 		}
 	}
+
 	return gg.RGBA{}, false
 }
 
@@ -97,33 +101,46 @@ func (c *LinearSegmentedCmap) At(t float64) gg.RGBA {
 	if r, ok := c.ext.resolve(t); ok {
 		return r
 	}
+
 	if t < 0 {
 		t = 0
 	}
+
 	if t > 1 {
 		t = 1
 	}
+
 	pos := t * 255
+
 	lo := int(pos)
 	if lo >= 255 {
 		return rgbaFromLUT(c.lut[255])
 	}
+
 	hi := lo + 1
 	frac := pos - float64(lo)
 	a := rgbaFromLUT(c.lut[lo])
 	b := rgbaFromLUT(c.lut[hi])
+
 	return a.Lerp(b, frac)
 }
 
-func (c *LinearSegmentedCmap) Name() string       { return c.name }
-func (c *LinearSegmentedCmap) N() int             { return 256 }
+// Name returns the registered identifier.
+func (c *LinearSegmentedCmap) Name() string { return c.name }
+
+// N returns the number of distinct LUT entries (always 256).
+func (c *LinearSegmentedCmap) N() int { return 256 }
+
+// Category returns the taxonomy bucket.
 func (c *LinearSegmentedCmap) Category() Category { return c.cat }
 
+// Reversed returns a new colormap with the LUT order flipped.
 func (c *LinearSegmentedCmap) Reversed() Cmap {
 	var rev [256][3]uint8
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		rev[i] = c.lut[255-i]
 	}
+
 	return &LinearSegmentedCmap{
 		name: c.name + "_r",
 		cat:  c.cat,
@@ -132,18 +149,21 @@ func (c *LinearSegmentedCmap) Reversed() Cmap {
 	}
 }
 
+// Resampled returns a ListedCmap that quantizes into n bins.
 func (c *LinearSegmentedCmap) Resampled(n int) Cmap {
 	if n < 1 {
 		n = 1
 	}
+
 	colors := make([]gg.RGBA, n)
 	if n == 1 {
 		colors[0] = c.At(0.5)
 	} else {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			colors[i] = c.At(float64(i) / float64(n-1))
 		}
 	}
+
 	return &resampledCmap{
 		base:   c,
 		name:   fmt.Sprintf("%s_n%d", c.name, n),
@@ -152,9 +172,11 @@ func (c *LinearSegmentedCmap) Resampled(n int) Cmap {
 	}
 }
 
+// WithExtremes returns a copy with explicit under/over/bad colors.
 func (c *LinearSegmentedCmap) WithExtremes(under, over, bad *gg.RGBA) Cmap {
 	clone := *c
 	clone.ext = mergeExtremes(c.ext, under, over, bad)
+
 	return &clone
 }
 
@@ -173,6 +195,7 @@ type ListedCmap struct {
 func NewListed(name string, cat Category, colors []gg.RGBA) *ListedCmap {
 	cp := make([]gg.RGBA, len(colors))
 	copy(cp, colors)
+
 	return &ListedCmap{name: name, cat: cat, colors: cp}
 }
 
@@ -182,20 +205,25 @@ func (c *ListedCmap) At(t float64) gg.RGBA {
 	if r, ok := c.ext.resolve(t); ok {
 		return r
 	}
+
 	n := len(c.colors)
 	if n == 0 {
 		return gg.RGBA{}
 	}
+
 	if t < 0 {
 		return c.colors[0]
 	}
+
 	if t >= 1 {
 		return c.colors[n-1]
 	}
+
 	idx := int(t * float64(n))
 	if idx >= n {
 		idx = n - 1
 	}
+
 	return c.colors[idx]
 }
 
@@ -206,10 +234,12 @@ func (c *ListedCmap) Color(i int) gg.RGBA {
 	if n == 0 {
 		return gg.RGBA{}
 	}
+
 	idx := i % n
 	if idx < 0 {
 		idx += n
 	}
+
 	return c.colors[idx]
 }
 
@@ -217,18 +247,26 @@ func (c *ListedCmap) Color(i int) gg.RGBA {
 func (c *ListedCmap) Colors() []gg.RGBA {
 	cp := make([]gg.RGBA, len(c.colors))
 	copy(cp, c.colors)
+
 	return cp
 }
 
-func (c *ListedCmap) Name() string       { return c.name }
-func (c *ListedCmap) N() int             { return len(c.colors) }
+// Name returns the registered identifier.
+func (c *ListedCmap) Name() string { return c.name }
+
+// N returns the number of discrete colors.
+func (c *ListedCmap) N() int { return len(c.colors) }
+
+// Category returns the taxonomy bucket.
 func (c *ListedCmap) Category() Category { return c.cat }
 
+// Reversed returns a new colormap with the color order flipped.
 func (c *ListedCmap) Reversed() Cmap {
 	rev := make([]gg.RGBA, len(c.colors))
 	for i, col := range c.colors {
 		rev[len(c.colors)-1-i] = col
 	}
+
 	return &ListedCmap{
 		name:   c.name + "_r",
 		cat:    c.cat,
@@ -237,18 +275,21 @@ func (c *ListedCmap) Reversed() Cmap {
 	}
 }
 
+// Resampled returns a new ListedCmap that quantizes into n bins.
 func (c *ListedCmap) Resampled(n int) Cmap {
 	if n < 1 {
 		n = 1
 	}
+
 	colors := make([]gg.RGBA, n)
 	if n == 1 {
 		colors[0] = c.At(0.5)
 	} else {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			colors[i] = c.At(float64(i) / float64(n-1))
 		}
 	}
+
 	return &ListedCmap{
 		name:   fmt.Sprintf("%s_n%d", c.name, n),
 		cat:    c.cat,
@@ -257,10 +298,12 @@ func (c *ListedCmap) Resampled(n int) Cmap {
 	}
 }
 
+// WithExtremes returns a copy with explicit under/over/bad colors.
 func (c *ListedCmap) WithExtremes(under, over, bad *gg.RGBA) Cmap {
 	clone := *c
 	clone.colors = append([]gg.RGBA(nil), c.colors...)
 	clone.ext = mergeExtremes(c.ext, under, over, bad)
+
 	return &clone
 }
 
@@ -277,20 +320,25 @@ func (c *resampledCmap) At(t float64) gg.RGBA {
 	if r, ok := c.ext.resolve(t); ok {
 		return r
 	}
+
 	n := len(c.colors)
 	if n == 0 {
 		return gg.RGBA{}
 	}
+
 	if t < 0 {
 		return c.colors[0]
 	}
+
 	if t >= 1 {
 		return c.colors[n-1]
 	}
+
 	idx := int(t * float64(n))
 	if idx >= n {
 		idx = n - 1
 	}
+
 	return c.colors[idx]
 }
 
@@ -304,6 +352,7 @@ func (c *resampledCmap) Resampled(n int) Cmap { return c.base.Resampled(n) }
 func (c *resampledCmap) WithExtremes(under, over, bad *gg.RGBA) Cmap {
 	clone := *c
 	clone.ext = mergeExtremes(c.ext, under, over, bad)
+
 	return &clone
 }
 
@@ -322,17 +371,21 @@ func rgbaFromLUT(e [3]uint8) gg.RGBA {
 // extremes value. nil inputs leave the existing setting unchanged.
 func mergeExtremes(base extremes, under, over, bad *gg.RGBA) extremes {
 	out := base
+
 	if under != nil {
 		v := *under
 		out.under = &v
 	}
+
 	if over != nil {
 		v := *over
 		out.over = &v
 	}
+
 	if bad != nil {
 		v := *bad
 		out.bad = &v
 	}
+
 	return out
 }

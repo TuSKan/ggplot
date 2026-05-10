@@ -11,38 +11,47 @@ import (
 // All window functions return lazy bqColumns backed by pending SQL.
 // No execution until Values() is called.
 
+// Lag shifts column values down by n positions (SQL LAG).
 func (e *Engine) Lag(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	return e.lazyWindowFn("LAG", col, n)
 }
 
+// Lead shifts column values up by n positions (SQL LEAD).
 func (e *Engine) Lead(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	return e.lazyWindowFn("LEAD", col, n)
 }
 
+// CumSum returns the cumulative sum (SQL SUM OVER window).
 func (e *Engine) CumSum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.lazyCumulativeWindowFn("SUM", col)
 }
 
+// CumMax returns the cumulative maximum (SQL MAX OVER window).
 func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.lazyCumulativeWindowFn("MAX", col)
 }
 
+// CumMin returns the cumulative minimum (SQL MIN OVER window).
 func (e *Engine) CumMin(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.lazyCumulativeWindowFn("MIN", col)
 }
 
+// Rank returns the 1-based rank (SQL RANK OVER ORDER BY).
 func (e *Engine) Rank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.lazyRankWindowFn("RANK", col)
 }
 
+// DenseRank returns the dense rank (SQL DENSE_RANK OVER ORDER BY).
 func (e *Engine) DenseRank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.lazyRankWindowFn("DENSE_RANK", col)
 }
 
+// PercentRank returns the percent rank (SQL PERCENT_RANK).
 func (e *Engine) PercentRank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.lazyRankWindowFn("PERCENT_RANK", col)
 }
 
+// RowNumber returns a 1-based sequential row-number column (delegates locally).
 func (e *Engine) RowNumber(n int) (dataset.AnyColumn, error) {
 	return e.localEngine().RowNumber(n)
 }
@@ -75,6 +84,7 @@ func (e *Engine) lazyWindowFn(fn string, col dataset.AnyColumn, n int) (dataset.
 	schema := dataset.NewSchema(newFields...)
 
 	ds := bqCol.ds.withSQL(sql, schema, bqCol.ds.numRows)
+
 	return &bqColumn{ds: ds, name: resultName, dtype: bqCol.dtype}, nil
 }
 
@@ -107,6 +117,7 @@ func (e *Engine) lazyCumulativeWindowFn(fn string, col dataset.AnyColumn) (datas
 	schema := dataset.NewSchema(newFields...)
 
 	ds := bqCol.ds.withSQL(sql, schema, bqCol.ds.numRows)
+
 	return &bqColumn{ds: ds, name: resultName, dtype: bqCol.dtype}, nil
 }
 
@@ -127,6 +138,7 @@ func (e *Engine) lazyRankWindowFn(fn string, col dataset.AnyColumn) (dataset.Any
 	}
 
 	resultName := fmt.Sprintf("%s_%s", fn, bqCol.name)
+
 	dtype := dataset.DTypeInt64
 	if fn == "PERCENT_RANK" {
 		dtype = dataset.DTypeFloat64
@@ -144,11 +156,13 @@ func (e *Engine) lazyRankWindowFn(fn string, col dataset.AnyColumn) (dataset.Any
 	schema := dataset.NewSchema(newFields...)
 
 	ds := bqCol.ds.withSQL(sql, schema, bqCol.ds.numRows)
+
 	return &bqColumn{ds: ds, name: resultName, dtype: dtype}, nil
 }
 
 // --- Caster ---
 
+// Cast converts a column to the target DType via SQL CAST.
 func (e *Engine) Cast(col dataset.AnyColumn, target dataset.DType) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
@@ -165,6 +179,7 @@ func (e *Engine) Cast(col dataset.AnyColumn, target dataset.DType) (dataset.AnyC
 		dataset.NewSchema(dataset.Field{Name: bqCol.name, Dtype: target}),
 		bqCol.ds.numRows,
 	)
+
 	return &bqColumn{ds: ds, name: bqCol.name, dtype: target}, nil
 }
 

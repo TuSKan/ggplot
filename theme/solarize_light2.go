@@ -51,5 +51,6 @@ func newSolarizeLight2() Theme {
 		hex("657B83"), // base00
 		hex("93A1A1"), // base1
 	}
+
 	return t
 }

@@ -17,6 +17,7 @@ func TestColumnFactory(t *testing.T) {
 	)
 
 	f := eng
+
 	ds, err := f.FromColumns(schema,
 		f.NewFloat64Column("x", []float64{1, 2, 3}),
 		f.NewStringColumn("label", []string{"a", "b", "c"}),
@@ -29,6 +30,7 @@ func TestColumnFactory(t *testing.T) {
 	if ds.NumRows() != 3 {
 		t.Fatalf("expected 3 rows, got %d", ds.NumRows())
 	}
+
 	if ds.Schema().NumFields() != 3 {
 		t.Fatalf("expected 3 fields, got %d", ds.Schema().NumFields())
 	}
@@ -38,6 +40,7 @@ func TestColumnFactory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	vals := col.Values()
 	if len(vals) != 3 || vals[0] != 1 || vals[2] != 3 {
 		t.Fatalf("unexpected float64 values: %v", vals)
@@ -48,6 +51,7 @@ func TestColumnFactory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if scol.Values()[1] != "b" {
 		t.Fatalf("expected 'b', got %q", scol.Values()[1])
 	}
@@ -72,6 +76,7 @@ func TestAggregator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	sumCol, _ := result.(dataset.Column[float64])
 	if sumCol.Values()[0] != 60 {
 		t.Fatalf("expected Sum=60, got %v", sumCol.Values()[0])
@@ -82,9 +87,11 @@ func TestAggregator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.DType() != dataset.DTypeInt64 {
 		t.Fatalf("expected int64, got %s", result.DType())
 	}
+
 	iSumCol, _ := result.(dataset.Column[int64])
 	if iSumCol.Values()[0] != 45 {
 		t.Fatalf("expected Sum=45, got %v", iSumCol.Values()[0])
@@ -95,10 +102,12 @@ func TestAggregator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	minCol, _ := minResult.(dataset.Column[string])
 	if minCol.Values()[0] != "alice" {
 		t.Fatalf("expected Min='alice', got %q", minCol.Values()[0])
 	}
+
 	maxCol, _ := maxResult.(dataset.Column[string])
 	if maxCol.Values()[0] != "charlie" {
 		t.Fatalf("expected Max='charlie', got %q", maxCol.Values()[0])
@@ -106,6 +115,7 @@ func TestAggregator(t *testing.T) {
 
 	// MinMax int64
 	iMin, _, _ := agg.MinMax(icol)
+
 	iMinCol, _ := iMin.(dataset.Column[int64])
 	if iMinCol.Values()[0] != 5 {
 		t.Fatalf("expected Min=5, got %v", iMinCol.Values()[0])
@@ -113,6 +123,7 @@ func TestAggregator(t *testing.T) {
 
 	// Count
 	result, _ = agg.Count(fcol)
+
 	cntCol, _ := result.(dataset.Column[int64])
 	if cntCol.Values()[0] != 3 {
 		t.Fatalf("expected Count=3, got %v", cntCol.Values()[0])
@@ -158,12 +169,14 @@ func TestBuilder(t *testing.T) {
 
 func makeGroupDS(t testing.TB) dataset.Table {
 	t.Helper()
+
 	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.StringCol("group"),
 		dataset.FloatCol("x"),
 		dataset.IntCol("id"),
 	)
+
 	ds, err := eng.FromColumns(schema,
 		eng.NewStringColumn("group", []string{"a", "a", "b", "b", "b"}),
 		eng.NewFloat64Column("x", []float64{10, 20, 30, 40, 50}),
@@ -172,11 +185,13 @@ func makeGroupDS(t testing.TB) dataset.Table {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return ds
 }
 
 func TestGroupBySummarize(t *testing.T) {
 	ds := makeGroupDS(t)
+
 	result, err := dataset.From(ds).
 		GroupBy("group").
 		Summarize(
@@ -194,6 +209,7 @@ func TestGroupBySummarize(t *testing.T) {
 	if result.NumRows() != 2 {
 		t.Fatalf("expected 2 groups, got %d", result.NumRows())
 	}
+
 	if result.Schema().NumFields() != 6 {
 		t.Fatalf("expected 6 fields, got %d", result.Schema().NumFields())
 	}
@@ -241,20 +257,25 @@ type doubleX struct{}
 func (doubleX) Apply(ds dataset.Table) (dataset.AnyColumn, error) {
 	eng := dataset.GetEngine(ds)
 	factory := eng.(dataset.ColumnFactory)
+
 	col, err := dataset.GetColumn[float64](ds, "x")
 	if err != nil {
 		return nil, err
 	}
+
 	vals := col.Values()
+
 	out := make([]float64, len(vals))
 	for i, v := range vals {
 		out[i] = v * 2
 	}
+
 	return factory.NewFloat64Column("x2", out), nil
 }
 
 func TestMutateAppend(t *testing.T) {
 	ds := makeGroupDS(t)
+
 	result, err := dataset.From(ds).
 		Mutate("x2", doubleX{}).
 		Collect(context.Background())
@@ -267,6 +288,7 @@ func TestMutateAppend(t *testing.T) {
 	}
 
 	col, _ := dataset.GetColumn[float64](result, "x2")
+
 	vals := col.Values()
 	if vals[0] != 20 || vals[2] != 60 || vals[4] != 100 {
 		t.Fatalf("unexpected x2 values: %v", vals)
@@ -275,6 +297,7 @@ func TestMutateAppend(t *testing.T) {
 
 func TestFullPipeline(t *testing.T) {
 	ds := makeGroupDS(t)
+
 	result, err := dataset.From(ds).
 		Select("group", "x").
 		Arrange("x").
@@ -297,12 +320,14 @@ func TestFullPipeline(t *testing.T) {
 
 func makeTestDS(t *testing.T) dataset.Table {
 	t.Helper()
+
 	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.FloatCol("x"),
 		dataset.StringCol("label"),
 		dataset.IntCol("id"),
 	)
+
 	ds, err := eng.FromColumns(schema,
 		eng.NewFloat64Column("x", []float64{3, 1, 4, 1, 5}),
 		eng.NewStringColumn("label", []string{"c", "a", "d", "a", "e"}),
@@ -311,21 +336,26 @@ func makeTestDS(t *testing.T) dataset.Table {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return ds
 }
 
 func TestFrameSelect(t *testing.T) {
 	ds := makeTestDS(t)
+
 	result, err := dataset.From(ds).Select("x", "label").Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.Schema().NumFields() != 2 {
 		t.Fatalf("expected 2 fields, got %d", result.Schema().NumFields())
 	}
+
 	if result.Schema().Field(0).Name != "x" {
 		t.Fatalf("expected first field 'x', got %q", result.Schema().Field(0).Name)
 	}
+
 	if result.NumRows() != 5 {
 		t.Fatalf("expected 5 rows, got %d", result.NumRows())
 	}
@@ -333,14 +363,18 @@ func TestFrameSelect(t *testing.T) {
 
 func TestFrameHead(t *testing.T) {
 	ds := makeTestDS(t)
+
 	result, err := dataset.From(ds).Head(3).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 3 {
 		t.Fatalf("expected 3 rows, got %d", result.NumRows())
 	}
+
 	col, _ := dataset.GetColumn[float64](result, "x")
+
 	vals := col.Values()
 	if vals[0] != 3 || vals[1] != 1 || vals[2] != 4 {
 		t.Fatalf("unexpected values: %v", vals)
@@ -349,14 +383,18 @@ func TestFrameHead(t *testing.T) {
 
 func TestFrameTail(t *testing.T) {
 	ds := makeTestDS(t)
+
 	result, err := dataset.From(ds).Tail(2).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 2 {
 		t.Fatalf("expected 2 rows, got %d", result.NumRows())
 	}
+
 	col, _ := dataset.GetColumn[float64](result, "x")
+
 	vals := col.Values()
 	if vals[0] != 1 || vals[1] != 5 {
 		t.Fatalf("unexpected values: %v", vals)
@@ -365,11 +403,14 @@ func TestFrameTail(t *testing.T) {
 
 func TestFrameArrange(t *testing.T) {
 	ds := makeTestDS(t)
+
 	result, err := dataset.From(ds).Arrange("x").Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	col, _ := dataset.GetColumn[float64](result, "x")
+
 	vals := col.Values()
 	for i := 1; i < len(vals); i++ {
 		if vals[i] < vals[i-1] {
@@ -380,6 +421,7 @@ func TestFrameArrange(t *testing.T) {
 
 func TestFrameDistinct(t *testing.T) {
 	ds := makeTestDS(t)
+
 	result, err := dataset.From(ds).Distinct("label").Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -392,6 +434,7 @@ func TestFrameDistinct(t *testing.T) {
 
 func TestFrameChain(t *testing.T) {
 	ds := makeTestDS(t)
+
 	result, err := dataset.From(ds).
 		Select("x", "label").
 		Head(4).
@@ -400,9 +443,11 @@ func TestFrameChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 4 {
 		t.Fatalf("expected 4 rows, got %d", result.NumRows())
 	}
+
 	col, _ := dataset.GetColumn[float64](result, "x")
 	vals := col.Values()
 	// After Head(4): [3,1,4,1], After Arrange: [1,1,3,4]
@@ -422,10 +467,13 @@ func TestFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 2 {
 		t.Fatalf("expected 2 rows, got %d", result.NumRows())
 	}
+
 	col, _ := dataset.GetColumn[float64](result, "x")
+
 	vals := col.Values()
 	if vals[0] != 4 || vals[1] != 5 {
 		t.Fatalf("unexpected values: %v", vals)
@@ -446,13 +494,14 @@ func TestFilterEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 0 {
 		t.Fatalf("expected 0 rows, got %d", result.NumRows())
 	}
+
 	if result.Schema().NumFields() != 3 {
 		t.Fatalf("expected 3 fields, got %d", result.Schema().NumFields())
 	}
-
 }
 
 func TestDropNA(t *testing.T) {
@@ -484,14 +533,18 @@ func TestDropNA(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 2 {
 		t.Fatalf("expected 2 rows after DropNA, got %d", result.NumRows())
 	}
+
 	col, _ := dataset.GetColumn[float64](result, "x")
+
 	vals := col.Values()
 	if vals[0] != 1 || vals[1] != 3 {
 		t.Fatalf("unexpected values: %v", vals)
 	}
+
 	lcol, _ := dataset.GetColumn[string](result, "label")
 	if lcol.Values()[0] != "a" || lcol.Values()[1] != "c" {
 		t.Fatalf("unexpected labels: %v", lcol.Values())
@@ -510,13 +563,15 @@ func TestFillDown(t *testing.T) {
 	xApp.AppendNull()
 
 	ds, _ := b.Build()
+
 	result, err := dataset.From(ds).Fill("x", dataset.FillDown).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	col, _ := dataset.GetColumn[float64](result, "x")
 	vals := col.Values()
-	// [1, NaN, NaN, 4, NaN] → FillDown → [1, 1, 1, 4, 4]
+	// [1, NaN, 4, NaN] → FillDown → [1, 1, 4, 4]
 	expected := []float64{1, 1, 1, 4, 4}
 	for i, v := range vals {
 		if v != expected[i] {
@@ -538,11 +593,14 @@ func TestReplaceNA(t *testing.T) {
 
 	filler := dataset.Engine(eng).(dataset.Filler)
 	col, _ := ds.Column("x")
+
 	replaced, err := filler.ReplaceNA(col, -999)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	rCol := replaced.(dataset.Column[float64])
+
 	vals := rCol.Values()
 	if vals[0] != 1 || vals[1] != -999 || vals[2] != 3 {
 		t.Fatalf("unexpected values: %v", vals)
@@ -568,17 +626,21 @@ func TestStack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.NumRows() != 5 {
 		t.Fatalf("expected 5 rows, got %d", result.NumRows())
 	}
+
 	col, _ := dataset.GetColumn[float64](result, "x")
 	vals := col.Values()
+
 	expected := []float64{1, 2, 3, 4, 5}
 	for i, v := range vals {
 		if v != expected[i] {
 			t.Fatalf("at %d: expected %f, got %f", i, expected[i], v)
 		}
 	}
+
 	lcol, _ := dataset.GetColumn[string](result, "label")
 	if lcol.Values()[4] != "e" {
 		t.Fatalf("unexpected last label: %q", lcol.Values()[4])
@@ -600,14 +662,17 @@ func TestCombine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.Schema().NumFields() != 2 {
 		t.Fatalf("expected 2 fields, got %d", result.Schema().NumFields())
 	}
+
 	if result.NumRows() != 3 {
 		t.Fatalf("expected 3 rows, got %d", result.NumRows())
 	}
 
 	xcol, _ := dataset.GetColumn[float64](result, "x")
+
 	lcol, _ := dataset.GetColumn[string](result, "label")
 	if xcol.Values()[0] != 1 || lcol.Values()[2] != "c" {
 		t.Fatalf("unexpected values")
@@ -624,6 +689,7 @@ func TestLagLead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	lv := lag.(dataset.Column[float64]).Values()
 	// [0, 0, 10, 20, 30]
 	if lv[0] != 0 || lv[1] != 0 || lv[2] != 10 || lv[3] != 20 || lv[4] != 30 {
@@ -634,6 +700,7 @@ func TestLagLead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	dv := lead.(dataset.Column[float64]).Values()
 	// [20, 30, 40, 50, 0]
 	if dv[0] != 20 || dv[3] != 50 || dv[4] != 0 {
@@ -644,10 +711,12 @@ func TestLagLead(t *testing.T) {
 func TestCumSum(t *testing.T) {
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5})
+
 	cs, err := eng.CumSum(col)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	vals := cs.(dataset.Column[float64]).Values()
 	// [1, 3, 6, 10, 15]
 	expected := []float64{1, 3, 6, 10, 15}
@@ -689,6 +758,7 @@ func TestRankDenseRank(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	rv := r.(dataset.Column[int64]).Values()
 	if rv[0] != 1 || rv[1] != 4 || rv[2] != 2 || rv[3] != 2 || rv[4] != 5 {
 		t.Fatalf("Rank unexpected: %v", rv)
@@ -700,6 +770,7 @@ func TestRankDenseRank(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	drv := dr.(dataset.Column[int64]).Values()
 	if drv[0] != 1 || drv[1] != 3 || drv[2] != 2 || drv[3] != 2 || drv[4] != 4 {
 		t.Fatalf("DenseRank unexpected: %v", drv)
@@ -708,10 +779,12 @@ func TestRankDenseRank(t *testing.T) {
 
 func TestRowNumber(t *testing.T) {
 	eng := memory.NewEngine(context.Background())
+
 	rn, err := eng.RowNumber(5)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	vals := rn.(dataset.Column[int64]).Values()
 	for i, v := range vals {
 		if v != int64(i+1) {

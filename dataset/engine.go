@@ -62,6 +62,7 @@ func GetEngine(ds Table) Engine {
 	if ed, ok := ds.(HasEngine); ok {
 		return ed.Engine()
 	}
+
 	return nil
 }
 
@@ -149,7 +150,7 @@ type BoolAppender interface {
 type Aggregator interface {
 	Sum(col AnyColumn) (AnyColumn, error)
 	Mean(col AnyColumn) (AnyColumn, error)
-	MinMax(col AnyColumn) (min AnyColumn, max AnyColumn, err error)
+	MinMax(col AnyColumn) (mnCol AnyColumn, mxCol AnyColumn, err error)
 	Count(col AnyColumn) (AnyColumn, error)
 	Median(col AnyColumn) (AnyColumn, error)
 	Variance(col AnyColumn) (AnyColumn, error)

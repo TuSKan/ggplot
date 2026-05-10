@@ -11,6 +11,7 @@
 package theme
 
 import (
+	"errors"
 	"fmt"
 	"image/color"
 	"maps"
@@ -18,6 +19,17 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+)
+
+var (
+	// ErrEmptyName is returned when registering a theme with an empty name.
+	ErrEmptyName = errors.New("theme: cannot register empty name")
+	// ErrNilFactory is returned when registering a nil factory.
+	ErrNilFactory = errors.New("theme: cannot register nil factory")
+	// ErrDuplicateName is returned when a theme name is already registered.
+	ErrDuplicateName = errors.New("theme: name already registered")
+	// ErrUnknownName is returned when resolving an unregistered theme name.
+	ErrUnknownName = errors.New("theme: unknown name")
 )
 
 // Name identifies a built-in theme.
@@ -28,66 +40,127 @@ type Name string
 // Default resolves to the matplotlib ggplot preset; users who want the old
 // hand-tuned light theme should pick a specific named preset instead.
 const (
+	// Default is the default theme.
 	Default Name = "default"
 
-	// Library originals (kept for callers that selected them by name).
+	// Minimal is the library-original minimal theme.
 	Minimal Name = "minimal"
-	Dark    Name = "dark"
-	BW      Name = "bw"
 
-	// Matplotlib stylelib presets.
-	Ggplot              Name = "ggplot"
-	Classic             Name = "classic"
-	Grayscale           Name = "grayscale"
-	Bmh                 Name = "bmh"
-	Fivethirtyeight     Name = "fivethirtyeight"
-	DarkBackground      Name = "dark_background"
-	SolarizeLight2      Name = "solarize_light2"
-	SolarizeDark        Name = "solarize_dark"
+	// Dark is the dark theme.
+	Dark Name = "dark"
+	// BW is the black and white theme.
+	BW Name = "bw"
+
+	// Ggplot is the matplotlib ggplot preset.
+	Ggplot Name = "ggplot"
+
+	// Classic is the classic theme.
+	Classic Name = "classic"
+
+	// Grayscale is the grayscale theme.
+	Grayscale Name = "grayscale"
+
+	// Bmh is the bmh theme.
+	Bmh Name = "bmh"
+
+	// Fivethirtyeight is the fivethirtyeight theme.
+	Fivethirtyeight Name = "fivethirtyeight"
+
+	// DarkBackground is the dark background theme.
+	DarkBackground Name = "dark_background"
+
+	// SolarizeLight2 is the solarize light2 theme.
+	SolarizeLight2 Name = "solarize_light2"
+
+	// SolarizeDark is the solarize dark theme.
+	SolarizeDark Name = "solarize_dark"
+
+	// TableauColorblind10 is the tableau colorblind10 theme.
 	TableauColorblind10 Name = "tableau_colorblind10"
-	Fast                Name = "fast"
+
+	// Fast is the fast theme.
+	Fast Name = "fast"
 
 	// Seaborn family — chrome variants.
-	Seaborn          Name = "seaborn"
-	SeabornDarkgrid  Name = "seaborn_darkgrid"
-	SeabornWhitegrid Name = "seaborn_whitegrid"
-	SeabornDark      Name = "seaborn_dark"
-	SeabornWhite     Name = "seaborn_white"
-	SeabornTicks     Name = "seaborn_ticks"
+	Seaborn Name = "seaborn"
 
-	// Seaborn family — palette variants.
-	SeabornDeep        Name = "seaborn_deep"
-	SeabornMuted       Name = "seaborn_muted"
-	SeabornBright      Name = "seaborn_bright"
-	SeabornColorblind  Name = "seaborn_colorblind"
-	SeabornPastel      Name = "seaborn_pastel"
+	// SeabornDarkgrid is the seaborn darkgrid theme.
+	SeabornDarkgrid Name = "seaborn_darkgrid"
+
+	// SeabornWhitegrid is the seaborn whitegrid theme.
+	SeabornWhitegrid Name = "seaborn_whitegrid"
+
+	// SeabornDark is the seaborn dark theme.
+	SeabornDark Name = "seaborn_dark"
+
+	// SeabornWhite is the seaborn white theme.
+	SeabornWhite Name = "seaborn_white"
+
+	// SeabornTicks is the seaborn ticks theme.
+	SeabornTicks Name = "seaborn_ticks"
+
+	// SeabornDeep is the Seaborn deep palette variant.
+	SeabornDeep Name = "seaborn_deep"
+
+	// SeabornMuted is the Seaborn muted palette variant.
+	SeabornMuted Name = "seaborn_muted"
+
+	// SeabornBright is the Seaborn bright palette variant.
+	SeabornBright Name = "seaborn_bright"
+
+	// SeabornColorblind is the Seaborn colorblind palette variant.
+	SeabornColorblind Name = "seaborn_colorblind"
+
+	// SeabornPastel is the Seaborn pastel palette variant.
+	SeabornPastel Name = "seaborn_pastel"
+
+	// SeabornDarkPalette is the Seaborn dark palette variant.
 	SeabornDarkPalette Name = "seaborn_dark_palette"
 
-	// Seaborn family — font-size variants.
-	SeabornPaper    Name = "seaborn_paper"
-	SeabornNotebook Name = "seaborn_notebook"
-	SeabornTalk     Name = "seaborn_talk"
-	SeabornPoster   Name = "seaborn_poster"
+	// SeabornPaper is the Seaborn paper font-size variant.
+	SeabornPaper Name = "seaborn_paper"
 
-	// Additions from raybuhr/pyplot-themes that don't overlap with matplotlib.
-	PaulTol    Name = "paul_tol"
-	Few        Name = "few"
-	FewLight   Name = "few_light"
-	FewDark    Name = "few_dark"
+	// SeabornNotebook is the Seaborn notebook font-size variant.
+	SeabornNotebook Name = "seaborn_notebook"
+
+	// SeabornTalk is the Seaborn talk font-size variant.
+	SeabornTalk Name = "seaborn_talk"
+
+	// SeabornPoster is the Seaborn poster font-size variant.
+	SeabornPoster Name = "seaborn_poster"
+
+	// PaulTol is the Paul Tol colorblind-safe palette from pyplot-themes.
+	PaulTol Name = "paul_tol"
+
+	// Few is the few theme.
+	Few Name = "few"
+
+	// FewLight is the few light theme.
+	FewLight Name = "few_light"
+
+	// FewDark is the few dark theme.
+	FewDark Name = "few_dark"
+
+	// UCBerkeley is the ucberkeley theme.
 	UCBerkeley Name = "uc_berkeley"
-	Tableau    Name = "tableau"
+
+	// Tableau is the tableau theme.
 
 	// Colorblind-safe theme (Wong 2011, 8 colors).
 	Colorblind Name = "colorblind"
 
-	// Seasonal / contextual palettes on tableau chrome.
+	// Autumn1 is a seasonal palette on tableau chrome.
 	Autumn1 Name = "autumn1"
+	// Autumn2 is a seasonal palette on tableau chrome.
 	Autumn2 Name = "autumn2"
-	Canyon  Name = "canyon"
-	Chili   Name = "chili"
-	Tomato  Name = "tomato"
+	// Canyon is a seasonal palette on tableau chrome.
+	Canyon Name = "canyon"
+	// Chili is a seasonal palette on tableau chrome.
+	Chili Name = "chili"
+	// Tomato is a seasonal palette on tableau chrome.
+	Tomato Name = "tomato"
 
-	// Solarized light companion (pyplot-themes Solarized.light palette).
+	// SolarizeLight is the solarized light companion (pyplot-themes palette).
 	SolarizeLight Name = "solarize_light"
 
 	// Petroff10 (new in matplotlib 3.10).
@@ -96,13 +169,20 @@ const (
 
 // Theme encapsulates the complete visual styling for a plot.
 type Theme struct {
-	Name       string
+	// Name is the name of the theme.
+	Name string
+	// Background is the background color of the plot.
 	Background color.Color
-	Panel      PanelStyle
-	Grid       GridStyle
-	Text       TextStyles
-	Ticks      TickStyle
-	Spacing    Spacing
+	// Panel is the style of the plot panel.
+	Panel PanelStyle
+	// Grid is the style of the plot grid.
+	Grid GridStyle
+	// Text is the style of the plot text.
+	Text TextStyles
+	// Ticks is the style of the plot ticks.
+	Ticks TickStyle
+	// Spacing is the spacing of the plot.
+	Spacing Spacing
 	// Palette is the discrete color cycle used when the plot has no
 	// explicit color scale set. Mirrors matplotlib's axes.prop_cycle.
 	// May be nil; callers fall back to colormap.Tab10.
@@ -129,53 +209,79 @@ type GeomDefaults struct {
 
 // PanelStyle controls the data panel appearance.
 type PanelStyle struct {
-	Background  color.Color
-	Border      color.Color
+	// Background is the background color of the panel.
+	Background color.Color
+	// Border is the border color of the panel.
+	Border color.Color
+	// BorderWidth is the border width of the panel.
 	BorderWidth float64
 }
 
 // GridStyle controls major and minor grid lines.
 type GridStyle struct {
-	MajorColor     color.Color
-	MajorWidth     float64
-	MinorColor     color.Color
-	MinorWidth     float64
+	// MajorColor is the color of the major grid lines.
+	MajorColor color.Color
+	// MajorWidth is the width of the major grid lines.
+	MajorWidth float64
+	// MinorColor is the color of the minor grid lines.
+	MinorColor color.Color
+	// MinorWidth is the width of the minor grid lines.
+	MinorWidth float64
+	// MajorLineCount is the number of major grid lines.
 	MajorLineCount int       // 0 = auto
 	DashPattern    []float64 // nil = solid, e.g. {4,4} = dashed, {2,3} = dotted
 }
 
 // TextStyles holds font configurations for different text roles.
 type TextStyles struct {
-	Title      FontConfig
-	Subtitle   FontConfig
-	AxisTitle  FontConfig
-	TickLabel  FontConfig
+	// Title is the font configuration for the title.
+	Title FontConfig
+	// Subtitle is the font configuration for the subtitle.
+	Subtitle FontConfig
+	// AxisTitle is the font configuration for the axis titles.
+	AxisTitle FontConfig
+	// TickLabel is the font configuration for the tick labels.
+	TickLabel FontConfig
+	// Legend is the font configuration for the legend.
 	Legend     FontConfig
 	Annotation FontConfig
 }
 
 // FontConfig encapsulates text rendering parameters.
 type FontConfig struct {
+	// Family is the font family.
 	Family string
-	Size   float64
-	Color  color.Color
-	Bold   bool
+	// Size is the font size.
+	Size float64
+	// Color is the font color.
+	Color color.Color
+	// Bold is whether the font is bold.
+	Bold bool
+	// Italic is whether the font is italic.
 	Italic bool
 }
 
 // TickStyle controls axis tick mark appearance.
 type TickStyle struct {
+	// Length is the length of the tick marks.
 	Length float64
-	Width  float64
-	Color  color.Color
+	// Width is the width of the tick marks.
+	Width float64
+	// Color is the color of the tick marks.
+	Color color.Color
 }
 
 // Spacing controls margins and inter-element spacing.
 type Spacing struct {
-	MarginTop    float64
-	MarginRight  float64
+	// MarginTop is the top margin.
+	MarginTop float64
+	// MarginRight is the right margin.
+	MarginRight float64
+	// MarginBottom is the bottom margin.
 	MarginBottom float64
-	MarginLeft   float64
+	// MarginLeft is the left margin.
+	MarginLeft float64
+	// PanelSpacing is the spacing between panels.
 	PanelSpacing float64
 }
 
@@ -198,17 +304,22 @@ var (
 // resolvable by name.
 func Register(name Name, f Factory) error {
 	if name == "" {
-		return fmt.Errorf("theme: cannot register empty name")
+		return ErrEmptyName
 	}
+
 	if f == nil {
-		return fmt.Errorf("theme: cannot register nil factory for %q", name)
+		return fmt.Errorf("%w for %q", ErrNilFactory, name)
 	}
+
 	registryMu.Lock()
 	defer registryMu.Unlock()
+
 	if _, dup := registry[name]; dup {
-		return fmt.Errorf("theme: name %q already registered", name)
+		return fmt.Errorf("%w: %q", ErrDuplicateName, name)
 	}
+
 	registry[name] = f
+
 	return nil
 }
 
@@ -226,21 +337,29 @@ func Resolve(name Name) (Theme, error) {
 	if name == "" {
 		name = Default
 	}
+
 	registryMu.RLock()
+
 	f, ok := registry[name]
+
 	registryMu.RUnlock()
+
 	if !ok {
-		return Theme{}, fmt.Errorf("theme: unknown name %q", name)
+		return Theme{}, fmt.Errorf("%w: %q", ErrUnknownName, name)
 	}
+
 	return f(), nil
 }
 
 // AllNames returns every registered Name in alphabetical order.
 func AllNames() []Name {
 	registryMu.RLock()
+
 	out := slices.Collect(maps.Keys(registry))
+
 	registryMu.RUnlock()
 	slices.Sort(out)
+
 	return out
 }
 
@@ -295,26 +414,29 @@ func gray(v uint8) color.Color {
 // hex parses a 6-character hex color (with optional leading '#') into an
 // opaque RGBA. Panics on malformed input — preset files supply literals
 // from upstream stylesheets, not user data.
-func hex(s string) color.Color {
+func hex(s string) color.RGBA {
 	s = strings.TrimPrefix(s, "#")
 	if len(s) != 6 {
 		panic(fmt.Sprintf("theme.hex: expected 6 hex chars, got %q", s))
 	}
+
 	n, err := strconv.ParseUint(s, 16, 32)
 	if err != nil {
 		panic(fmt.Sprintf("theme.hex: %v", err))
 	}
+
 	return color.RGBA{
-		R: uint8(n >> 16),
-		G: uint8(n >> 8),
-		B: uint8(n),
+		R: uint8(n >> 16), //nolint:gosec // G115: hex input is validated to 6 chars (24 bits); overflow impossible.
+		G: uint8(n >> 8),  //nolint:gosec // G115: hex input is validated to 6 chars (24 bits); overflow impossible.
+		B: uint8(n),       //nolint:gosec // G115: hex input is validated to 6 chars (24 bits); overflow impossible.
 		A: 255,
 	}
 }
 
 // hexA is hex with an explicit alpha (0–255).
 func hexA(s string, a uint8) color.Color {
-	c := hex(s).(color.RGBA)
+	c := hex(s)
 	c.A = a
+
 	return c
 }

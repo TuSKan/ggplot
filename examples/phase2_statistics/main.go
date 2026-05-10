@@ -32,6 +32,7 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 	if err := p.Save(context.Background(), out, w, h); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
@@ -54,10 +55,12 @@ func identityStat(dir string) {
 func binCountStat(dir string) {
 	rng := rand.New(rand.NewSource(42))
 	n := 600
+
 	xs := make([]float64, n)
 	for i := range xs {
 		xs[i] = rng.NormFloat64()*12 + 100
 	}
+
 	eng2 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng2, eng2.NewFloat64Column("weight", xs))
 	p := ggplot.New(ds, aes.X("weight")).
@@ -71,6 +74,7 @@ func binCountStat(dir string) {
 func densityStat(dir string) {
 	rng := rand.New(rand.NewSource(42))
 	n := 500
+
 	xs := make([]float64, n)
 	for i := range xs {
 		if rng.Float64() < 0.4 {
@@ -79,6 +83,7 @@ func densityStat(dir string) {
 			xs[i] = rng.NormFloat64()*5 + 40
 		}
 	}
+
 	eng3 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng3, eng3.NewFloat64Column("measurement", xs))
 	p := ggplot.New(ds, aes.X("measurement")).
@@ -92,11 +97,13 @@ func densityStat(dir string) {
 func smoothStat(dir string) {
 	rng := rand.New(rand.NewSource(42))
 	n := 100
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i) * 0.12
 		ys[i] = 2*math.Sin(xs[i]) + 0.5*xs[i] + rng.NormFloat64()*0.8
 	}
+
 	eng4 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng4, eng4.NewFloat64Column("x", xs), eng4.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -110,13 +117,16 @@ func smoothStat(dir string) {
 // BoxPlot stat — five-number summary
 func boxplotStat(dir string) {
 	rng := rand.New(rand.NewSource(42))
+
 	var x, y []float64
+
 	for g := 1; g <= 4; g++ {
-		for i := 0; i < 40; i++ {
+		for range 40 {
 			x = append(x, float64(g))
 			y = append(y, float64(g)*10+rng.NormFloat64()*float64(g)*3)
 		}
 	}
+
 	eng5 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng5, eng5.NewFloat64Column("group", x), eng5.NewFloat64Column("value", y))
 	p := ggplot.New(ds, aes.X("group"), aes.Y("value")).

@@ -35,6 +35,7 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 	if err := p.Save(context.Background(), out, w, h); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
@@ -42,11 +43,13 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 // Custom tick positions and percentage labels on a completion chart.
 func breaksAndLabels(dir string) {
 	n := 100
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i)
 		ys[i] = 100 * (1 - math.Exp(-float64(i)*0.04)) // saturation curve
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("day", xs),
@@ -94,6 +97,7 @@ func currencyFormatter(dir string) {
 				if v >= 1000 {
 					return fmt.Sprintf("$%.0fk", v/1000)
 				}
+
 				return fmt.Sprintf("$%.0f", v)
 			}),
 		).
@@ -115,11 +119,13 @@ func currencyFormatter(dir string) {
 // Side-by-side: default 5% padding vs explicit tight expand.
 func expandPadding(dir string) {
 	n := 40
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i)
 		ys[i] = math.Sin(float64(i)*0.2) * 10
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", xs),
@@ -157,12 +163,14 @@ func expandPadding(dir string) {
 // Minor grid lines for a scientific data plot.
 func minorGridLines(dir string) {
 	n := 200
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		x := float64(i) * 0.1
 		xs[i] = x
 		ys[i] = math.Exp(-x*0.15) * math.Cos(x)
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("time", xs),
@@ -197,12 +205,14 @@ func minorGridLines(dir string) {
 // Zoom into a specific region without filtering data.
 func clipBoundsZoom(dir string) {
 	n := 200
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		x := float64(i) * 0.5
 		xs[i] = x
 		ys[i] = math.Sin(x*0.1)*50 + 100 + float64(i)*0.3
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", xs),

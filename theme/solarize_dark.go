@@ -71,5 +71,6 @@ func newSolarizeDark() Theme {
 		hex("2AA198"), // cyan
 		hex("859900"), // green
 	}
+
 	return t
 }

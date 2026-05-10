@@ -159,6 +159,7 @@ func NewEngine(ctx context.Context, projectID string, opts ...Option) (*Engine, 
 		if err != nil {
 			return nil, fmt.Errorf("bigquery: failed to create client: %w", err)
 		}
+
 		e.bqClient = client
 	}
 
@@ -169,6 +170,7 @@ func NewEngine(ctx context.Context, projectID string, opts ...Option) (*Engine, 
 			e.bqClient.Close()
 			return nil, fmt.Errorf("bigquery: failed to create storage read client: %w", err)
 		}
+
 		e.readClient = rc
 	}
 
@@ -202,12 +204,15 @@ func (e *Engine) Close() error {
 	if err := e.readClient.Close(); err != nil {
 		errs = append(errs, err)
 	}
+
 	if err := e.bqClient.Close(); err != nil {
 		errs = append(errs, err)
 	}
+
 	if len(errs) > 0 {
 		return fmt.Errorf("bigquery: close errors: %v", errs)
 	}
+
 	return nil
 }
 
@@ -242,6 +247,7 @@ func (e *Engine) Table(datasetID, tableID string) (dataset.Table, error) {
 func (e *Engine) registerTempTable(ref tableRef) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	e.tempTables = append(e.tempTables, ref)
 }
 
@@ -249,7 +255,9 @@ func (e *Engine) registerTempTable(ref tableRef) {
 func (e *Engine) nextTempID() int64 {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	e.tempCounter++
+
 	return e.tempCounter
 }
 
@@ -258,6 +266,7 @@ func (e *Engine) localEngine() *arrowEngine.Engine {
 	e._localOnce.Do(func() {
 		e._local = arrowEngine.NewEngine(e.ctx, memory.DefaultAllocator)
 	})
+
 	return e._local
 }
 
@@ -299,7 +308,9 @@ func (e *Engine) NewTimestampColumn(name string, data []int64) dataset.AnyColumn
 func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) (dataset.Table, error) {
 	// Check if all columns are bqColumns from the same dataset
 	var bqDS *bqDataset
+
 	allBQ := true
+
 	names := make([]string, len(cols))
 	for i, col := range cols {
 		bqCol, ok := col.(*bqColumn)
@@ -307,6 +318,7 @@ func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) 
 			allBQ = false
 			break
 		}
+
 		names[i] = bqCol.name
 		if bqDS == nil {
 			bqDS = bqCol.ds

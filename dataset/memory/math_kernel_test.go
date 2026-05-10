@@ -21,6 +21,7 @@ func intCol(eng *memeng.Engine, vals []int64) dataset.AnyColumn {
 
 func assertClose(t *testing.T, name string, got, want float64) {
 	t.Helper()
+
 	if math.Abs(got-want) > 1e-6 {
 		t.Errorf("%s = %v, want %v", name, got, want)
 	}
@@ -40,10 +41,12 @@ func TestMemAddCols(t *testing.T) {
 	eng := mathEngine()
 	a := mathCol(eng, []float64{1, 2, 3})
 	b := mathCol(eng, []float64{10, 20, 30})
+
 	r, err := eng.AddCols(a, b)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	vals := r.(interface{ Values() []float64 }).Values()
 	if vals[0] != 11 || vals[1] != 22 || vals[2] != 33 {
 		t.Errorf("AddCols = %v", vals)
@@ -54,6 +57,7 @@ func TestMemMulScalar(t *testing.T) {
 	eng := mathEngine()
 	col := mathCol(eng, []float64{2, 4, 6})
 	r, _ := eng.MulScalar(col, 3)
+
 	vals := r.(interface{ Values() []float64 }).Values()
 	if vals[0] != 6 || vals[1] != 12 || vals[2] != 18 {
 		t.Errorf("MulScalar = %v", vals)
@@ -132,6 +136,7 @@ func TestMemBitAnd(t *testing.T) {
 	eng := mathEngine()
 	a := intCol(eng, []int64{0xFF})
 	b := intCol(eng, []int64{0x0F})
+
 	r, _ := eng.BitAnd(a, b)
 	if getI64(r) != 0x0F {
 		t.Errorf("BitAnd = %X, want 0F", getI64(r))
@@ -140,6 +145,7 @@ func TestMemBitAnd(t *testing.T) {
 
 func TestMemBitShiftLeft(t *testing.T) {
 	eng := mathEngine()
+
 	r, _ := eng.BitShiftLeft(intCol(eng, []int64{1}), 8)
 	if getI64(r) != 256 {
 		t.Errorf("ShiftLeft(1,8) = %d, want 256", getI64(r))

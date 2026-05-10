@@ -17,18 +17,21 @@ import (
 
 // ReadCSV reads CSV data using arrow/csv.NewInferringReader with chunked
 // streaming. Default chunk is 64K rows per batch to bound memory for large files.
-func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig) (dataset.Table, error) {
+func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) (dataset.Table, error) {
 	chunkSize := cfg.ChunkSize
 	if chunkSize <= 0 {
 		chunkSize = 1 << 16 // 65 536 rows default
 	}
 
 	var opts []arrowcsv.Option
+
 	opts = append(opts, arrowcsv.WithHeader(cfg.HasHeader))
+
 	opts = append(opts, arrowcsv.WithComma(cfg.Comma))
 	if cfg.Comment != 0 {
 		opts = append(opts, arrowcsv.WithComment(cfg.Comment))
 	}
+
 	opts = append(opts, arrowcsv.WithNullReader(true, cfg.NullValues...))
 	opts = append(opts, arrowcsv.WithChunk(chunkSize))
 	opts = append(opts, arrowcsv.WithAllocator(e.alloc))
@@ -46,8 +49,10 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 		strings []string
 	}
 
-	var accums []colAcc
-	var fields []dataset.Field
+	var (
+		accums []colAcc
+		fields []dataset.Field
+	)
 
 	for rr.Next() {
 		rec := rr.RecordBatch()
@@ -57,15 +62,16 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 		// First batch: initialize accumulators from schema.
 		if accums == nil {
 			schema := rec.Schema()
+
 			accums = make([]colAcc, nCols)
-			for i := 0; i < nCols; i++ {
+			for i := range nCols {
 				f := schema.Field(i)
 				accums[i] = colAcc{name: f.Name, typeID: f.Type.ID()}
 			}
 		}
 
 		// Append chunk data to accumulators.
-		for i := 0; i < nCols; i++ {
+		for i := range nCols {
 			col := rec.Column(i)
 			a := &accums[i]
 
@@ -73,8 +79,9 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 			case arrow.FLOAT64:
 				arr := col.(*array.Float64)
 				start := len(a.floats)
+
 				a.floats = append(a.floats, arr.Float64Values()...)
-				for j := 0; j < nRows; j++ {
+				for j := range nRows {
 					if arr.IsNull(j) {
 						a.floats[start+j] = math.NaN()
 					}
@@ -86,13 +93,13 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 
 			case arrow.BOOL:
 				arr := col.(*array.Boolean)
-				for j := 0; j < nRows; j++ {
+				for j := range nRows {
 					a.bools = append(a.bools, arr.Value(j))
 				}
 
 			default: // string
 				arr := col.(*array.String)
-				for j := 0; j < nRows; j++ {
+				for j := range nRows {
 					a.strings = append(a.strings, arr.Value(j))
 				}
 			}
@@ -109,6 +116,7 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 
 	// Build dataset from accumulated columns.
 	var dsCols []dataset.AnyColumn
+
 	for _, a := range accums {
 		switch a.typeID {
 		case arrow.FLOAT64:
@@ -130,8 +138,9 @@ func (e *Engine) ReadCSV(ctx context.Context, r io.Reader, cfg dataset.CSVConfig
 }
 
 // WriteCSV writes a Dataset as CSV using go-simdcsv (generic string-based output).
-func (e *Engine) WriteCSV(ctx context.Context, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
+func (e *Engine) WriteCSV(_ context.Context, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
 	writer := csv.NewWriter(w)
+
 	writer.Comma = cfg.Comma
 	defer writer.Flush()
 
@@ -142,9 +151,10 @@ func (e *Engine) WriteCSV(ctx context.Context, w io.Writer, ds dataset.Table, cf
 	// Write header.
 	if cfg.HasHeader {
 		header := make([]string, nCols)
-		for i := 0; i < nCols; i++ {
+		for i := range nCols {
 			header[i] = schema.Field(i).Name
 		}
+
 		if err := writer.Write(header); err != nil {
 			return err
 		}
@@ -152,21 +162,24 @@ func (e *Engine) WriteCSV(ctx context.Context, w io.Writer, ds dataset.Table, cf
 
 	// Build column formatters.
 	formatters := make([]func(int) string, nCols)
-	for i := 0; i < nCols; i++ {
+	for i := range nCols {
 		f := schema.Field(i)
+
 		col, err := ds.Column(f.Name)
 		if err != nil {
 			return err
 		}
+
 		formatters[i] = arrowMakeFormatter(col)
 	}
 
 	// Write data rows.
 	row := make([]string, nCols)
-	for r := 0; r < nRows; r++ {
-		for c := 0; c < nCols; c++ {
+	for r := range nRows {
+		for c := range nCols {
 			row[c] = formatters[c](r)
 		}
+
 		if err := writer.Write(row); err != nil {
 			return err
 		}
@@ -179,29 +192,34 @@ func arrowMakeFormatter(col dataset.AnyColumn) func(int) string {
 	switch c := col.(type) {
 	case dataset.Column[float64]:
 		vals := c.Values()
+
 		return func(row int) string {
 			v := vals[row]
 			if math.IsNaN(v) {
 				return "NA"
 			}
+
 			return strconv.FormatFloat(v, 'g', -1, 64)
 		}
 	case dataset.Column[int64]:
 		vals := c.Values()
+
 		return func(row int) string {
 			return strconv.FormatInt(vals[row], 10)
 		}
 	case dataset.Column[bool]:
 		vals := c.Values()
+
 		return func(row int) string {
 			return strconv.FormatBool(vals[row])
 		}
 	case dataset.Column[string]:
 		vals := c.Values()
+
 		return func(row int) string {
 			return vals[row]
 		}
 	default:
-		return func(row int) string { return "" }
+		return func(_ int) string { return "" }
 	}
 }

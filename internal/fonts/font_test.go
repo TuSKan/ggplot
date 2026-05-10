@@ -6,6 +6,8 @@ import (
 )
 
 func TestScoreAndTiebreak(t *testing.T) {
+	t.Parallel()
+
 	q := Query{Family: "arial", Weight: WeightNormal, Style: StyleNormal, PreferMonospace: false}
 
 	f1 := Font{Family: "arial", Weight: WeightNormal, Style: StyleNormal, FullName: "Arial B", Path: "/a"}
@@ -23,6 +25,8 @@ func TestScoreAndTiebreak(t *testing.T) {
 }
 
 func TestResolverFallbackChains(t *testing.T) {
+	t.Parallel()
+
 	reg := &Registry{
 		fonts: []Font{
 			{Family: "liberation sans", Weight: WeightNormal},
@@ -34,6 +38,7 @@ func TestResolverFallbackChains(t *testing.T) {
 
 	// 1. Missing exact requested family mappings picking directly the first matching generic mapped cascade.
 	q1 := Query{Family: "unknown", AllowFallback: true}
+
 	f1 := res.Resolve(q1)
 	if f1 == nil || f1.Family != "liberation sans" {
 		t.Errorf("expected fallback generic chain to pick generic mapped liberation sans.")
@@ -41,6 +46,7 @@ func TestResolverFallbackChains(t *testing.T) {
 
 	// 2. Hits an configured aliasing mechanism missing triggering standard defaults logic.
 	q2 := Query{Family: "helvetica", AllowFallback: false}
+
 	f2 := res.Resolve(q2)
 	if f2 == nil || f2.Family != "liberation sans" {
 		t.Errorf("expected near structural alias array mapping identifying liberation sans mapping overrides ")
@@ -48,6 +54,7 @@ func TestResolverFallbackChains(t *testing.T) {
 
 	// 3. Blocks queries without breaking cascades dropping structural variables completely missing configurations.
 	q3 := Query{Family: "comic sans", AllowFallback: false} // we don't have comic sans ms mapped
+
 	f3 := res.Resolve(q3)
 	if f3 != nil {
 		t.Errorf("expected nil result blocking generic empty cascade mappings ")
@@ -63,6 +70,7 @@ func TestResolverFallbackChains(t *testing.T) {
 	resMono := NewResolver(regMono, DefaultFallbackConfig())
 
 	q4 := Query{Family: "menlo", Weight: WeightBold, AllowFallback: true}
+
 	f4 := resMono.Resolve(q4)
 	if f4 == nil || f4.Family != "menlo" {
 		t.Errorf("expected logic routing exactly returning family identical variant missing styles constraints ")
@@ -70,15 +78,20 @@ func TestResolverFallbackChains(t *testing.T) {
 }
 
 func TestWeightParsing(t *testing.T) {
+	t.Parallel()
+
 	if parseWeight("Light Italic") != WeightLight {
 		t.Errorf("incorrect parse for light")
 	}
+
 	if parseWeight("Black") != WeightBlack {
 		t.Errorf("incorrect parse for black")
 	}
 }
 
 func TestMonospaceHinting(t *testing.T) {
+	t.Parallel()
+
 	qMono := Query{Family: "generic", PreferMonospace: true}
 	fM := Font{Family: "generic", IsMonospace: true}
 	fN := Font{Family: "generic", IsMonospace: false}
@@ -89,6 +102,8 @@ func TestMonospaceHinting(t *testing.T) {
 }
 
 func TestParseFontFileInvalid(t *testing.T) {
+	t.Parallel()
+
 	_, err := parseFontFile("fake.ttf", []byte("1234567890abcdefghijklmnopqrstuvwxyz"))
 	if err == nil {
 		t.Errorf("expected error when breaking corrupt string loads internally loops parsing tracking ")
@@ -96,6 +111,8 @@ func TestParseFontFileInvalid(t *testing.T) {
 }
 
 func TestConcurrentLoadFace(t *testing.T) {
+	t.Parallel()
+
 	reg := &Registry{
 		fonts: []Font{
 			{Family: "arial", Weight: WeightNormal},
@@ -106,7 +123,7 @@ func TestConcurrentLoadFace(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -129,6 +146,8 @@ func TestConcurrentLoadFace(t *testing.T) {
 }
 
 func TestMeasureExtents(t *testing.T) {
+	t.Parallel()
+
 	// grabs a real file locally mapped bypassing mock paths ensuring sfnt unmarshals.
 	reg, _ := NewRegistry()
 	if len(reg.Fonts()) == 0 {
@@ -154,28 +173,30 @@ func TestMeasureExtents(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error mapping arrays: %v", err)
 	}
+
 	if eEmpty.Width != 0 {
 		t.Errorf("Expected 0 width for empty strings!")
 	}
+
 	if eEmpty.LineHeight <= 0 {
 		t.Errorf("LineHeight maps independent of string widths: %v", eEmpty.LineHeight)
 	}
 
 	// 2. ASCII geometries summing points internally
-	eAscii, _ := handle.MeasureExtents("Testing bounding boxes")
-	if eAscii.Width <= 0 {
+	eASCII, _ := handle.MeasureExtents("Testing bounding boxes")
+	if eASCII.Width <= 0 {
 		t.Errorf("Expected positive Width mapped")
 	}
 
 	// 3. Caching overrides tracking repeats
-	eAsciiRepeat, _ := handle.MeasureExtents("Testing bounding boxes")
-	if eAscii.Width != eAsciiRepeat.Width {
+	eASCIIRepeat, _ := handle.MeasureExtents("Testing bounding boxes")
+	if eASCII.Width != eASCIIRepeat.Width {
 		t.Errorf("Drift tracked on parallel string mappings illegally!")
 	}
 
 	// 4. Mixed width glyphs parsing wide Japanese bounds scaled logic
 	eMixed, _ := handle.MeasureExtents("Testing boundingBoxes 自動")
-	if eMixed.Width <= eAscii.Width {
+	if eMixed.Width <= eASCII.Width {
 		t.Errorf("Expected Japanese glyph elements widening layouts")
 	}
 }

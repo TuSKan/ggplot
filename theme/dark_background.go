@@ -48,5 +48,6 @@ func newDarkBackground() Theme {
 		hex("CCEBC4"),
 		hex("FFED6F"),
 	}
+
 	return t
 }

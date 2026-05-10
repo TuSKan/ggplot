@@ -2,11 +2,13 @@ package colormap
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"strconv"
 
-	"github.com/TuSKan/ggplot/dataset"
 	"github.com/gogpu/gg"
+
+	"github.com/TuSKan/ggplot/dataset"
 )
 
 // Scale composes a [Norm] and a [Cmap] into a dataset-aware color mapper.
@@ -41,9 +43,11 @@ func NewContinuous(c Cmap, n Norm) *Scale {
 	if c == nil {
 		c = Viridis
 	}
+
 	if n == nil {
 		n = &LinearNorm{}
 	}
+
 	return &Scale{cmap: c, norm: n}
 }
 
@@ -55,6 +59,7 @@ func NewDiscrete(c Cmap) *Scale {
 	if c == nil {
 		c = Tab10
 	}
+
 	return &Scale{
 		cmap:     c,
 		discrete: true,
@@ -68,9 +73,8 @@ func NewDiscrete(c Cmap) *Scale {
 // trained.
 func NewManual(m map[string]gg.RGBA) *Scale {
 	overrides := make(map[string]gg.RGBA, len(m))
-	for k, v := range m {
-		overrides[k] = v
-	}
+	maps.Copy(overrides, m)
+
 	return &Scale{
 		cmap:      Tab10,
 		discrete:  true,
@@ -104,6 +108,7 @@ func (s *Scale) SetOverride(label string, c gg.RGBA) {
 	if s.overrides == nil {
 		s.overrides = make(map[string]gg.RGBA)
 	}
+
 	s.overrides[label] = c
 }
 
@@ -122,6 +127,7 @@ func (s *Scale) Discrete() bool { return s.discrete }
 func (s *Scale) Categories() []string {
 	out := make([]string, len(s.categories))
 	copy(out, s.categories)
+
 	return out
 }
 
@@ -132,9 +138,11 @@ func (s *Scale) Train(col dataset.AnyColumn) error {
 	if s.discrete {
 		return s.trainDiscrete(col)
 	}
+
 	if s.norm == nil {
 		s.norm = &LinearNorm{}
 	}
+
 	return s.norm.Train(col)
 }
 
@@ -142,6 +150,7 @@ func (s *Scale) trainDiscrete(col dataset.AnyColumn) error {
 	if s.labelIdx == nil {
 		s.labelIdx = make(map[string]int)
 	}
+
 	switch c := col.(type) {
 	case dataset.Column[string]:
 		for _, v := range c.Values() {
@@ -152,6 +161,7 @@ func (s *Scale) trainDiscrete(col dataset.AnyColumn) error {
 			if math.IsNaN(v) {
 				continue
 			}
+
 			s.observeLabel(strconv.FormatFloat(v, 'g', -1, 64))
 		}
 	case dataset.Column[int64]:
@@ -169,6 +179,7 @@ func (s *Scale) trainDiscrete(col dataset.AnyColumn) error {
 	default:
 		return fmt.Errorf("colormap: discrete Scale cannot train on column %q (%s)", col.Name(), col.DType())
 	}
+
 	return nil
 }
 
@@ -176,6 +187,7 @@ func (s *Scale) observeLabel(label string) {
 	if _, ok := s.labelIdx[label]; ok {
 		return
 	}
+
 	s.labelIdx[label] = len(s.categories)
 	s.categories = append(s.categories, label)
 }
@@ -201,6 +213,7 @@ func (s *Scale) At(v any) gg.RGBA {
 				return c
 			}
 		}
+
 		if s.discrete {
 			return s.atLabel(label)
 		}
@@ -211,6 +224,7 @@ func (s *Scale) At(v any) gg.RGBA {
 		if math.IsNaN(x) {
 			return s.bad()
 		}
+
 		return s.atNumeric(x)
 	case float32:
 		return s.atNumeric(float64(x))
@@ -224,12 +238,14 @@ func (s *Scale) At(v any) gg.RGBA {
 		if x {
 			return s.atLabel("true")
 		}
+
 		return s.atLabel("false")
 	case string:
 		// Continuous Scale fed a string: try to parse it as a float.
 		if f, err := strconv.ParseFloat(x, 64); err == nil {
 			return s.atNumeric(f)
 		}
+
 		return s.atLabel(x)
 	default:
 		return s.bad()
@@ -241,7 +257,9 @@ func (s *Scale) atNumeric(v float64) gg.RGBA {
 	if s.norm == nil {
 		s.norm = &LinearNorm{}
 	}
+
 	t := s.norm.Norm(v)
+
 	return s.cmap.At(t)
 }
 
@@ -253,10 +271,12 @@ func (s *Scale) atLabel(label string) gg.RGBA {
 		if s.labelIdx == nil {
 			s.labelIdx = make(map[string]int)
 		}
+
 		idx = len(s.categories)
 		s.labelIdx[label] = idx
 		s.categories = append(s.categories, label)
 	}
+
 	return s.colorAtIndex(idx)
 }
 
@@ -271,9 +291,11 @@ func (s *Scale) colorAtIndex(i int) gg.RGBA {
 		if n == 0 {
 			return gg.RGBA{}
 		}
+
 		if i >= n {
 			i = n - 1
 		}
+
 		return listed.Color(i)
 	}
 	// Continuous cmap used for discrete data: sample evenly.
@@ -281,7 +303,9 @@ func (s *Scale) colorAtIndex(i int) gg.RGBA {
 	if n <= 1 {
 		return s.cmap.At(0)
 	}
+
 	t := float64(i) / float64(n-1)
+
 	return s.cmap.At(t)
 }
 
@@ -302,5 +326,6 @@ func asLabel(v any) (string, bool) {
 	case fmt.Stringer:
 		return x.String(), true
 	}
+
 	return "", false
 }

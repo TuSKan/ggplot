@@ -1,57 +1,104 @@
-# golangci-lint config for ggplot
-# Run: golangci-lint run --timeout 10m
+version: "2"
 
 run:
-  timeout: 10m
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
 
 linters:
+  default: all
+
   enable:
-    - errcheck      # unchecked error returns
-    - staticcheck   # advanced static analysis (SA* checks)
-    - gocritic      # opinionated code style checks
-    - errorlint     # error wrapping/comparison best practices
-    - govet         # go vet checks (already in CI, but explicit)
-    - ineffassign   # unused assignments
-    - unused        # unused code
-    - typecheck     # type checking
+    - gomodguard_v2
 
-linters-settings:
-  errcheck:
-    # Don't flag fmt.Fprintf / io.Writer.Write — too noisy for rendering code.
-    exclude-functions:
-      - fmt.Fprintf
-      - fmt.Fprintln
-      - (io.Writer).Write
-      - (*bytes.Buffer).WriteString
-      - (*bytes.Buffer).Write
+  disable:
+    # ── Deprecated / replaced ─────────────────────────────────────────
+    - gomodguard # deprecated; replaced by gomodguard_v2
 
-  staticcheck:
-    checks:
-      - all
+    # ── Complexity: keep one useful signal ────────────────────────────
+    - cyclop    # redundant with gocognit for this project
+    - gocyclo   # redundant with gocognit for this project
+    - maintidx  # maintainability index is too noisy for rendering/pipeline code
 
-  gocritic:
-    disabled-checks:
-      - ifElseChain     # style-only; switch isn't always clearer
+    # ── Not applicable to this project ────────────────────────────────
+    - depguard        # no dependency allowlist yet
+    - protogetter     # no protobuf
+    - testifylint     # no testify
+    - zerologlint     # no zerolog
+    - rowserrcheck    # no SQL
+    - sqlclosecheck   # no SQL
+    - spancheck       # no tracing
+    - canonicalheader # no canonical net/http.Header handling
+    - gosmopolitan    # no i18n policy yet
+    - musttag         # no universal struct tag policy
+    - tagliatelle     # no JSON naming convention policy
 
-  errorlint:
-    # Only flag errors.Is / errors.As misuse, not fmt.Errorf wrapping style.
-    errorf: false
-    asserts: true
-    comparison: true
+    # ── Style choices ─────────────────────────────────────────────────
+    - exhaustruct     # partial struct init is idiomatic for options/builders
+    - varnamelen      # x, y, r, g, b, dx, dy are natural in plotting/graphics code
+    - godox           # TODO/FIXME are tracked separately
+    - goheader        # no per-file license header requirement
+    - nlreturn        # blank line before return is style
+    - wsl             # whitespace style preference
+    - godot           # comment punctuation is style
+    - decorder        # declaration order follows API/story, not mechanical grouping
+    - noinlineerr     # inline error handling is concise for short guards
+    - funcorder       # plotting API order should follow conceptual flow
 
-issues:
-  # Don't report issues in test files for errcheck — test code often ignores errors intentionally.
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gocritic
+    # ── Plotting / rendering codebase policy ──────────────────────────
+    - mnd              # plotting defaults use numeric constants: margins, DPI, alpha, tick counts
+    - goconst          # repeated literals may be meaningful aesthetic/default values
+    - funlen           # renderer/layout/scale-training functions can be naturally long
+    - lll              # long comments, SVG paths, examples, and table rows are acceptable
+    - gochecknoglobals # default themes, palettes, scales, and registries may be package-level
+    - nonamedreturns   # named returns can document graphical outputs: x, y, width, height
+    - dogsled          # some parser/renderer APIs may intentionally ignore returned values
+    - nestif           # too primitive; gocognit already provides the useful complexity signal
+    - recvcheck        # value receivers for small value types, pointer receivers for builders/mutation
+    - ireturn          # factories may intentionally return Geom, Stat, Scale, Renderer interfaces
+    - goprintffuncname # too dogmatic for domain/test helper names
+    - inamedparam      # interface method parameter names are usually clear from type/docs
+    - gochecknoinits   # theme self-registration and engine bootstrapping use init()
+    - interfacebloat   # Canvas is a cohesive rendering backend; splitting would fragment a natural API boundary
 
-    # Exclude generated files.
-    - path: ".*_gen\\.go"
-      linters:
-        - all
+  settings:
+    gocognit:
+      min-complexity: 50
 
-  # Show all issues, don't cap per-linter.
-  max-issues-per-linter: 0
-  max-same-issues: 0
+    gomodguard_v2:
+      local-replace-directives: true
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+
+  exclusions:
+    rules:
+      # White-box tests are acceptable while the public API is still evolving.
+      - path: '(.+)_test\.go'
+        linters:
+          - testpackage
+
+      # Tests commonly use fixture paths, permissions, and deterministic sample data.
+      - path: '(.+)_test\.go'
+        linters:
+          - gosec
+
+      # Examples intentionally print rendered output or demo values.
+      - path: '^examples/'
+        linters:
+          - forbidigo
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+  settings:
+    gofmt:
+      simplify: true
+
+    goimports:
+      local-prefixes:
+        - github.com/TuSKan/ggplot

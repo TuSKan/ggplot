@@ -15,9 +15,11 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 
 	"github.com/TuSKan/ggplot/dataset"
 	simd "github.com/TuSKan/ggplot/dataset/compute"
@@ -40,51 +42,64 @@ func (e *Engine) Context() context.Context {
 	if e.ctx == nil {
 		return context.Background()
 	}
+
 	return e.ctx
 }
 
 // --- ColumnFactory ---
 
+// NewFloat64Column creates a float64 column from the given slice.
 func (e *Engine) NewFloat64Column(name string, data []float64) dataset.AnyColumn {
 	return &float64Column{name: name, data: data}
 }
 
+// NewInt64Column creates an int64 column from the given slice.
 func (e *Engine) NewInt64Column(name string, data []int64) dataset.AnyColumn {
 	return &int64Column{name: name, data: data}
 }
 
+// NewStringColumn creates a string column from the given slice.
 func (e *Engine) NewStringColumn(name string, data []string) dataset.AnyColumn {
 	return &stringColumn{name: name, data: data}
 }
 
+// NewBoolColumn creates a bool column from the given slice.
 func (e *Engine) NewBoolColumn(name string, data []bool) dataset.AnyColumn {
 	return &boolColumn{name: name, data: data}
 }
 
+// NewTimestampColumn creates a timestamp column (int64-backed) from the given slice.
 func (e *Engine) NewTimestampColumn(name string, data []int64) dataset.AnyColumn {
 	return &int64Column{name: name, data: data, dtype: dataset.DTypeTimestamp}
 }
 
+// FromColumns constructs a Table from a schema and pre-built columns.
 func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) (dataset.Table, error) {
 	if len(cols) == 0 {
-		return nil, fmt.Errorf("memory: FromColumns requires at least one column")
+		return nil, errors.New("memory: FromColumns requires at least one column")
 	}
+
 	length := cols[0].Len()
+
 	columns := make(map[string]dataset.AnyColumn, len(cols))
 	for _, col := range cols {
 		if col.Len() != length {
 			return nil, fmt.Errorf("memory: column %q has length %d, expected %d",
 				col.Name(), col.Len(), length)
 		}
+
 		columns[col.Name()] = col
 	}
+
 	return &memDataset{schema: schema, columns: columns, length: length, eng: e}, nil
 }
 
 // --- BuilderFactory ---
 
+// NewBuilder creates a typed row-appender for the given schema.
 func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 	b := &memBuilder{eng: e, schema: schema}
+
 	b.appenders = make(map[string]any, schema.NumFields())
 	for i := 0; i < schema.NumFields(); i++ {
 		f := schema.Field(i)
@@ -99,11 +114,13 @@ func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 			b.appenders[f.Name] = &memBoolAppender{}
 		}
 	}
+
 	return b
 }
 
 // --- Aggregator (returns AnyColumn, preserves input type) ---
 
+// Sum returns the sum of a numeric column as a single-row column.
 func (e *Engine) Sum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	switch c := col.(type) {
 	case *float64Column:
@@ -117,10 +134,12 @@ func (e *Engine) Sum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	}
 }
 
+// Mean returns the arithmetic mean of a float64 column as a single-row column.
 func (e *Engine) Mean(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	if col.Len() == 0 {
-		return nil, fmt.Errorf("memory: Mean of empty column")
+		return nil, errors.New("memory: Mean of empty column")
 	}
+
 	switch c := col.(type) {
 	case *float64Column:
 		s := simd.SliceSum(c.data)
@@ -133,36 +152,43 @@ func (e *Engine) Mean(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	}
 }
 
+// MinMax returns two single-row columns containing the min and max values.
 func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyColumn, error) {
 	switch c := col.(type) {
 	case *float64Column:
 		if len(c.data) == 0 {
-			return nil, nil, fmt.Errorf("memory: MinMax of empty column")
+			return nil, nil, errors.New("memory: MinMax of empty column")
 		}
 		// Scalar reduction; SIMD via Vec[T] generics regresses due to heap-escape (see slice.go).
 		lo, hi := simd.SliceMinMax(c.data)
+
 		return &float64Column{name: c.name, data: []float64{lo}},
 			&float64Column{name: c.name, data: []float64{hi}}, nil
 	case *int64Column:
 		if len(c.data) == 0 {
-			return nil, nil, fmt.Errorf("memory: MinMax of empty column")
+			return nil, nil, errors.New("memory: MinMax of empty column")
 		}
+
 		lo, hi := simd.SliceMinMax(c.data)
+
 		return &int64Column{name: c.name, data: []int64{lo}, dtype: c.dtype},
 			&int64Column{name: c.name, data: []int64{hi}, dtype: c.dtype}, nil
 	case *stringColumn:
 		if len(c.data) == 0 {
-			return nil, nil, fmt.Errorf("memory: MinMax of empty column")
+			return nil, nil, errors.New("memory: MinMax of empty column")
 		}
+
 		lo, hi := c.data[0], c.data[0]
 		for _, v := range c.data[1:] {
 			if v < lo {
 				lo = v
 			}
+
 			if v > hi {
 				hi = v
 			}
 		}
+
 		return &stringColumn{name: c.name, data: []string{lo}},
 			&stringColumn{name: c.name, data: []string{hi}}, nil
 	default:
@@ -170,47 +196,58 @@ func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyCo
 	}
 }
 
+// Count returns the row count of a column as a single-row int64 column.
 func (e *Engine) Count(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	return &int64Column{name: col.Name(), data: []int64{int64(col.Len())}}, nil
+	return &int64Column{name: col.Name(), data: []int64{col.Len()}}, nil
 }
 
+// Median returns the median of a float64 column as a single-row column.
 func (e *Engine) Median(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	c, ok := col.(*float64Column)
 	if !ok {
 		return nil, fmt.Errorf("memory: Median requires float64 column, got %s", col.DType())
 	}
+
 	n := len(c.data)
 	if n == 0 {
-		return nil, fmt.Errorf("memory: Median of empty column")
+		return nil, errors.New("memory: Median of empty column")
 	}
 	// O(n) partial sort via NthElement — no full sort needed.
 	tmp := make([]float64, n)
 	copy(tmp, c.data)
+
 	mid := n / 2
 	dsort.NthElement(tmp, mid)
+
 	var v float64
+
 	if n%2 == 0 {
 		// After NthElement(mid), tmp[:mid] are all ≤ tmp[mid].
 		// Lower median = max(tmp[:mid]) — simple O(n/2) scan.
 		upper := tmp[mid]
+
 		lower := tmp[0]
 		for _, x := range tmp[1:mid] {
 			if x > lower {
 				lower = x
 			}
 		}
+
 		v = (lower + upper) / 2
 	} else {
 		v = tmp[mid]
 	}
+
 	return &float64Column{name: c.name, data: []float64{v}}, nil
 }
 
+// Variance returns the sample variance of a float64 column as a single-row column.
 func (e *Engine) Variance(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	c, ok := col.(*float64Column)
 	if !ok {
 		return nil, fmt.Errorf("memory: Variance requires float64 column, got %s", col.DType())
 	}
+
 	n := len(c.data)
 	if n < 2 {
 		return &float64Column{name: c.name, data: []float64{0}}, nil
@@ -218,15 +255,18 @@ func (e *Engine) Variance(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	// Two-pass: 1) mean via SliceSum, 2) sum of squared deviations
 	mean := simd.SliceSum(c.data) / float64(n)
 	ss := 0.0
+
 	for _, v := range c.data {
 		d := v - mean
 		ss += d * d
 	}
+
 	return &float64Column{name: c.name, data: []float64{ss / float64(n-1)}}, nil
 }
 
 // --- Caster ---
 
+// Cast converts a column to the specified dtype.
 func (e *Engine) Cast(col dataset.AnyColumn, target dataset.DType) (dataset.AnyColumn, error) {
 	switch target {
 	case dataset.DTypeFloat64:
@@ -249,6 +289,7 @@ func (e *Engine) castToFloat64(col dataset.AnyColumn) (dataset.AnyColumn, error)
 		for i, v := range c.data {
 			data[i] = float64(v)
 		}
+
 		return &float64Column{name: c.name, data: data}, nil
 	case *stringColumn:
 		data := make([]float64, len(c.data))
@@ -260,6 +301,7 @@ func (e *Engine) castToFloat64(col dataset.AnyColumn) (dataset.AnyColumn, error)
 				data[i] = f
 			}
 		}
+
 		return &float64Column{name: c.name, data: data}, nil
 	default:
 		return nil, fmt.Errorf("memory: cannot cast %s to float64", col.DType())
@@ -275,6 +317,7 @@ func (e *Engine) castToInt64(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 		for i, v := range c.data {
 			data[i] = int64(v)
 		}
+
 		return &int64Column{name: c.name, data: data}, nil
 	default:
 		return nil, fmt.Errorf("memory: cannot cast %s to int64", col.DType())
@@ -290,12 +333,14 @@ func (e *Engine) castToString(col dataset.AnyColumn) (dataset.AnyColumn, error) 
 		for i, v := range c.data {
 			data[i] = fmt.Sprintf("%g", v)
 		}
+
 		return &stringColumn{name: c.name, data: data}, nil
 	case *int64Column:
 		data := make([]string, len(c.data))
 		for i, v := range c.data {
-			data[i] = fmt.Sprintf("%d", v)
+			data[i] = strconv.FormatInt(v, 10)
 		}
+
 		return &stringColumn{name: c.name, data: data}, nil
 	default:
 		return nil, fmt.Errorf("memory: cannot cast %s to string", col.DType())
@@ -315,20 +360,17 @@ func (c *float64Column) DType() dataset.DType { return dataset.DTypeFloat64 }
 func (c *float64Column) Values() []float64    { return c.data }
 func (c *float64Column) IsNull() []bool {
 	// NaN is the null sentinel for float64 (see memFloat64Appender.AppendNull)
-	hasNull := false
-	for _, v := range c.data {
-		if math.IsNaN(v) {
-			hasNull = true
-			break
-		}
-	}
+	hasNull := slices.ContainsFunc(c.data, math.IsNaN)
+
 	if !hasNull {
 		return nil
 	}
+
 	nulls := make([]bool, len(c.data))
 	for i, v := range c.data {
 		nulls[i] = math.IsNaN(v)
 	}
+
 	return nulls
 }
 
@@ -344,6 +386,7 @@ func (c *int64Column) DType() dataset.DType {
 	if c.dtype != 0 {
 		return c.dtype
 	}
+
 	return dataset.DTypeInt64
 }
 func (c *int64Column) Values() []int64 { return c.data }
@@ -389,6 +432,7 @@ func (d *memDataset) Column(name string) (dataset.AnyColumn, error) {
 	if !ok {
 		return nil, &dataset.ErrColumnNotFound{Name: name}
 	}
+
 	return col, nil
 }
 
@@ -432,6 +476,7 @@ func (b *memBuilder) Build() (dataset.Table, error) {
 			cols[i] = &boolColumn{name: f.Name, data: a.data}
 		}
 	}
+
 	return b.eng.FromColumns(b.schema, cols...)
 }
 
@@ -475,38 +520,45 @@ func (a *memBoolAppender) Reserve(n int) {
 
 // --- Selector ---
 
+// Select returns a new column containing only the rows at the given indices.
 func (e *Engine) Select(col dataset.AnyColumn, indices []int) (dataset.AnyColumn, error) {
 	n := len(indices)
+
 	switch c := col.(type) {
 	case *float64Column:
 		out := make([]float64, n)
 		for i, idx := range indices {
 			out[i] = c.data[idx]
 		}
+
 		return &float64Column{name: c.name, data: out}, nil
 	case *int64Column:
 		out := make([]int64, n)
 		for i, idx := range indices {
 			out[i] = c.data[idx]
 		}
+
 		return &int64Column{name: c.name, data: out, dtype: c.dtype}, nil
 	case *stringColumn:
 		out := make([]string, n)
 		for i, idx := range indices {
 			out[i] = c.data[idx]
 		}
+
 		return &stringColumn{name: c.name, data: out}, nil
 	case *boolColumn:
 		out := make([]bool, n)
 		for i, idx := range indices {
 			out[i] = c.data[idx]
 		}
+
 		return &boolColumn{name: c.name, data: out}, nil
 	default:
 		return nil, fmt.Errorf("memory: Take not supported for %T", col)
 	}
 }
 
+// Slice returns a sub-column from start (inclusive) to end (exclusive).
 func (e *Engine) Slice(col dataset.AnyColumn, start, end int) (dataset.AnyColumn, error) {
 	switch c := col.(type) {
 	case *float64Column:
@@ -522,62 +574,76 @@ func (e *Engine) Slice(col dataset.AnyColumn, start, end int) (dataset.AnyColumn
 	}
 }
 
+// SortIndices returns the permutation that sorts the column ascending.
 func (e *Engine) SortIndices(col dataset.AnyColumn) ([]int, error) {
 	switch c := col.(type) {
 	case *float64Column:
-		return dsort.SortIndicesFloat64(c.data), nil
+		return dsort.IndicesFloat64(c.data), nil
 	case *int64Column:
-		return dsort.SortIndicesInt64(c.data), nil
+		return dsort.IndicesInt64(c.data), nil
 	case *stringColumn:
-		return dsort.SortIndicesString(c.data), nil
+		return dsort.IndicesString(c.data), nil
 	case *boolColumn:
 		n := len(c.data)
+
 		indices := make([]int, n)
 		for i := range indices {
 			indices[i] = i
 		}
+
 		parallelSortFunc(indices, func(a, b int) int {
 			if !c.data[a] && c.data[b] {
 				return -1
 			}
+
 			if c.data[a] && !c.data[b] {
 				return 1
 			}
+
 			return 0
 		})
+
 		return indices, nil
 	default:
 		return nil, fmt.Errorf("memory: SortIndices not supported for %T", col)
 	}
 }
 
+// FilterIndices returns the indices where mask is true.
 func (e *Engine) FilterIndices(mask []bool) []int {
 	n := 0
+
 	for _, v := range mask {
 		if v {
 			n++
 		}
 	}
+
 	indices := make([]int, 0, n)
+
 	for i, v := range mask {
 		if v {
 			indices = append(indices, i)
 		}
 	}
+
 	return indices
 }
 
 // --- Filterer ---
 
+// Filter returns a new Table containing only rows where mask evaluates true.
 func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, error) {
 	bools, err := mask.Mask(ds)
 	if err != nil {
 		return nil, err
 	}
+
 	indices := e.FilterIndices(bools)
 	if len(indices) == 0 {
 		// Return empty dataset with same schema
 		schema := ds.Schema()
+
 		cols := make([]dataset.AnyColumn, schema.NumFields())
 		for i := 0; i < schema.NumFields(); i++ {
 			f := schema.Field(i)
@@ -594,27 +660,33 @@ func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, e
 				cols[i] = e.NewTimestampColumn(f.Name, nil)
 			}
 		}
+
 		return e.FromColumns(schema, cols...)
 	}
 	// Delegate to Selector.Take for scatter-gather
 	schema := ds.Schema()
+
 	cols := make([]dataset.AnyColumn, schema.NumFields())
 	for i := 0; i < schema.NumFields(); i++ {
 		col, err := ds.Column(schema.Field(i).Name)
 		if err != nil {
 			return nil, err
 		}
+
 		taken, err := e.Select(col, indices)
 		if err != nil {
 			return nil, err
 		}
+
 		cols[i] = taken
 	}
+
 	return e.FromColumns(schema, cols...)
 }
 
 // --- Filler ---
 
+// Fill forward- or backward-fills null values in a column.
 func (e *Engine) Fill(col dataset.AnyColumn, dir dataset.FillDirection) (dataset.AnyColumn, error) {
 	switch c := col.(type) {
 	case *float64Column:
@@ -633,8 +705,10 @@ func fillFloat64(_ *Engine, c *float64Column, dir dataset.FillDirection) dataset
 	if nulls == nil {
 		return c // no nulls, nothing to fill
 	}
+
 	out := make([]float64, len(c.data))
 	copy(out, c.data)
+
 	if dir == dataset.FillDown {
 		for i := 1; i < len(out); i++ {
 			if nulls[i] {
@@ -648,6 +722,7 @@ func fillFloat64(_ *Engine, c *float64Column, dir dataset.FillDirection) dataset
 			}
 		}
 	}
+
 	return &float64Column{name: c.name, data: out}
 }
 
@@ -656,8 +731,10 @@ func fillInt64(_ *Engine, c *int64Column, dir dataset.FillDirection) dataset.Any
 	if nulls == nil {
 		return c
 	}
+
 	out := make([]int64, len(c.data))
 	copy(out, c.data)
+
 	if dir == dataset.FillDown {
 		for i := 1; i < len(out); i++ {
 			if nulls[i] {
@@ -671,6 +748,7 @@ func fillInt64(_ *Engine, c *int64Column, dir dataset.FillDirection) dataset.Any
 			}
 		}
 	}
+
 	return &int64Column{name: c.name, data: out, dtype: c.dtype}
 }
 
@@ -679,8 +757,10 @@ func fillString(_ *Engine, c *stringColumn, dir dataset.FillDirection) dataset.A
 	if nulls == nil {
 		return c
 	}
+
 	out := make([]string, len(c.data))
 	copy(out, c.data)
+
 	if dir == dataset.FillDown {
 		for i := 1; i < len(out); i++ {
 			if nulls[i] {
@@ -694,9 +774,11 @@ func fillString(_ *Engine, c *stringColumn, dir dataset.FillDirection) dataset.A
 			}
 		}
 	}
+
 	return &stringColumn{name: c.name, data: out}
 }
 
+// DropNA removes rows containing null values in the specified columns.
 func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error) {
 	n := int(ds.NumRows())
 	if n == 0 {
@@ -706,6 +788,7 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 	// If no cols specified, check all
 	if len(cols) == 0 {
 		schema := ds.Schema()
+
 		cols = make([]string, schema.NumFields())
 		for i := 0; i < schema.NumFields(); i++ {
 			cols[i] = schema.Field(i).Name
@@ -717,11 +800,13 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 	for i := range keep {
 		keep[i] = true
 	}
+
 	for _, name := range cols {
 		col, err := ds.Column(name)
 		if err != nil {
 			return nil, err
 		}
+
 		switch c := col.(type) {
 		case *float64Column:
 			for i, isNull := range c.IsNull() {
@@ -756,45 +841,55 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 	}
 
 	schema := ds.Schema()
+
 	outCols := make([]dataset.AnyColumn, schema.NumFields())
 	for i := 0; i < schema.NumFields(); i++ {
 		col, err := ds.Column(schema.Field(i).Name)
 		if err != nil {
 			return nil, err
 		}
+
 		taken, err := e.Select(col, indices)
 		if err != nil {
 			return nil, err
 		}
+
 		outCols[i] = taken
 	}
+
 	return e.FromColumns(schema, outCols...)
 }
 
+// ReplaceNA replaces null (NaN) values in a float64 column with defaultVal.
 func (e *Engine) ReplaceNA(col dataset.AnyColumn, defaultVal float64) (dataset.AnyColumn, error) {
 	c, ok := col.(*float64Column)
 	if !ok {
 		return nil, fmt.Errorf("memory: ReplaceNA requires float64 column, got %T", col)
 	}
+
 	nulls := c.IsNull()
 	if nulls == nil {
 		return c, nil
 	}
+
 	out := make([]float64, len(c.data))
 	copy(out, c.data)
+
 	for i, isNull := range nulls {
 		if isNull {
 			out[i] = defaultVal
 		}
 	}
+
 	return &float64Column{name: c.name, data: out}, nil
 }
 
 // --- Composer ---
 
+// Stack vertically concatenates datasets with compatible schemas.
 func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
-		return nil, fmt.Errorf("memory: Stack requires at least one dataset")
+		return nil, errors.New("memory: Stack requires at least one dataset")
 	}
 	// Use first dataset's schema as reference
 	schema := datasets[0].Schema()
@@ -806,6 +901,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 			return nil, fmt.Errorf("memory: Stack schema mismatch: expected %d fields, dataset %d has %d",
 				schema.NumFields(), i, s.NumFields())
 		}
+
 		for j := 0; j < schema.NumFields(); j++ {
 			if s.Field(j).Name != schema.Field(j).Name || s.Field(j).Dtype != schema.Field(j).Dtype {
 				return nil, fmt.Errorf("memory: Stack schema mismatch at field %d: %q(%s) vs %q(%s)",
@@ -827,47 +923,59 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 		switch schema.Field(ci).Dtype {
 		case dataset.DTypeFloat64:
 			vals := make([]float64, 0, totalLen)
+
 			for _, ds := range datasets {
 				col, _ := ds.Column(name)
 				vals = append(vals, col.(dataset.Column[float64]).Values()...)
 			}
+
 			cols[ci] = e.NewFloat64Column(name, vals)
 		case dataset.DTypeInt64:
 			vals := make([]int64, 0, totalLen)
+
 			for _, ds := range datasets {
 				col, _ := ds.Column(name)
 				vals = append(vals, col.(dataset.Column[int64]).Values()...)
 			}
+
 			cols[ci] = e.NewInt64Column(name, vals)
 		case dataset.DTypeString:
 			vals := make([]string, 0, totalLen)
+
 			for _, ds := range datasets {
 				col, _ := ds.Column(name)
 				vals = append(vals, col.(dataset.Column[string]).Values()...)
 			}
+
 			cols[ci] = e.NewStringColumn(name, vals)
 		case dataset.DTypeBool:
 			vals := make([]bool, 0, totalLen)
+
 			for _, ds := range datasets {
 				col, _ := ds.Column(name)
 				vals = append(vals, col.(dataset.Column[bool]).Values()...)
 			}
+
 			cols[ci] = e.NewBoolColumn(name, vals)
 		case dataset.DTypeTimestamp:
 			vals := make([]int64, 0, totalLen)
+
 			for _, ds := range datasets {
 				col, _ := ds.Column(name)
 				vals = append(vals, col.(dataset.Column[int64]).Values()...)
 			}
+
 			cols[ci] = e.NewTimestampColumn(name, vals)
 		}
 	}
+
 	return e.FromColumns(schema, cols...)
 }
 
+// Combine horizontally concatenates datasets with equal row counts.
 func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
-		return nil, fmt.Errorf("memory: Combine requires at least one dataset")
+		return nil, errors.New("memory: Combine requires at least one dataset")
 	}
 
 	// Validate all datasets have same length
@@ -880,8 +988,11 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 	}
 
 	// Merge all fields and columns
-	var fields []dataset.Field
-	var cols []dataset.AnyColumn
+	var (
+		fields []dataset.Field
+		cols   []dataset.AnyColumn
+	)
+
 	for _, ds := range datasets {
 		s := ds.Schema()
 		for i := 0; i < s.NumFields(); i++ {
@@ -896,6 +1007,7 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 
 // --- Windower ---
 
+// Lag shifts a column's values down by n positions, filling with NaN/zero.
 func (e *Engine) Lag(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	switch c := col.(type) {
 	case *float64Column:
@@ -905,6 +1017,7 @@ func (e *Engine) Lag(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 				out[i] = c.data[i-n]
 			}
 		}
+
 		return &float64Column{name: c.name, data: out}, nil
 	case *int64Column:
 		out := make([]int64, len(c.data))
@@ -913,12 +1026,14 @@ func (e *Engine) Lag(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 				out[i] = c.data[i-n]
 			}
 		}
+
 		return &int64Column{name: c.name, data: out, dtype: c.dtype}, nil
 	default:
 		return nil, fmt.Errorf("memory: Lag not supported for %T", col)
 	}
 }
 
+// Lead shifts a column's values up by n positions, filling with NaN/zero.
 func (e *Engine) Lead(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	switch c := col.(type) {
 	case *float64Column:
@@ -928,6 +1043,7 @@ func (e *Engine) Lead(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 				out[i] = c.data[i+n]
 			}
 		}
+
 		return &float64Column{name: c.name, data: out}, nil
 	case *int64Column:
 		out := make([]int64, len(c.data))
@@ -936,29 +1052,35 @@ func (e *Engine) Lead(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 				out[i] = c.data[i+n]
 			}
 		}
+
 		return &int64Column{name: c.name, data: out, dtype: c.dtype}, nil
 	default:
 		return nil, fmt.Errorf("memory: Lead not supported for %T", col)
 	}
 }
 
+// CumSum returns the cumulative sum of a float64 column.
 func (e *Engine) CumSum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	switch c := col.(type) {
 	case *float64Column:
 		out := make([]float64, len(c.data))
+
 		acc := 0.0
 		for i, v := range c.data {
 			acc += v
 			out[i] = acc
 		}
+
 		return &float64Column{name: c.name, data: out}, nil
 	case *int64Column:
 		out := make([]int64, len(c.data))
+
 		acc := int64(0)
 		for i, v := range c.data {
 			acc += v
 			out[i] = acc
 		}
+
 		return &int64Column{name: c.name, data: out, dtype: c.dtype}, nil
 	default:
 		return nil, fmt.Errorf("memory: CumSum not supported for %T", col)
@@ -979,19 +1101,17 @@ func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 				}
 			}
 		}
+
 		return &float64Column{name: c.name, data: out}, nil
 	case *int64Column:
 		out := make([]int64, len(c.data))
 		if len(c.data) > 0 {
 			out[0] = c.data[0]
 			for i := 1; i < len(c.data); i++ {
-				if c.data[i] > out[i-1] {
-					out[i] = c.data[i]
-				} else {
-					out[i] = out[i-1]
-				}
+				out[i] = max(c.data[i], out[i-1])
 			}
 		}
+
 		return &int64Column{name: c.name, data: out, dtype: c.dtype}, nil
 	default:
 		return nil, fmt.Errorf("memory: CumMax not supported for %T", col)
@@ -1012,19 +1132,17 @@ func (e *Engine) CumMin(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 				}
 			}
 		}
+
 		return &float64Column{name: c.name, data: out}, nil
 	case *int64Column:
 		out := make([]int64, len(c.data))
 		if len(c.data) > 0 {
 			out[0] = c.data[0]
 			for i := 1; i < len(c.data); i++ {
-				if c.data[i] < out[i-1] {
-					out[i] = c.data[i]
-				} else {
-					out[i] = out[i-1]
-				}
+				out[i] = min(c.data[i], out[i-1])
 			}
 		}
+
 		return &int64Column{name: c.name, data: out, dtype: c.dtype}, nil
 	default:
 		return nil, fmt.Errorf("memory: CumMin not supported for %T", col)
@@ -1035,11 +1153,14 @@ func (e *Engine) CumMin(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 // next rank skips. E.g. [10,20,20,30] → [1,2,2,4].
 func (e *Engine) Rank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	n := col.Len()
+
 	sorted, err := e.SortIndices(col)
 	if err != nil {
 		return nil, err
 	}
+
 	ranks := make([]int64, n)
+
 	switch c := col.(type) {
 	case *float64Column:
 		for pos, idx := range sorted {
@@ -1070,20 +1191,25 @@ func (e *Engine) Rank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	default:
 		return nil, fmt.Errorf("memory: Rank not supported for %T", col)
 	}
+
 	return &int64Column{name: col.Name(), data: ranks}, nil
 }
 
 // DenseRank returns dense rank (no gaps). E.g. [10,20,20,30] → [1,2,2,3].
 func (e *Engine) DenseRank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	n := col.Len()
+
 	sorted, err := e.SortIndices(col)
 	if err != nil {
 		return nil, err
 	}
+
 	ranks := make([]int64, n)
+
 	switch c := col.(type) {
 	case *float64Column:
 		denseRank := int64(1)
+
 		for pos, idx := range sorted {
 			if pos > 0 {
 				prevIdx := sorted[pos-1]
@@ -1091,10 +1217,12 @@ func (e *Engine) DenseRank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 					denseRank++
 				}
 			}
+
 			ranks[idx] = denseRank
 		}
 	case *int64Column:
 		denseRank := int64(1)
+
 		for pos, idx := range sorted {
 			if pos > 0 {
 				prevIdx := sorted[pos-1]
@@ -1102,11 +1230,13 @@ func (e *Engine) DenseRank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 					denseRank++
 				}
 			}
+
 			ranks[idx] = denseRank
 		}
 	default:
 		return nil, fmt.Errorf("memory: DenseRank not supported for %T", col)
 	}
+
 	return &int64Column{name: col.Name(), data: ranks}, nil
 }
 
@@ -1116,16 +1246,20 @@ func (e *Engine) PercentRank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	ranks := rankCol.(dataset.Column[int64]).Values()
 	n := len(ranks)
+
 	out := make([]float64, n)
 	if n <= 1 {
 		return &float64Column{name: col.Name(), data: out}, nil
 	}
+
 	denom := float64(n - 1)
 	for i, r := range ranks {
 		out[i] = float64(r-1) / denom
 	}
+
 	return &float64Column{name: col.Name(), data: out}, nil
 }
 
@@ -1135,6 +1269,7 @@ func (e *Engine) RowNumber(n int) (dataset.AnyColumn, error) {
 	for i := range out {
 		out[i] = int64(i + 1)
 	}
+
 	return &int64Column{name: "row_number", data: out}, nil
 }
 

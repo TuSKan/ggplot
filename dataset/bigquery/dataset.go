@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 
 	storagepb "cloud.google.com/go/bigquery/storage/apiv1/storagepb"
@@ -58,7 +59,9 @@ func (d *bqDataset) Column(name string) (dataset.AnyColumn, error) {
 	if idx < 0 {
 		return nil, &dataset.ErrColumnNotFound{Name: name}
 	}
+
 	field := d.schema.Field(idx)
+
 	return &bqColumn{
 		ds:    d,
 		name:  name,
@@ -83,6 +86,7 @@ func (d *bqDataset) materialize() (*bqDataset, error) {
 	d.matOnce.Do(func() {
 		d.matDS, d.matErr = d.executeMaterialize()
 	})
+
 	return d.matDS, d.matErr
 }
 
@@ -96,6 +100,7 @@ func (d *bqDataset) executeMaterialize() (*bqDataset, error) {
 	}
 
 	schema := bqSchemaToDataset(meta.Schema)
+
 	return &bqDataset{
 		engine:  d.engine,
 		schema:  schema,
@@ -110,6 +115,7 @@ func (d *bqDataset) resolveSQL() string {
 	if d.pendingSQL != "" {
 		return d.pendingSQL
 	}
+
 	return d.buildSelectSQL()
 }
 
@@ -118,18 +124,25 @@ func (d *bqDataset) buildSelectSQL() string {
 	cols := "*"
 	if len(d.selectedFields) > 0 {
 		cols = ""
+
+		var colsSb121 strings.Builder
+
 		for i, f := range d.selectedFields {
 			if i > 0 {
-				cols += ", "
+				colsSb121.WriteString(", ")
 			}
-			cols += "`" + f + "`"
+
+			colsSb121.WriteString("`" + f + "`")
 		}
+
+		cols += colsSb121.String()
 	}
 
 	sql := fmt.Sprintf("SELECT %s FROM `%s`", cols, d.table.FullyQualified())
 	if d.rowRestriction != "" {
 		sql += " WHERE " + d.rowRestriction
 	}
+
 	return sql
 }
 
@@ -140,11 +153,13 @@ func (d *bqDataset) sourceRef() string {
 	if d.pendingSQL != "" {
 		return "(" + d.pendingSQL + ")"
 	}
+
 	src := "`" + d.table.FullyQualified() + "`"
 	// If there are Tier 1 restrictions, wrap as subquery
 	if d.rowRestriction != "" || d.selectedFields != nil {
 		return "(" + d.buildSelectSQL() + ")"
 	}
+
 	return src
 }
 
@@ -166,6 +181,7 @@ func (d *bqDataset) withRestriction(expr string) *bqDataset {
 	if d.rowRestriction != "" {
 		restriction = d.rowRestriction + " AND " + expr
 	}
+
 	return &bqDataset{
 		engine:         d.engine,
 		schema:         d.schema,
@@ -182,6 +198,7 @@ func (d *bqDataset) withFields(fields []string) *bqDataset {
 	copy(selected, fields)
 
 	schema := d.schema
+
 	selectedFieldDefs := make([]dataset.Field, 0, len(fields))
 	for _, name := range fields {
 		idx := d.schema.FieldIndex(name)
@@ -189,6 +206,7 @@ func (d *bqDataset) withFields(fields []string) *bqDataset {
 			selectedFieldDefs = append(selectedFieldDefs, d.schema.Field(idx))
 		}
 	}
+
 	if len(selectedFieldDefs) > 0 {
 		schema = dataset.NewSchema(selectedFieldDefs...)
 	}
@@ -196,12 +214,19 @@ func (d *bqDataset) withFields(fields []string) *bqDataset {
 	// If there's a pending SQL, wrap it as a subquery and apply SELECT
 	if d.pendingSQL != "" {
 		cols := ""
+
+		var colsSb199 strings.Builder
+
 		for i, f := range selected {
 			if i > 0 {
-				cols += ", "
+				colsSb199.WriteString(", ")
 			}
-			cols += "`" + f + "`"
+
+			colsSb199.WriteString("`" + f + "`")
 		}
+
+		cols += colsSb199.String()
+
 		return &bqDataset{
 			engine:     d.engine,
 			schema:     schema,
@@ -259,6 +284,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		src = mat
 	}
 
@@ -268,6 +294,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 			"rows", src.numRows,
 			"table", src.table.FullyQualified())
 	}
+
 	if src.engine.quota.MaxDownloadRows > 0 && src.numRows > src.engine.quota.MaxDownloadRows {
 		return nil, fmt.Errorf("bigquery: download exceeds quota (%d rows > limit %d)",
 			src.numRows, src.engine.quota.MaxDownloadRows)
@@ -280,7 +307,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 	}
 
 	req := &storagepb.CreateReadSessionRequest{
-		Parent:         fmt.Sprintf("projects/%s", src.engine.projectID),
+		Parent:         "projects/" + src.engine.projectID,
 		ReadSession:    readSession,
 		MaxStreamCount: 1,
 	}
@@ -297,6 +324,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 	}
 
 	streamName := session.GetStreams()[0].GetName()
+
 	stream, err := src.engine.readClient.ReadRows(ctx, &storagepb.ReadRowsRequest{
 		ReadStream: streamName,
 	})
@@ -305,11 +333,13 @@ func (d *bqDataset) download() (dataset.Table, error) {
 	}
 
 	var resultDS dataset.Table
+
 	for {
 		resp, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
 			break
 		}
+
 		if err != nil {
 			return nil, fmt.Errorf("bigquery: stream recv failed: %w", err)
 		}
@@ -321,7 +351,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 
 		arrowSchema := session.GetArrowSchema()
 		if arrowSchema == nil {
-			return nil, fmt.Errorf("bigquery: session has no Arrow schema")
+			return nil, errors.New("bigquery: session has no Arrow schema")
 		}
 
 		batchTbl, err := decodeArrowBatch(eng, arrowSchema.GetSerializedSchema(), arrowRows.GetSerializedRecordBatch())
@@ -333,10 +363,12 @@ func (d *bqDataset) download() (dataset.Table, error) {
 			resultDS = batchTbl
 		} else {
 			var engIface dataset.Engine = eng
+
 			composer, ok := engIface.(dataset.Composer)
 			if !ok {
-				return nil, fmt.Errorf("bigquery: arrow engine does not support Composer")
+				return nil, errors.New("bigquery: arrow engine does not support Composer")
 			}
+
 			resultDS, err = composer.Stack(resultDS, batchTbl)
 			if err != nil {
 				return nil, fmt.Errorf("bigquery: failed to stack batches: %w", err)
@@ -347,6 +379,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 	if resultDS == nil {
 		return buildEmptyDataset(eng, src.schema)
 	}
+
 	return resultDS, nil
 }
 
@@ -368,5 +401,6 @@ func buildEmptyDataset(eng *arrowEngine.Engine, schema *dataset.Schema) (dataset
 			cols[i] = eng.NewFloat64Column(f.Name, nil)
 		}
 	}
+
 	return eng.FromColumns(schema, cols...)
 }

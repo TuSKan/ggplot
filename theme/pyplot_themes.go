@@ -6,7 +6,6 @@ func init() {
 	MustRegister(PaulTol, newPaulTol)
 	MustRegister(Few, newFew)
 	MustRegister(UCBerkeley, newUCBerkeley)
-	MustRegister(Tableau, newTableau)
 	// Seasonal / contextual palette variants (pyplot-themes originals).
 	MustRegister(Autumn1, newAutumn1)
 	MustRegister(Autumn2, newAutumn2)
@@ -43,6 +42,7 @@ func newPaulTol() Theme {
 		hex("117733"), hex("999933"), hex("DDCC77"), hex("661100"),
 		hex("CC6677"), hex("AA4466"), hex("882255"), hex("AA4499"),
 	}
+
 	return t
 }
 
@@ -76,6 +76,7 @@ func newFew() Theme {
 		hex("60BD68"), hex("F17CB0"), hex("B2912F"),
 		hex("B276B2"), hex("DECF3F"), hex("F15854"),
 	}
+
 	return t
 }
 
@@ -103,6 +104,7 @@ func newUCBerkeley() Theme {
 		hex("DDD5C7"), hex("00B0DA"), hex("00A598"), hex("46535E"),
 		hex("B9D3B6"), hex("CFDD45"), hex("859438"), hex("584F29"),
 	}
+
 	return t
 }
 
@@ -129,6 +131,7 @@ func newTableau() Theme {
 		hex("9467BD"), hex("8C564B"), hex("E377C2"), hex("7F7F7F"),
 		hex("BCBD22"), hex("17BECF"),
 	}
+
 	return t
 }
 
@@ -141,6 +144,7 @@ func seasonalTheme(name Name, palette []color.Color) Theme {
 	t := newTableau()
 	t.Name = string(name)
 	t.Palette = palette
+
 	return t
 }
 

@@ -31,13 +31,17 @@ package ggplot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/gogpu/gg"
 
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/colormap"
@@ -51,7 +55,6 @@ import (
 	"github.com/TuSKan/ggplot/scale"
 	"github.com/TuSKan/ggplot/stat"
 	"github.com/TuSKan/ggplot/theme"
-	"github.com/gogpu/gg"
 )
 
 // Plot is the immutable, declarative plot builder. Every method returns a new
@@ -66,6 +69,7 @@ type Plot struct {
 // LegendPos controls legend placement.
 type LegendPos string
 
+// LegendRight places the legend to the right of the plot.
 const (
 	LegendRight  LegendPos = "right"
 	LegendLeft   LegendPos = "left"
@@ -94,9 +98,8 @@ func (p *Plot) clone() *Plot {
 	layers := make([]grammar.LayerSpec, len(p.spec.Layers))
 	for i, l := range p.spec.Layers {
 		m := make(grammar.AesMap, len(l.Mapping))
-		for k, v := range l.Mapping {
-			m[k] = v
-		}
+		maps.Copy(m, l.Mapping)
+
 		layers[i] = grammar.LayerSpec{Geom: l.Geom, Mapping: m}
 	}
 
@@ -104,10 +107,9 @@ func (p *Plot) clone() *Plot {
 	scales := make(map[string]grammar.ScaleOverride, len(p.spec.ScaleOverrides))
 	for k, v := range p.spec.ScaleOverrides {
 		params := make(map[string]string, len(v.Params))
-		for pk, pv := range v.Params {
-			params[pk] = pv
-		}
-		opts := make([]scale.ScaleOpt, len(v.Opts))
+		maps.Copy(params, v.Params)
+
+		opts := make([]scale.Opt, len(v.Opts))
 		copy(opts, v.Opts)
 		scales[k] = grammar.ScaleOverride{Type: v.Type, Params: params, Opts: opts}
 	}
@@ -118,9 +120,7 @@ func (p *Plot) clone() *Plot {
 	var colorScales map[string]*colormap.Scale
 	if len(p.spec.ColorScales) > 0 {
 		colorScales = make(map[string]*colormap.Scale, len(p.spec.ColorScales))
-		for k, v := range p.spec.ColorScales {
-			colorScales[k] = v
-		}
+		maps.Copy(colorScales, p.spec.ColorScales)
 	}
 
 	return &Plot{
@@ -150,15 +150,18 @@ func (p *Plot) ScaleColor(c colormap.Cmap) *Plot {
 	if cloned.spec.ColorScales == nil {
 		cloned.spec.ColorScales = make(map[string]*colormap.Scale)
 	}
+
 	if c == nil {
 		delete(cloned.spec.ColorScales, "color")
 		return cloned
 	}
+
 	if _, ok := c.(*colormap.ListedCmap); ok {
 		cloned.spec.ColorScales["color"] = colormap.NewDiscrete(c)
 	} else {
 		cloned.spec.ColorScales["color"] = colormap.NewContinuous(c, nil)
 	}
+
 	return cloned
 }
 
@@ -168,15 +171,18 @@ func (p *Plot) ScaleFill(c colormap.Cmap) *Plot {
 	if cloned.spec.ColorScales == nil {
 		cloned.spec.ColorScales = make(map[string]*colormap.Scale)
 	}
+
 	if c == nil {
 		delete(cloned.spec.ColorScales, "fill")
 		return cloned
 	}
+
 	if _, ok := c.(*colormap.ListedCmap); ok {
 		cloned.spec.ColorScales["fill"] = colormap.NewDiscrete(c)
 	} else {
 		cloned.spec.ColorScales["fill"] = colormap.NewContinuous(c, nil)
 	}
+
 	return cloned
 }
 
@@ -188,7 +194,9 @@ func (p *Plot) ScaleColorManual(m map[string]colormap.Color) *Plot {
 	if cloned.spec.ColorScales == nil {
 		cloned.spec.ColorScales = make(map[string]*colormap.Scale)
 	}
+
 	cloned.spec.ColorScales["color"] = colormap.NewManual(m)
+
 	return cloned
 }
 
@@ -200,7 +208,9 @@ func (p *Plot) ScaleColorContinuous(c colormap.Cmap, n colormap.Norm) *Plot {
 	if cloned.spec.ColorScales == nil {
 		cloned.spec.ColorScales = make(map[string]*colormap.Scale)
 	}
+
 	cloned.spec.ColorScales["color"] = colormap.NewContinuous(c, n)
+
 	return cloned
 }
 
@@ -210,9 +220,8 @@ func (p *Plot) Layer(l geom.Layer, localAes ...aes.Mapping) *Plot {
 
 	// Merge geom-level mapping with explicit per-layer overrides.
 	mapping := make(grammar.AesMap)
-	for k, v := range l.Mapping {
-		mapping[k] = v
-	}
+	maps.Copy(mapping, l.Mapping)
+
 	for _, am := range localAes {
 		mapping[am.Channel] = am.Column
 	}
@@ -221,6 +230,7 @@ func (p *Plot) Layer(l geom.Layer, localAes ...aes.Mapping) *Plot {
 		Geom:    l,
 		Mapping: mapping,
 	})
+
 	return cloned
 }
 
@@ -230,6 +240,7 @@ func (p *Plot) Aes(mappings ...aes.Mapping) *Plot {
 	for _, m := range mappings {
 		cloned.spec.GlobalMapping[m.Channel] = m.Column
 	}
+
 	return cloned
 }
 
@@ -237,6 +248,7 @@ func (p *Plot) Aes(mappings ...aes.Mapping) *Plot {
 func (p *Plot) Coord(c coord.Coord) *Plot {
 	cloned := p.clone()
 	cloned.spec.Coord = c
+
 	return cloned
 }
 
@@ -244,6 +256,7 @@ func (p *Plot) Coord(c coord.Coord) *Plot {
 func (p *Plot) FacetWrap(col string, opts ...facet.WrapOpt) *Plot {
 	cloned := p.clone()
 	cloned.spec.Facet = facet.Wrap(col, opts...)
+
 	return cloned
 }
 
@@ -251,6 +264,7 @@ func (p *Plot) FacetWrap(col string, opts ...facet.WrapOpt) *Plot {
 func (p *Plot) FacetGrid(rowCol, colCol string) *Plot {
 	cloned := p.clone()
 	cloned.spec.Facet = facet.Grid(rowCol, colCol)
+
 	return cloned
 }
 
@@ -258,20 +272,23 @@ func (p *Plot) FacetGrid(rowCol, colCol string) *Plot {
 func (p *Plot) Theme(name theme.Name) *Plot {
 	cloned := p.clone()
 	cloned.spec.ThemeName = name
+
 	return cloned
 }
 
 // XLim sets explicit x-axis limits. Pass math.NaN() for either end to auto-detect.
-func (p *Plot) XLim(min, max float64) *Plot {
+func (p *Plot) XLim(lo, hi float64) *Plot {
 	cloned := p.clone()
-	cloned.spec.XLim = [2]*float64{ptrF64(min), ptrF64(max)}
+	cloned.spec.XLim = [2]*float64{new(lo), new(hi)}
+
 	return cloned
 }
 
 // YLim sets explicit y-axis limits. Pass math.NaN() for either end to auto-detect.
-func (p *Plot) YLim(min, max float64) *Plot {
+func (p *Plot) YLim(lo, hi float64) *Plot {
 	cloned := p.clone()
-	cloned.spec.YLim = [2]*float64{ptrF64(min), ptrF64(max)}
+	cloned.spec.YLim = [2]*float64{new(lo), new(hi)}
+
 	return cloned
 }
 
@@ -282,34 +299,37 @@ func (p *Plot) CoordFlip() *Plot {
 	for i := range cloned.spec.Layers {
 		cloned.spec.Layers[i].Geom.Params.Orientation = geom.Horizontal
 	}
+
 	cloned.spec.Labels.X, cloned.spec.Labels.Y = cloned.spec.Labels.Y, cloned.spec.Labels.X
+
 	return cloned
 }
-
-func ptrF64(v float64) *float64 { return &v }
 
 // LegendPosition sets the legend placement.
 func (p *Plot) LegendPosition(pos LegendPos) *Plot {
 	cloned := p.clone()
 	cloned.spec.LegendPosition = string(pos)
+
 	return cloned
 }
 
 // ScaleX sets the x-axis scale type with optional configuration.
 // Options: [scale.WithBreaks], [scale.WithLabels], [scale.WithFormatter],
 // [scale.WithExpand], [scale.WithMinorBreaks], [scale.WithClipBounds].
-func (p *Plot) ScaleX(scaleType scale.Type, opts ...scale.ScaleOpt) *Plot {
+func (p *Plot) ScaleX(scaleType scale.Type, opts ...scale.Opt) *Plot {
 	cloned := p.clone()
 	cloned.spec.ScaleOverrides["x"] = grammar.ScaleOverride{Type: scaleType, Opts: opts}
+
 	return cloned
 }
 
 // ScaleY sets the y-axis scale type with optional configuration.
 // Options: [scale.WithBreaks], [scale.WithLabels], [scale.WithFormatter],
 // [scale.WithExpand], [scale.WithMinorBreaks], [scale.WithClipBounds].
-func (p *Plot) ScaleY(scaleType scale.Type, opts ...scale.ScaleOpt) *Plot {
+func (p *Plot) ScaleY(scaleType scale.Type, opts ...scale.Opt) *Plot {
 	cloned := p.clone()
 	cloned.spec.ScaleOverrides["y"] = grammar.ScaleOverride{Type: scaleType, Opts: opts}
+
 	return cloned
 }
 
@@ -319,6 +339,7 @@ func (p *Plot) Labs(opts ...LabOpt) *Plot {
 	for _, opt := range opts {
 		opt(&cloned.spec.Labels)
 	}
+
 	return cloned
 }
 
@@ -374,7 +395,9 @@ func (p *Plot) Save(ctx context.Context, filename string, width, height int, opt
 	for _, o := range opts {
 		o(&cfg)
 	}
+
 	sw, sh := int(float64(width)*cfg.scale), int(float64(height)*cfg.scale)
+
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
 	case ".svg", ".pdf":
@@ -390,6 +413,7 @@ func (p *Plot) saveRaster(ctx context.Context, filename string, width, height in
 	if err := p.renderTo(ctx, cv, width, height); err != nil {
 		return err
 	}
+
 	return cv.SavePNG(filename)
 }
 
@@ -399,6 +423,7 @@ func (p *Plot) saveVector(ctx context.Context, filename, ext string, width, heig
 	if err := p.renderTo(ctx, cv, width, height); err != nil {
 		return err
 	}
+
 	rec := cv.FinishRecording()
 
 	f, err := os.Create(filename)
@@ -413,6 +438,7 @@ func (p *Plot) saveVector(ctx context.Context, filename, ext string, width, heig
 	case ".pdf":
 		_, err = canvas.ExportPDF(rec, f)
 	}
+
 	return err
 }
 
@@ -422,6 +448,7 @@ func (p *Plot) Render(ctx context.Context, width, height int) (*canvas.GGCanvas,
 	if err := p.renderTo(ctx, cv, width, height); err != nil {
 		return nil, err
 	}
+
 	return cv, nil
 }
 
@@ -434,7 +461,9 @@ func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, h
 	for _, o := range opts {
 		o(&cfg)
 	}
+
 	sw, sh := int(float64(width)*cfg.scale), int(float64(height)*cfg.scale)
+
 	switch format {
 	case "svg":
 		return p.writeVector(ctx, w, format, sw, sh)
@@ -445,10 +474,12 @@ func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, h
 		if err := p.renderTo(ctx, cv, sw, sh); err != nil {
 			return 0, err
 		}
+
 		cw := &countWriter{w: w}
 		if err := cv.EncodePNG(cw); err != nil {
 			return cw.n, err
 		}
+
 		return cw.n, nil
 	default:
 		return 0, fmt.Errorf("ggplot: unsupported format %q (supported: png, svg, pdf)", format)
@@ -460,6 +491,7 @@ func (p *Plot) writeVector(ctx context.Context, w io.Writer, format string, widt
 	if err := p.renderTo(ctx, cv, width, height); err != nil {
 		return 0, err
 	}
+
 	rec := cv.FinishRecording()
 
 	switch format {
@@ -481,6 +513,7 @@ type countWriter struct {
 func (cw *countWriter) Write(p []byte) (int, error) {
 	n, err := cw.w.Write(p)
 	cw.n += int64(n)
+
 	return n, err
 }
 
@@ -491,24 +524,27 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
 	if len(p.spec.Layers) == 0 {
-		return fmt.Errorf("ggplot: plot has no layers")
+		return errors.New("ggplot: plot has no layers")
 	}
 	// Materialise any lazy Dataset chain before rendering.
 	collectedDS, collectErr := p.spec.Dataset.Collect(ctx)
 	if collectErr != nil {
 		return fmt.Errorf("ggplot: collect dataset: %w", collectErr)
 	}
+
 	p.spec.Dataset = collectedDS
 
 	if p.spec.Dataset.Table() == nil {
-		return fmt.Errorf("ggplot: plot has no dataset")
+		return errors.New("ggplot: plot has no dataset")
 	}
 
 	th, err := theme.Resolve(p.spec.ThemeName)
 	if err != nil {
 		return fmt.Errorf("ggplot: %w", err)
 	}
+
 	cv.Clear(th.Background)
 
 	// 1. Facet.
@@ -516,30 +552,38 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 	if err != nil {
 		return fmt.Errorf("ggplot: facet split: %w", err)
 	}
+
 	rows, cols := p.spec.Facet.GridDims(len(panels))
 	if rows <= 0 {
 		rows = 1
 	}
+
 	if cols <= 0 {
 		cols = 1
 	}
 
 	// Cached layout for multi-panel consistency.
-	var cachedMTop, cachedMRight, cachedMBottom, cachedMLeft, cachedLegendW float64
-	var legendPos string
-	var hasLegend bool
+	var (
+		cachedMTop, cachedMRight, cachedMBottom, cachedMLeft, cachedLegendW float64
+		legendPos                                                           string
+		hasLegend                                                           bool
+	)
 
 	// 2. For each facet panel.
 	for pi, panel := range panels {
 		// 2a. Stat transforms + colour/group splitting.
 		resolved := make([]resolvedLayer, 0, len(p.spec.Layers)*4)
+
 		var legendEntries []guide.LegendEntry
+
 		legendTitle := ""
+
 		var colorBarSpec *guide.ColorBarSpec // continuous color legend
 
 		for _, layer := range p.spec.Layers {
 			merged := p.spec.GlobalMapping.Merge(layer.Mapping)
 			statName := layer.Geom.StatName
+
 			s, err := stat.Lookup(statName)
 			if err != nil {
 				return fmt.Errorf("ggplot: %w", err)
@@ -555,6 +599,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 
 			// Detect whether color column is numeric (continuous) or categorical.
 			continuousColorCol := ""
+
 			if colorCol != "" {
 				if col, err := ds.Column(colorCol); err == nil {
 					if col.DType() == dataset.DTypeFloat64 || col.DType() == dataset.DTypeInt64 {
@@ -587,6 +632,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				if err != nil {
 					return fmt.Errorf("ggplot: group split by %q: %w", groupCol, err)
 				}
+
 				if legendTitle == "" && colorCol != "" {
 					legendTitle = colorCol
 				}
@@ -597,16 +643,13 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 					grpRGBA := colorScale.At(grpLabel)
 
 					grpMerged := make(grammar.AesMap, len(merged))
-					for k, v := range merged {
-						grpMerged[k] = v
-					}
+					maps.Copy(grpMerged, merged)
 
 					// Apply stat transform per-group.
 					if s.Name() != stat.Identity {
 						statMapping := make(map[string]string, len(grpMerged))
-						for k, v := range grpMerged {
-							statMapping[k] = v
-						}
+						maps.Copy(statMapping, grpMerged)
+
 						opts := stat.Options{
 							Bins:    layer.Geom.Params.Bins,
 							Method:  layer.Geom.Params.Method,
@@ -614,15 +657,18 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 							Whisker: layer.Geom.Params.Whisker,
 							Notch:   layer.Geom.Params.Notch,
 						}
+
 						transformed, err := s.Compute(ctx, grpDS, statMapping, opts)
 						if err != nil {
 							return fmt.Errorf("ggplot: stat %q failed for group %q: %w",
 								statName, grpLabel, err)
 						}
+
 						if transformed.Table() == nil {
 							return fmt.Errorf("ggplot: stat %q produced nil table for group %q",
 								statName, grpLabel)
 						}
+
 						grpDS = transformed
 						grpMerged = updateMappingForStat(s, grpMerged)
 					}
@@ -639,12 +685,14 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 					// Accumulate legend entries (deduplicated).
 					if colorCol != "" && pi == 0 {
 						alreadyHas := false
+
 						for _, le := range legendEntries {
 							if le.Label == grpLabel {
 								alreadyHas = true
 								break
 							}
 						}
+
 						if !alreadyHas {
 							legendEntries = append(legendEntries, guide.LegendEntry{
 								Label: grpLabel,
@@ -658,9 +706,8 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				// continuous color mapping.
 				if s.Name() != stat.Identity {
 					statMapping := make(map[string]string, len(merged))
-					for k, v := range merged {
-						statMapping[k] = v
-					}
+					maps.Copy(statMapping, merged)
+
 					opts := stat.Options{
 						Bins:    layer.Geom.Params.Bins,
 						Method:  layer.Geom.Params.Method,
@@ -668,13 +715,16 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 						Whisker: layer.Geom.Params.Whisker,
 						Notch:   layer.Geom.Params.Notch,
 					}
+
 					transformed, err := s.Compute(ctx, ds, statMapping, opts)
 					if err != nil {
 						return fmt.Errorf("ggplot: stat %q failed: %w", statName, err)
 					}
+
 					if transformed.Table() == nil {
 						return fmt.Errorf("ggplot: stat %q produced nil table", statName)
 					}
+
 					ds = transformed
 					merged = updateMappingForStat(s, merged)
 				}
@@ -686,6 +736,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 					if contScale == nil {
 						contScale = colormap.NewContinuous(colormap.Viridis, nil)
 					}
+
 					if col, err := ds.Column(continuousColorCol); err == nil {
 						_ = contScale.Train(col)
 					}
@@ -723,13 +774,16 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		// 2b. Train scale objects on stat-transformed data.
 		// Detect discrete (string) X columns and build appropriate scale.
 		var xScale scale.Scale
+
 		yScale, err := scale.Resolve(p.spec.ScaleOverrides["y"].Type)
 		if err != nil {
 			return fmt.Errorf("ggplot: %w", err)
 		}
+
 		if yOpts := p.spec.ScaleOverrides["y"].Opts; len(yOpts) > 0 {
 			yScale = scale.Configure(yScale, yOpts...)
 		}
+
 		xIsDiscrete := false
 
 		// Probe the first resolved layer's X column to decide scale type.
@@ -741,6 +795,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 						xIsDiscrete = true
 					}
 				}
+
 				break
 			}
 		}
@@ -748,15 +803,18 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		if xIsDiscrete {
 			// Build discrete scale from string X column values.
 			ds := scale.Discrete()
+
 			for i, rl := range resolved {
 				xColName, ok := rl.mapping["x"]
 				if !ok {
 					continue
 				}
+
 				col, err := rl.ds.Column(xColName)
 				if err != nil {
 					continue
 				}
+
 				if err := ds.Train(col); err != nil {
 					continue
 				}
@@ -764,6 +822,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				// Replace string column with float64 positions.
 				if sc, ok2 := col.(dataset.Column[string]); ok2 {
 					vals := sc.Values()
+
 					positions := make([]float64, len(vals))
 					for j, v := range vals {
 						positions[j] = ds.MapCategory(v)
@@ -775,12 +834,14 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 					}
 				}
 			}
+
 			xScale = ds
 		} else {
 			xScale, err = scale.Resolve(p.spec.ScaleOverrides["x"].Type)
 			if err != nil {
 				return fmt.Errorf("ggplot: %w", err)
 			}
+
 			if xOpts := p.spec.ScaleOverrides["x"].Opts; len(xOpts) > 0 {
 				xScale = scale.Configure(xScale, xOpts...)
 			}
@@ -795,6 +856,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 					}
 				}
 			}
+
 			if colName, ok := rl.mapping["y"]; ok {
 				if col, err := rl.ds.Column(colName); err == nil {
 					_ = yScale.Train(col)
@@ -836,6 +898,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			if exp, ok := xScale.(scale.Expander); ok {
 				xHasExpand = exp.HasExpand()
 			}
+
 			yHasExpand := false
 			if exp, ok := yScale.(scale.Expander); ok {
 				yHasExpand = exp.HasExpand()
@@ -850,6 +913,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 					xPad = 0.5
 				}
 			}
+
 			if !yHasExpand {
 				yPad = (yMax - yMin) * 0.05
 				if yPad == 0 {
@@ -860,12 +924,14 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			// For bar/histogram/boxplot, add extra X padding so edge elements don't clip.
 			if !xHasExpand {
 				hasBars := false
+
 				for _, rl := range resolved {
 					switch rl.geom.Geom {
 					case geom.TypeBar, geom.TypeHistogram, geom.TypeBoxPlot:
 						hasBars = true
 					}
 				}
+
 				if hasBars {
 					for _, rl := range resolved {
 						n := rl.ds.NumRows()
@@ -886,6 +952,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 					bs.SetBounds(xMin-xPad, xMax+xPad)
 				}
 			}
+
 			if yPad > 0 {
 				if yMin == 0 {
 					if bs, ok := yScale.(scale.BoundsSetter); ok {
@@ -903,6 +970,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			if yPad == 0 {
 				yPad = 0.5
 			}
+
 			if yMin == 0 {
 				if bs, ok := yScale.(scale.BoundsSetter); ok {
 					bs.SetBounds(0, yMax+yPad)
@@ -920,21 +988,26 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			if p.spec.XLim[0] != nil && !math.IsNaN(*p.spec.XLim[0]) {
 				curXMin = *p.spec.XLim[0]
 			}
+
 			if p.spec.XLim[1] != nil && !math.IsNaN(*p.spec.XLim[1]) {
 				curXMax = *p.spec.XLim[1]
 			}
+
 			if bs, ok := xScale.(scale.BoundsSetter); ok {
 				bs.SetBounds(curXMin, curXMax)
 			}
 		}
+
 		if p.spec.YLim[0] != nil || p.spec.YLim[1] != nil {
 			curYMin, curYMax := yScale.Bounds()
 			if p.spec.YLim[0] != nil && !math.IsNaN(*p.spec.YLim[0]) {
 				curYMin = *p.spec.YLim[0]
 			}
+
 			if p.spec.YLim[1] != nil && !math.IsNaN(*p.spec.YLim[1]) {
 				curYMax = *p.spec.YLim[1]
 			}
+
 			if bs, ok := yScale.(scale.BoundsSetter); ok {
 				bs.SetBounds(curYMin, curYMax)
 			}
@@ -946,9 +1019,13 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		if allLayersHorizontal(p.spec.Layers) {
 			leftAxisScale = xScale
 		}
+
 		yTicks := leftAxisScale.Ticks(6)
+
 		cv.SetFontSize(th.Text.TickLabel.Size)
+
 		maxTickW := 0.0
+
 		for _, v := range yTicks {
 			tw, _ := cv.MeasureString(leftAxisScale.Format(v))
 			if tw > maxTickW {
@@ -957,9 +1034,11 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		}
 
 		// Margins — compute once for the first panel, reuse for all.
-		var mTop, mRight, mBottom, mLeft float64
-		var panelW, panelH, cellW, cellH, dataX, dataY float64
-		var legendW float64
+		var (
+			mTop, mRight, mBottom, mLeft               float64
+			panelW, panelH, cellW, cellH, dataX, dataY float64
+			legendW                                    float64
+		)
 
 		if pi == 0 || len(panels) == 1 {
 			mTop = 15.0
@@ -970,12 +1049,15 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			if p.spec.Labels.Title != "" {
 				mTop += th.Text.Title.Size + 8
 			}
+
 			if p.spec.Labels.Subtitle != "" {
 				mTop += th.Text.Subtitle.Size + 4
 			}
+
 			if p.spec.Labels.X != "" {
 				mBottom += th.Text.AxisTitle.Size + 8
 			}
+
 			if p.spec.Labels.Y != "" {
 				// Match the guide's title offset formula:
 				//   titleOffset = 5 + maxTickW + axisTitleSize/2 + 8
@@ -986,8 +1068,10 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				if titleGap < 30+th.Text.AxisTitle.Size/2 {
 					titleGap = 30 + th.Text.AxisTitle.Size/2
 				}
+
 				mLeft = 15.0 + titleGap + th.Ticks.Length
 			}
+
 			if p.spec.Labels.Caption != "" {
 				mBottom += th.Text.TickLabel.Size + 4
 			}
@@ -997,28 +1081,36 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			if legendPos == "" {
 				legendPos = "right"
 			}
+
 			hasLegend = legendPos != "none" && (len(legendEntries) > 0 || colorBarSpec != nil)
 
 			// Compute legend width for vertical (left/right) positions.
 			legendW = 0.0
+
 			if hasLegend && (legendPos == "right" || legendPos == "left") {
 				if len(legendEntries) > 0 {
 					cv.SetFontSize(th.Text.Legend.Size)
+
 					maxLabelW := 0.0
+
 					for _, le := range legendEntries {
 						tw, _ := cv.MeasureString(le.Label)
 						if tw > maxLabelW {
 							maxLabelW = tw
 						}
 					}
+
 					legendW += maxLabelW + 12 + 8 + 15
 				}
+
 				if colorBarSpec != nil {
 					cv.SetFontSize(th.Text.Legend.Size * 0.9)
+
 					vmin, vmax := 0.0, 1.0
 					if colorBarSpec.Norm != nil {
 						vmin, vmax = colorBarSpec.Norm.Bounds()
 					}
+
 					maxLblW, _ := cv.MeasureString(fmt.Sprintf("%.4g", vmax))
 					minLblW, _ := cv.MeasureString(fmt.Sprintf("%.4g", vmin))
 					lblW := math.Max(maxLblW, minLblW)
@@ -1062,9 +1154,11 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 
 		panelW = float64(width) - mLeft - mRight
 		panelH = float64(height) - mTop - mBottom
+
 		if panelW < 10 {
 			panelW = 10
 		}
+
 		if panelH < 10 {
 			panelH = 10
 		}
@@ -1091,6 +1185,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			cv.SetFontSize(th.Text.TickLabel.Size)
 			cv.DrawStringAnchored(panel.Label, dataX+cellW/2, dataY+stripH/2, 0.5, 0.5)
 		}
+
 		dataY += stripH
 		cellH -= stripH
 
@@ -1099,6 +1194,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		renderXScale := xScale
 		renderYScale := yScale
 		renderXLabel := p.spec.Labels.X
+
 		renderYLabel := p.spec.Labels.Y
 		if allLayersHorizontal(p.spec.Layers) {
 			renderXScale, renderYScale = yScale, xScale
@@ -1121,13 +1217,16 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		cv.Translate(dataX, dataY)
 		cv.DrawRectangle(0, 0, cellW, cellH)
 		cv.Clip()
+
 		xMin, xMax = xScale.Bounds()
+
 		yMin, yMax = yScale.Bounds()
 		for _, rl := range resolved {
 			drawLayer(cv, p.spec.Coord, rl.ds, rl.geom, rl.mapping,
 				rl.groupColor, rl.contColCol, rl.contColScale,
 				cellW, cellH, xMin, xMax, yMin, yMax, th)
 		}
+
 		cv.Restore()
 
 		// 2g. Draw axes and tick labels (in absolute coords, outside panel clip).
@@ -1139,6 +1238,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 		if !isMultiPanel || isBottomRow {
 			guide.DrawXAxis(cv, renderXScale, renderXLabel, dataX, dataY+cellH, cellW, th)
 		}
+
 		if !isMultiPanel || isLeftCol {
 			guide.DrawYAxis(cv, renderYScale, renderYLabel, dataX, dataY, cellH, th)
 		}
@@ -1148,22 +1248,26 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 			switch legendPos {
 			case "right":
 				lx := dataX + cellW + 10
+
 				ly := dataY + 5
 				if len(legendEntries) > 0 {
 					guide.DrawLegend(cv, legendTitle, legendEntries, lx, ly, th)
 					ly += float64(len(legendEntries)+1) * 20
 				}
+
 				if colorBarSpec != nil {
 					barH := math.Min(cellH*0.25, 120)
 					guide.DrawColorBar(cv, *colorBarSpec, lx, ly, barH, th)
 				}
 			case "left":
 				lx := dataX - legendW - 5
+
 				ly := dataY + 5
 				if len(legendEntries) > 0 {
 					guide.DrawLegend(cv, legendTitle, legendEntries, lx, ly, th)
 					ly += float64(len(legendEntries)+1) * 20
 				}
+
 				if colorBarSpec != nil {
 					barH := math.Min(cellH*0.25, 120)
 					guide.DrawColorBar(cv, *colorBarSpec, lx, ly, barH, th)
@@ -1173,6 +1277,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				if len(legendEntries) > 0 {
 					guide.DrawLegendHorizontal(cv, legendTitle, legendEntries, dataX, topY, cellW, th)
 				}
+
 				if colorBarSpec != nil {
 					barW := math.Min(cellW*0.3, 200)
 					barX := dataX + cellW/2 - barW/2
@@ -1183,6 +1288,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				if len(legendEntries) > 0 {
 					guide.DrawLegendHorizontal(cv, legendTitle, legendEntries, dataX, bottomY, cellW, th)
 				}
+
 				if colorBarSpec != nil {
 					barW := math.Min(cellW*0.3, 200)
 					barX := dataX + cellW/2 - barW/2
@@ -1195,17 +1301,20 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 	// 3. Title, subtitle, caption — drawn ONCE outside the panel loop.
 	centerX := float64(width) / 2
 	titleY := 10.0
+
 	if p.spec.Labels.Title != "" {
 		cv.SetColor(th.Text.Title.Color)
 		cv.SetFontSize(th.Text.Title.Size)
 		cv.DrawStringAnchored(p.spec.Labels.Title, centerX, titleY+th.Text.Title.Size/2, 0.5, 0.5)
 		titleY += th.Text.Title.Size + 8
 	}
+
 	if p.spec.Labels.Subtitle != "" {
 		cv.SetColor(th.Text.Subtitle.Color)
 		cv.SetFontSize(th.Text.Subtitle.Size)
 		cv.DrawStringAnchored(p.spec.Labels.Subtitle, centerX, titleY+th.Text.Subtitle.Size/2, 0.5, 0.5)
 	}
+
 	if p.spec.Labels.Caption != "" {
 		cv.SetColor(th.Text.TickLabel.Color)
 		cv.SetFontSize(th.Text.TickLabel.Size)
@@ -1234,13 +1343,12 @@ func updateMappingForStat(s stat.Stat, mapping grammar.AesMap) grammar.AesMap {
 	if om == nil {
 		return mapping // identity — no rewriting
 	}
+
 	result := make(grammar.AesMap, len(mapping))
-	for k, v := range mapping {
-		result[k] = v
-	}
-	for aes, col := range om {
-		result[aes] = col
-	}
+	maps.Copy(result, mapping)
+
+	maps.Copy(result, om)
+
 	return result
 }
 
@@ -1260,17 +1368,20 @@ func groupByColumn(_ context.Context, ds dataset.Dataset, colName string) ([]str
 	// Extract string labels from the column.
 	// Uses strconv instead of fmt.Sprintf (~5× faster per value).
 	var vals []string
+
 	switch tc := col.(type) {
 	case dataset.Column[string]:
 		vals = tc.Values()
 	case dataset.Column[float64]:
 		raw := tc.Values()
+
 		vals = make([]string, len(raw))
 		for i, v := range raw {
 			vals[i] = strconv.FormatFloat(v, 'g', -1, 64)
 		}
 	case dataset.Column[int64]:
 		raw := tc.Values()
+
 		vals = make([]string, len(raw))
 		for i, v := range raw {
 			vals[i] = strconv.FormatInt(v, 10)
@@ -1281,11 +1392,14 @@ func groupByColumn(_ context.Context, ds dataset.Dataset, colName string) ([]str
 
 	// Build index groups: map[label] → []rowIndex.
 	groupIndices := make(map[string][]int)
+
 	var order []string
+
 	for i, v := range vals {
 		if _, exists := groupIndices[v]; !exists {
 			order = append(order, v)
 		}
+
 		groupIndices[v] = append(groupIndices[v], i)
 	}
 
@@ -1296,8 +1410,10 @@ func groupByColumn(_ context.Context, ds dataset.Dataset, colName string) ([]str
 		if serr != nil {
 			return nil, nil, fmt.Errorf("select group %q: %w", label, serr)
 		}
+
 		subsets[i] = subset
 	}
+
 	return order, subsets, nil
 }
 
@@ -1309,6 +1425,7 @@ func themePaletteCmap(th theme.Theme) colormap.Cmap {
 	if len(th.Palette) == 0 {
 		return colormap.Tab10
 	}
+
 	colors := make([]gg.RGBA, len(th.Palette))
 	for i, c := range th.Palette {
 		r, g, b, a := c.RGBA()
@@ -1319,6 +1436,7 @@ func themePaletteCmap(th theme.Theme) colormap.Cmap {
 			A: float64(a) / 65535.0,
 		}
 	}
+
 	return colormap.NewListed("theme:"+th.Name, colormap.Qualitative, colors)
 }
 
@@ -1328,10 +1446,12 @@ func allLayersHorizontal(layers []grammar.LayerSpec) bool {
 	if len(layers) == 0 {
 		return false
 	}
+
 	for _, l := range layers {
 		if l.Geom.Params.Orientation != geom.Horizontal {
 			return false
 		}
 	}
+
 	return true
 }

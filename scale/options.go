@@ -6,12 +6,12 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 )
 
-// ScaleOpt is a functional option that configures a [ConfiguredScale].
-type ScaleOpt func(*ConfiguredScale)
+// Opt is a functional option that configures a [ConfiguredScale].
+type Opt func(*ConfiguredScale)
 
 // WithBreaks sets explicit tick positions that override the automatic
 // [Scale.Ticks] generation. The values are in data space.
-func WithBreaks(breaks []float64) ScaleOpt {
+func WithBreaks(breaks []float64) Opt {
 	return func(c *ConfiguredScale) {
 		c.breaks = make([]float64, len(breaks))
 		copy(c.breaks, breaks)
@@ -22,7 +22,7 @@ func WithBreaks(breaks []float64) ScaleOpt {
 // produced by [WithBreaks] (same index order). If len(labels) < len(breaks),
 // excess ticks use the inner scale's Format. If [WithBreaks] is not set,
 // labels are matched to auto-generated ticks positionally.
-func WithLabels(labels []string) ScaleOpt {
+func WithLabels(labels []string) Opt {
 	return func(c *ConfiguredScale) {
 		c.labels = make([]string, len(labels))
 		copy(c.labels, labels)
@@ -33,7 +33,7 @@ func WithLabels(labels []string) ScaleOpt {
 // the inner scale's [Scale.Format] for every tick value.
 // When both WithFormatter and WithLabels are set, WithLabels takes
 // priority for positions that have a matching index.
-func WithFormatter(fn func(float64) string) ScaleOpt {
+func WithFormatter(fn func(float64) string) Opt {
 	return func(c *ConfiguredScale) { c.formatter = fn }
 }
 
@@ -43,7 +43,7 @@ func WithFormatter(fn func(float64) string) ScaleOpt {
 // units. This replaces the renderer's default 5 % expansion for the axis.
 //
 // ggplot2 equivalent: scale_x_continuous(expand = expansion(mult, add))
-func WithExpand(mult, add float64) ScaleOpt {
+func WithExpand(mult, add float64) Opt {
 	return func(c *ConfiguredScale) {
 		c.expandMult = mult
 		c.expandAdd = add
@@ -53,7 +53,7 @@ func WithExpand(mult, add float64) ScaleOpt {
 
 // WithMinorBreaks sets explicit minor tick positions (data space).
 // Minor ticks are used to draw minor grid lines between major ticks.
-func WithMinorBreaks(breaks []float64) ScaleOpt {
+func WithMinorBreaks(breaks []float64) Opt {
 	return func(c *ConfiguredScale) {
 		c.minorBreaks = make([]float64, len(breaks))
 		copy(c.minorBreaks, breaks)
@@ -64,13 +64,14 @@ func WithMinorBreaks(breaks []float64) ScaleOpt {
 // the data domain. Data points outside this range are still present in the
 // dataset (no filtering), but the axis shows only [min, max].
 // Use math.NaN() for either bound to leave it auto-detected.
-func WithClipBounds(min, max float64) ScaleOpt {
+func WithClipBounds(lo, hi float64) Opt {
 	return func(c *ConfiguredScale) {
-		if !math.IsNaN(min) {
-			c.clipMin = &min
+		if !math.IsNaN(lo) {
+			c.clipMin = &lo
 		}
-		if !math.IsNaN(max) {
-			c.clipMax = &max
+
+		if !math.IsNaN(hi) {
+			c.clipMax = &hi
 		}
 	}
 }
@@ -79,14 +80,16 @@ func WithClipBounds(min, max float64) ScaleOpt {
 
 // Configure wraps an existing [Scale] with the given options.
 // If no options are provided the inner scale is returned unchanged.
-func Configure(inner Scale, opts ...ScaleOpt) Scale {
+func Configure(inner Scale, opts ...Opt) Scale {
 	if len(opts) == 0 {
 		return inner
 	}
+
 	cs := &ConfiguredScale{inner: inner}
 	for _, o := range opts {
 		o(cs)
 	}
+
 	return cs
 }
 
@@ -123,6 +126,7 @@ func (c *ConfiguredScale) Map(v float64) float64 {
 	if mx == mn {
 		return 0.5
 	}
+
 	return (v - mn) / (mx - mn)
 }
 
@@ -138,6 +142,7 @@ func (c *ConfiguredScale) Ticks(n int) []float64 {
 	if len(c.breaks) > 0 {
 		return c.breaks
 	}
+
 	return c.inner.Ticks(n)
 }
 
@@ -153,13 +158,16 @@ func (c *ConfiguredScale) Format(v float64) string {
 				if i < len(c.labels) {
 					return c.labels[i]
 				}
+
 				break
 			}
 		}
 	}
+
 	if c.formatter != nil {
 		return c.formatter(v)
 	}
+
 	return c.inner.Format(v)
 }
 
@@ -179,6 +187,7 @@ func (c *ConfiguredScale) Bounds() (float64, float64) {
 	if c.clipMin != nil {
 		mn = *c.clipMin
 	}
+
 	if c.clipMax != nil {
 		mx = *c.clipMax
 	}
@@ -211,10 +220,12 @@ func (c *ConfiguredScale) MinorTicks() []float64 {
 	if len(major) < 2 {
 		return nil
 	}
+
 	minor := make([]float64, 0, len(major)-1)
-	for i := 0; i < len(major)-1; i++ {
+	for i := range len(major) - 1 {
 		minor = append(minor, (major[i]+major[i+1])/2)
 	}
+
 	return minor
 }
 

@@ -1,6 +1,7 @@
 package bigquery
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -75,8 +76,10 @@ func (b *bqBuilder) getOrCreate(name string, dtype dataset.DType) *bqAppender {
 	if a, ok := b.cols[name]; ok {
 		return a
 	}
+
 	a := &bqAppender{name: name, dtype: dtype}
 	b.cols[name] = a
+
 	return a
 }
 
@@ -119,7 +122,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 
 	messageDescriptor, ok := descriptor.(protoreflect.MessageDescriptor)
 	if !ok {
-		return nil, fmt.Errorf("bigquery: descriptor is not a MessageDescriptor")
+		return nil, errors.New("bigquery: descriptor is not a MessageDescriptor")
 	}
 
 	// Convert to DescriptorProto for WithSchemaDescriptor
@@ -151,7 +154,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 
 	// Serialize all rows as protobuf messages
 	serializedRows := make([][]byte, b.nRows)
-	for i := 0; i < b.nRows; i++ {
+	for i := range b.nRows {
 		msg := dynamicpb.NewMessage(messageDescriptor)
 
 		for _, field := range b.schema.Fields() {
@@ -162,11 +165,13 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 
 			// Proto field names are lowercase with underscores
 			fdName := protoreflect.Name(strings.ToLower(field.Name))
+
 			fd := messageDescriptor.Fields().ByName(fdName)
 			if fd == nil {
 				// Try exact match
 				fd = messageDescriptor.Fields().ByName(protoreflect.Name(field.Name))
 			}
+
 			if fd == nil {
 				continue
 			}
@@ -200,6 +205,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 		if err != nil {
 			return nil, fmt.Errorf("bigquery: failed to marshal row %d: %w", i, err)
 		}
+
 		serializedRows[i] = data
 	}
 
@@ -222,6 +228,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 	}
 
 	schema := bqSchemaToDataset(meta.Schema)
+
 	return &bqDataset{
 		engine:  b.engine,
 		schema:  schema,
@@ -314,7 +321,9 @@ func appendNull(nulls []bool, idx int) []bool {
 	for len(nulls) <= idx {
 		nulls = append(nulls, false)
 	}
+
 	nulls[idx] = true
+
 	return nulls
 }
 
@@ -322,8 +331,10 @@ func grow[T any](s []T, n int) []T {
 	if cap(s)-len(s) >= n {
 		return s
 	}
+
 	newCap := len(s) + n
 	ns := make([]T, len(s), newCap)
 	copy(ns, s)
+
 	return ns
 }

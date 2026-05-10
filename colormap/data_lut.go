@@ -22,37 +22,46 @@ func lutFromStops(stops []stopRGB) [256][3]uint8 {
 	if len(stops) == 0 {
 		return lut
 	}
+
 	if len(stops) == 1 {
 		s := stops[0]
-		for i := 0; i < 256; i++ {
+		for i := range 256 {
 			lut[i] = [3]uint8{s.r, s.g, s.b}
 		}
+
 		return lut
 	}
-	for i := 0; i < 256; i++ {
+
+	for i := range 256 {
 		t := float64(i) / 255.0
 		// Locate enclosing stop pair.
 		j := 0
 		for j+1 < len(stops) && stops[j+1].t < t {
 			j++
 		}
+
 		if j+1 >= len(stops) {
 			s := stops[len(stops)-1]
 			lut[i] = [3]uint8{s.r, s.g, s.b}
+
 			continue
 		}
+
 		lo, hi := stops[j], stops[j+1]
 		span := hi.t - lo.t
+
 		var f float64
 		if span > 0 {
 			f = (t - lo.t) / span
 		}
+
 		lut[i] = [3]uint8{
 			lerpU8(lo.r, hi.r, f),
 			lerpU8(lo.g, hi.g, f),
 			lerpU8(lo.b, hi.b, f),
 		}
 	}
+
 	return lut
 }
 
@@ -61,8 +70,10 @@ func lerpU8(a, b uint8, t float64) uint8 {
 	if v < 0 {
 		return 0
 	}
+
 	if v > 255 {
 		return 255
 	}
+
 	return uint8(v + 0.5)
 }

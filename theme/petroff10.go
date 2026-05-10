@@ -1,4 +1,4 @@
-package theme
+package theme //nolint:dupl // Each theme preset is intentionally self-contained, mirroring upstream mplstyle files.
 
 import "image/color"
 
@@ -43,5 +43,6 @@ func newPetroff10() Theme {
 		hex("717581"), // slate
 		hex("92dadd"), // sky cyan
 	}
+
 	return t
 }

@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash"
 	"hash/fnv"
@@ -43,15 +44,19 @@ func NewDataset(eng Engine, cols ...AnyColumn) (Dataset, error) {
 	if !ok {
 		return Dataset{}, fmt.Errorf("engine %q does not support ColumnFactory", eng.Name())
 	}
+
 	fields := make([]Field, len(cols))
 	for i, c := range cols {
 		fields[i] = Field{Name: c.Name(), Dtype: c.DType()}
 	}
+
 	schema := NewSchema(fields...)
+
 	tbl, err := factory.FromColumns(schema, cols...)
 	if err != nil {
 		return Dataset{}, err
 	}
+
 	return Dataset{eng: eng, tbl: tbl, op: op{kind: opNone}}, nil
 }
 
@@ -74,32 +79,39 @@ func (f Dataset) Table() Table {
 	return f.tbl
 }
 
-// Convenience forwarding methods — require a collected Dataset.
+// Column retrieves a named column. Requires a collected Dataset.
 func (f Dataset) Column(name string) (AnyColumn, error) {
 	if f.tbl == nil {
-		return nil, fmt.Errorf("dataset: Column() on uncollected Dataset — call Collect(ctx) first")
+		return nil, errors.New("dataset: Column() on uncollected Dataset — call Collect(ctx) first")
 	}
+
 	return f.tbl.Column(name)
 }
 
+// NumRows returns the number of rows, or 0 if uncollected.
 func (f Dataset) NumRows() int64 {
 	if f.tbl == nil {
 		return 0
 	}
+
 	return f.tbl.NumRows()
 }
 
+// NumCols returns the number of columns, or 0 if uncollected.
 func (f Dataset) NumCols() int64 {
 	if f.tbl == nil {
 		return 0
 	}
+
 	return f.tbl.NumCols()
 }
 
+// Schema returns the schema, or nil if uncollected.
 func (f Dataset) Schema() *Schema {
 	if f.tbl == nil {
 		return nil
 	}
+
 	return f.tbl.Schema()
 }
 
@@ -108,6 +120,7 @@ func (f Dataset) withError(err error) Dataset {
 	if f.err != nil {
 		return f // keep the first error
 	}
+
 	return Dataset{tbl: f.tbl, err: err}
 }
 
@@ -116,15 +129,18 @@ func (f Dataset) requireEngine() (Engine, Dataset) {
 	if f.err != nil {
 		return nil, f
 	}
+
 	eng := f.eng
 	if eng == nil {
 		if f.tbl != nil {
 			eng = GetEngine(f.tbl)
 		}
 	}
+
 	if eng == nil {
-		return nil, f.withError(fmt.Errorf("dataset: Dataset requires an engine"))
+		return nil, f.withError(errors.New("dataset: Dataset requires an engine"))
 	}
+
 	return eng, f
 }
 
@@ -134,10 +150,12 @@ func (f Dataset) requireSelector(eng Engine) (Selector, ColumnFactory, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("engine %q does not support Selector", eng.Name())
 	}
+
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
 		return nil, nil, fmt.Errorf("engine %q does not support ColumnFactory", eng.Name())
 	}
+
 	return sel, factory, nil
 }
 
@@ -158,29 +176,38 @@ func (f Dataset) execSelect(cols []string) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
 	}
+
 	fields := make([]Field, 0, len(cols))
+
 	columns := make([]AnyColumn, 0, len(cols))
 	for _, name := range cols {
 		idx := f.tbl.Schema().FieldIndex(name)
 		if idx < 0 {
 			return f.withError(&ErrColumnNotFound{Name: name})
 		}
+
 		fields = append(fields, f.tbl.Schema().Field(idx))
+
 		col, err := f.tbl.Column(name)
 		if err != nil {
 			return f.withError(err)
 		}
+
 		columns = append(columns, col)
 	}
+
 	schema := NewSchema(fields...)
+
 	ds, err := factory.FromColumns(schema, columns...)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -189,31 +216,40 @@ func (f Dataset) execRename(oldName, newName string) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
 	}
+
 	schema := f.tbl.Schema()
 	fields := make([]Field, schema.NumFields())
+
 	columns := make([]AnyColumn, schema.NumFields())
 	for i := 0; i < schema.NumFields(); i++ {
 		field := schema.Field(i)
+
 		col, err := f.tbl.Column(field.Name)
 		if err != nil {
 			return f.withError(err)
 		}
+
 		if field.Name == oldName {
 			field.Name = newName
 			col = renameColumn(col, newName)
 		}
+
 		fields[i] = field
 		columns[i] = col
 	}
+
 	ns := NewSchema(fields...)
+
 	ds, err := factory.FromColumns(ns, columns...)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -229,26 +265,33 @@ func (f Dataset) execFilter(mask Masker) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	if filterer, ok := eng.(Filterer); ok {
 		ds, err := filterer.Filter(f.tbl, mask)
 		if err != nil {
 			return f.withError(err)
 		}
+
 		return Dataset{eng: eng, tbl: ds}
 	}
+
 	sel, factory, err := f.requireSelector(eng)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	bools, err := mask.Mask(f.tbl)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	indices := sel.FilterIndices(bools)
+
 	ds, err := applySelect(sel, factory, f.tbl, indices)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -259,24 +302,29 @@ func (f Dataset) execFilter(mask Masker) Dataset {
 // The Dataset must be materialised (collected). Use on collected datasets only.
 func (f Dataset) SelectRows(indices []int) (Dataset, error) {
 	if f.tbl == nil {
-		return f, fmt.Errorf("dataset: SelectRows requires a materialised dataset (call Collect first)")
+		return f, errors.New("dataset: SelectRows requires a materialised dataset (call Collect first)")
 	}
+
 	eng := f.eng
 	if eng == nil {
 		eng = GetEngine(f.tbl)
 	}
+
 	sel, ok := eng.(Selector)
 	if !ok {
 		return f, fmt.Errorf("engine %q does not support Selector", eng.Name())
 	}
+
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
 		return f, fmt.Errorf("engine %q does not support ColumnFactory", eng.Name())
 	}
+
 	ds, err := applySelect(sel, factory, f.tbl, indices)
 	if err != nil {
 		return f, err
 	}
+
 	return Dataset{eng: eng, tbl: ds}, nil
 }
 
@@ -318,25 +366,31 @@ func (f Dataset) execArrange(cols []string) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	sel, factory, err := f.requireSelector(eng)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	if len(cols) == 0 {
 		return f
 	}
+
 	col, err := f.tbl.Column(cols[0])
 	if err != nil {
 		return f.withError(err)
 	}
+
 	indices, err := sel.SortIndices(col)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	ds, err := applySelect(sel, factory, f.tbl, indices)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -344,6 +398,7 @@ func (f Dataset) execHead(n int) Dataset {
 	if n >= int(f.tbl.NumRows()) {
 		return f
 	}
+
 	return f.execSlice(0, n)
 }
 
@@ -351,6 +406,7 @@ func (f Dataset) execTail(n int) Dataset {
 	if n >= int(f.tbl.NumRows()) {
 		return f
 	}
+
 	return f.execSlice(int(f.tbl.NumRows())-n, int(f.tbl.NumRows()))
 }
 
@@ -359,23 +415,29 @@ func (f Dataset) execSlice(start, end int) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	sel, factory, err := f.requireSelector(eng)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	if start < 0 {
 		start = 0
 	}
+
 	if end > int(f.tbl.NumRows()) {
 		end = int(f.tbl.NumRows())
 	}
+
 	if start >= end {
 		return f.withError(fmt.Errorf("dataset: Slice start (%d) >= end (%d)", start, end))
 	}
+
 	ds, err := applySlice(sel, factory, f.tbl, start, end)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -384,57 +446,73 @@ func (f Dataset) execDistinct(cols []string) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	sel, factory, err := f.requireSelector(eng)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	if len(cols) == 0 {
 		cols = Names(f.tbl)
 	}
+
 	seen := make(map[uint64]struct{}, int(f.tbl.NumRows())/2)
+
 	var indices []int
+
 	hasher := newRowHasher(f.tbl, cols)
-	for row := 0; row < int(f.tbl.NumRows()); row++ {
-		key := hasher.hash(row)
+	for row := range f.tbl.NumRows() {
+		r := int(row)
+
+		key := hasher.hash(r)
 		if _, exists := seen[key]; !exists {
 			seen[key] = struct{}{}
-			indices = append(indices, row)
+
+			indices = append(indices, r)
 		}
 	}
+
 	ds, err := applySelect(sel, factory, f.tbl, indices)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Joins ---
 
+// LeftJoin performs a left join against other on the given key spec.
 func (f Dataset) LeftJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinLeft
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
+// InnerJoin performs an inner join against other on the given key spec.
 func (f Dataset) InnerJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinInner
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
+// RightJoin performs a right join against other on the given key spec.
 func (f Dataset) RightJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinRight
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
+// FullJoin performs a full outer join against other on the given key spec.
 func (f Dataset) FullJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinFull
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
+// SemiJoin keeps rows from the left that have a match in other.
 func (f Dataset) SemiJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinSemi
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
 }
 
+// AntiJoin keeps rows from the left that have no match in other.
 func (f Dataset) AntiJoin(other Table, spec JoinSpec) Dataset {
 	spec.Type = JoinAnti
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opJoin, joinOther: other, joinSpec: spec}}
@@ -445,27 +523,33 @@ func (f Dataset) execJoin(other Table, spec JoinSpec) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	joiner, ok := eng.(Joiner)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support Joiner", eng.Name()))
 	}
+
 	ds, err := joiner.Join(f.tbl, other, spec)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Reshape ---
 
+// PivotLonger reshapes wide data to long format.
 func (f Dataset) PivotLonger(spec PivotLongerSpec) Dataset {
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opPivotLonger, pivotL: spec}}
 }
 
+// PivotWider reshapes long data to wide format.
 func (f Dataset) PivotWider(spec PivotWiderSpec) Dataset {
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opPivotWider, pivotW: spec}}
 }
 
+// Separate splits a string column into multiple columns by a separator.
 func (f Dataset) Separate(col string, into []string, sep string) Dataset {
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opSeparate, sepCol: col, into: into, sep: sep}}
 }
@@ -475,14 +559,17 @@ func (f Dataset) execPivotLonger(spec PivotLongerSpec) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	reshaper, ok := eng.(Reshaper)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support Reshaper", eng.Name()))
 	}
+
 	ds, err := reshaper.PivotLonger(f.tbl, spec)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -491,14 +578,17 @@ func (f Dataset) execPivotWider(spec PivotWiderSpec) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	reshaper, ok := eng.(Reshaper)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support Reshaper", eng.Name()))
 	}
+
 	ds, err := reshaper.PivotWider(f.tbl, spec)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -507,23 +597,28 @@ func (f Dataset) execSeparate(col string, into []string, sep string) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	reshaper, ok := eng.(Reshaper)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support Reshaper", eng.Name()))
 	}
+
 	ds, err := reshaper.Separate(f.tbl, col, into, sep)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Fill / DropNA ---
 
+// Fill forward- or backward-fills missing values in the named column.
 func (f Dataset) Fill(col string, dir FillDirection) Dataset {
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opFill, fillCol: col, fillDir: dir}}
 }
 
+// DropNA removes rows with missing values in the specified columns.
 func (f Dataset) DropNA(cols ...string) Dataset {
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opDropNA, cols: cols}}
 }
@@ -533,22 +628,27 @@ func (f Dataset) execFill(col string, dir FillDirection) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	filler, ok := eng.(Filler)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support Filler", eng.Name()))
 	}
+
 	factory, ok2 := eng.(ColumnFactory)
 	if !ok2 {
 		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
 	}
+
 	c, err := f.tbl.Column(col)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	filled, err := filler.Fill(c, dir)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return f.replaceColumn(factory, col, filled)
 }
 
@@ -557,23 +657,28 @@ func (f Dataset) execDropNA(cols []string) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	filler, ok := eng.(Filler)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support Filler", eng.Name()))
 	}
+
 	ds, err := filler.DropNA(f.tbl, cols...)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
 // --- Composing ---
 
+// Stack vertically concatenates this dataset with others (row-bind).
 func (f Dataset) Stack(others ...Table) Dataset {
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opStack, others: others}}
 }
 
+// Combine horizontally concatenates this dataset with others (column-bind).
 func (f Dataset) Combine(others ...Table) Dataset {
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opCombine, others: others}}
 }
@@ -583,15 +688,19 @@ func (f Dataset) execStack(others []Table) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	composer, ok := eng.(Composer)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support Composer", eng.Name()))
 	}
+
 	all := append([]Table{f.tbl}, others...)
+
 	ds, err := composer.Stack(all...)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -600,15 +709,19 @@ func (f Dataset) execCombine(others []Table) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	composer, ok := eng.(Composer)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support Composer", eng.Name()))
 	}
+
 	all := append([]Table{f.tbl}, others...)
+
 	ds, err := composer.Combine(all...)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -616,6 +729,7 @@ func (f Dataset) execCombine(others []Table) Dataset {
 
 func (f Dataset) replaceColumn(factory ColumnFactory, name string, newCol AnyColumn) Dataset {
 	schema := f.tbl.Schema()
+
 	columns := make([]AnyColumn, schema.NumFields())
 	for i := 0; i < schema.NumFields(); i++ {
 		field := schema.Field(i)
@@ -626,13 +740,16 @@ func (f Dataset) replaceColumn(factory ColumnFactory, name string, newCol AnyCol
 			if err != nil {
 				return f.withError(err)
 			}
+
 			columns[i] = col
 		}
 	}
+
 	ds, err := factory.FromColumns(schema, columns...)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: f.eng, tbl: ds}
 }
 
@@ -648,6 +765,7 @@ type AggSpec struct {
 // AggFunc identifies an aggregation function.
 type AggFunc int
 
+// AggSum is the sum aggregation.
 const (
 	AggSum AggFunc = iota
 	AggMean
@@ -658,13 +776,25 @@ const (
 	AggVariance
 )
 
-// Agg helpers for building AggSpecs.
-func Sum(out, in string) AggSpec    { return AggSpec{OutputName: out, InputName: in, Fn: AggSum} }
-func Mean(out, in string) AggSpec   { return AggSpec{OutputName: out, InputName: in, Fn: AggMean} }
-func Min(out, in string) AggSpec    { return AggSpec{OutputName: out, InputName: in, Fn: AggMin} }
-func Max(out, in string) AggSpec    { return AggSpec{OutputName: out, InputName: in, Fn: AggMax} }
-func Count(out, in string) AggSpec  { return AggSpec{OutputName: out, InputName: in, Fn: AggCount} }
+// Sum builds a sum aggregation spec.
+func Sum(out, in string) AggSpec { return AggSpec{OutputName: out, InputName: in, Fn: AggSum} }
+
+// Mean builds a mean aggregation spec.
+func Mean(out, in string) AggSpec { return AggSpec{OutputName: out, InputName: in, Fn: AggMean} }
+
+// Min builds a min aggregation spec.
+func Min(out, in string) AggSpec { return AggSpec{OutputName: out, InputName: in, Fn: AggMin} }
+
+// Max builds a max aggregation spec.
+func Max(out, in string) AggSpec { return AggSpec{OutputName: out, InputName: in, Fn: AggMax} }
+
+// Count builds a count aggregation spec.
+func Count(out, in string) AggSpec { return AggSpec{OutputName: out, InputName: in, Fn: AggCount} }
+
+// Median builds a median aggregation spec.
 func Median(out, in string) AggSpec { return AggSpec{OutputName: out, InputName: in, Fn: AggMedian} }
+
+// Variance builds a variance aggregation spec.
 func Variance(out, in string) AggSpec {
 	return AggSpec{OutputName: out, InputName: in, Fn: AggVariance}
 }
@@ -683,6 +813,7 @@ func (f Dataset) GroupBy(cols ...string) GroupedFrame {
 // Summarize applies aggregations per group, producing a lazy Dataset.
 func (gf GroupedFrame) Summarize(specs ...AggSpec) Dataset {
 	f := gf.frame
+
 	return Dataset{
 		eng:    f.eng,
 		parent: &f,
@@ -698,11 +829,11 @@ func dispatchAgg(agg Aggregator, fn AggFunc, col AnyColumn) (AnyColumn, error) {
 	case AggMean:
 		return agg.Mean(col)
 	case AggMin:
-		min, _, err := agg.MinMax(col)
-		return min, err
+		lo, _, err := agg.MinMax(col)
+		return lo, err
 	case AggMax:
-		_, max, err := agg.MinMax(col)
-		return max, err
+		_, hi, err := agg.MinMax(col)
+		return hi, err
 	case AggCount:
 		return agg.Count(col)
 	case AggMedian:
@@ -720,6 +851,7 @@ func resolveAggDType(fn AggFunc, ds Table, colName string) DType {
 	if err != nil {
 		return DTypeFloat64
 	}
+
 	switch fn {
 	case AggSum:
 		return col.DType() // preserves type
@@ -737,8 +869,9 @@ func resolveAggDType(fn AggFunc, ds Table, colName string) DType {
 // mergeAggResults combines N single-element AnyColumns into one N-element column.
 func mergeAggResults(factory ColumnFactory, name string, results []AnyColumn) (AnyColumn, error) {
 	if len(results) == 0 {
-		return nil, fmt.Errorf("dataset: no agg results to merge")
+		return nil, errors.New("dataset: no agg results to merge")
 	}
+
 	n := len(results)
 	switch results[0].DType() {
 	case DTypeFloat64:
@@ -746,24 +879,28 @@ func mergeAggResults(factory ColumnFactory, name string, results []AnyColumn) (A
 		for i, r := range results {
 			vals[i] = r.(Column[float64]).Values()[0]
 		}
+
 		return factory.NewFloat64Column(name, vals), nil
 	case DTypeInt64:
 		vals := make([]int64, n)
 		for i, r := range results {
 			vals[i] = r.(Column[int64]).Values()[0]
 		}
+
 		return factory.NewInt64Column(name, vals), nil
 	case DTypeString:
 		vals := make([]string, n)
 		for i, r := range results {
 			vals[i] = r.(Column[string]).Values()[0]
 		}
+
 		return factory.NewStringColumn(name, vals), nil
 	case DTypeTimestamp:
 		vals := make([]int64, n)
 		for i, r := range results {
 			vals[i] = r.(Column[int64]).Values()[0]
 		}
+
 		return factory.NewTimestampColumn(name, vals), nil
 	default:
 		return nil, fmt.Errorf("dataset: unsupported agg result DType %s", results[0].DType())
@@ -786,36 +923,44 @@ func (f Dataset) Mutate(name string, fn MutateFunc) Dataset {
 // applyTake applies a Take operation to all columns in a dataset using the engine's Selector.
 func applySelect(sel Selector, factory ColumnFactory, ds Table, indices []int) (Table, error) {
 	schema := ds.Schema()
+
 	columns := make([]AnyColumn, schema.NumFields())
 	for i := 0; i < schema.NumFields(); i++ {
 		col, err := ds.Column(schema.Field(i).Name)
 		if err != nil {
 			return nil, err
 		}
+
 		taken, err := sel.Select(col, indices)
 		if err != nil {
 			return nil, err
 		}
+
 		columns[i] = taken
 	}
+
 	return factory.FromColumns(schema, columns...)
 }
 
 // applySlice applies a SliceColumn to all columns in a dataset using the engine's Selector.
 func applySlice(sel Selector, factory ColumnFactory, ds Table, start, end int) (Table, error) {
 	schema := ds.Schema()
+
 	columns := make([]AnyColumn, schema.NumFields())
 	for i := 0; i < schema.NumFields(); i++ {
 		col, err := ds.Column(schema.Field(i).Name)
 		if err != nil {
 			return nil, err
 		}
+
 		sliced, err := sel.Slice(col, start, end)
 		if err != nil {
 			return nil, err
 		}
+
 		columns[i] = sliced
 	}
+
 	return factory.FromColumns(schema, columns...)
 }
 
@@ -851,11 +996,13 @@ func newRowHasher(ds Table, cols []string) *rowHasher {
 		boolv:  make([][]bool, n),
 		nulls:  make([][]bool, n),
 	}
+
 	for i, name := range cols {
 		col, _ := ds.Column(name)
 		if col == nil {
 			continue // dtypes[i] stays 0 → falls through to default sentinel
 		}
+
 		rh.dtypes[i] = col.DType()
 		switch c := col.(type) {
 		case Column[float64]:
@@ -876,16 +1023,19 @@ func newRowHasher(ds Table, cols []string) *rowHasher {
 			rh.nulls[i] = c.IsNull()
 		}
 	}
+
 	return rh
 }
 
 func (rh *rowHasher) hash(row int) uint64 {
 	rh.h.Reset()
-	for i := 0; i < rh.ncols; i++ {
+
+	for i := range rh.ncols {
 		if rh.nulls[i] != nil && rh.nulls[i][row] {
 			rh.h.Write([]byte{0xFF})
 			continue
 		}
+
 		switch rh.dtypes[i] {
 		case DTypeFloat64:
 			binary.LittleEndian.PutUint64(rh.buf[:], math.Float64bits(rh.float[i][row]))
@@ -906,6 +1056,7 @@ func (rh *rowHasher) hash(row int) uint64 {
 			rh.h.Write([]byte{0xFF})
 		}
 	}
+
 	return rh.h.Sum64()
 }
 
@@ -931,42 +1082,54 @@ func (f Dataset) execGroupBy(groupCols []string, specs []AggSpec) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	agg, ok := eng.(Aggregator)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support Aggregator", eng.Name()))
 	}
+
 	sel, factory, err := f.requireSelector(eng)
 	if err != nil {
 		return f.withError(err)
 	}
 
 	type group struct{ indices []int }
+
 	seen := make(map[uint64]int, int(f.tbl.NumRows())/2)
+
 	var groups []group
+
 	hasher := newRowHasher(f.tbl, groupCols)
-	for row := 0; row < int(f.tbl.NumRows()); row++ {
-		key := hasher.hash(row)
+	for row := range f.tbl.NumRows() {
+		r := int(row)
+
+		key := hasher.hash(r)
 		if idx, exists := seen[key]; exists {
-			groups[idx].indices = append(groups[idx].indices, row)
+			groups[idx].indices = append(groups[idx].indices, r)
 		} else {
 			seen[key] = len(groups)
-			groups = append(groups, group{indices: []int{row}})
+			groups = append(groups, group{indices: []int{r}})
 		}
 	}
 
 	nGroups := len(groups)
+
 	var outFields []Field
+
 	for _, name := range groupCols {
 		idx := f.tbl.Schema().FieldIndex(name)
 		if idx < 0 {
 			return f.withError(&ErrColumnNotFound{Name: name})
 		}
+
 		outFields = append(outFields, f.tbl.Schema().Field(idx))
 	}
+
 	for _, spec := range specs {
 		dtype := resolveAggDType(spec.Fn, f.tbl, spec.InputName)
 		outFields = append(outFields, Field{Name: spec.OutputName, Dtype: dtype})
 	}
+
 	outSchema := NewSchema(outFields...)
 	outCols := make([]AnyColumn, len(outFields))
 
@@ -974,15 +1137,18 @@ func (f Dataset) execGroupBy(groupCols []string, specs []AggSpec) Dataset {
 	for i, g := range groups {
 		firstIndices[i] = g.indices[0]
 	}
+
 	for ci, name := range groupCols {
 		col, err := f.tbl.Column(name)
 		if err != nil {
 			return f.withError(err)
 		}
+
 		taken, err := sel.Select(col, firstIndices)
 		if err != nil {
 			return f.withError(err)
 		}
+
 		outCols[ci] = taken
 	}
 
@@ -991,22 +1157,28 @@ func (f Dataset) execGroupBy(groupCols []string, specs []AggSpec) Dataset {
 		if err != nil {
 			return f.withError(err)
 		}
+
 		aggResults := make([]AnyColumn, nGroups)
+
 		for gi, g := range groups {
 			groupCol, err := sel.Select(col, g.indices)
 			if err != nil {
 				return f.withError(err)
 			}
+
 			result, err := dispatchAgg(agg, spec.Fn, groupCol)
 			if err != nil {
 				return f.withError(err)
 			}
+
 			aggResults[gi] = result
 		}
+
 		merged, err := mergeAggResults(factory, spec.OutputName, aggResults)
 		if err != nil {
 			return f.withError(err)
 		}
+
 		outCols[len(groupCols)+si] = merged
 	}
 
@@ -1014,6 +1186,7 @@ func (f Dataset) execGroupBy(groupCols []string, specs []AggSpec) Dataset {
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -1024,34 +1197,43 @@ func (f Dataset) execMutate(name string, fn MutateFunc) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
 	}
+
 	newCol, err := fn.Apply(f.tbl)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	schema := f.tbl.Schema()
 	if schema.HasField(name) {
 		return f.replaceColumn(factory, name, newCol)
 	}
+
 	fields := schema.Fields()
 	fields = append(fields, Field{Name: name, Dtype: newCol.DType()})
 	newSchema := NewSchema(fields...)
+
 	columns := make([]AnyColumn, schema.NumFields()+1)
 	for i := 0; i < schema.NumFields(); i++ {
 		col, err := f.tbl.Column(schema.Field(i).Name)
 		if err != nil {
 			return f.withError(err)
 		}
+
 		columns[i] = col
 	}
+
 	columns[schema.NumFields()] = newCol
+
 	ds, err := factory.FromColumns(newSchema, columns...)
 	if err != nil {
 		return f.withError(err)
 	}
+
 	return Dataset{eng: eng, tbl: ds}
 }
 
@@ -1062,10 +1244,13 @@ func (f Dataset) execReplaceCol(colName string, values []float64) Dataset {
 	if fr.err != nil {
 		return fr
 	}
+
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
 		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
 	}
+
 	newCol := factory.NewFloat64Column(colName, values)
+
 	return f.replaceColumn(factory, colName, newCol)
 }

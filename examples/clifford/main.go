@@ -32,7 +32,7 @@ func main() {
 	a, b, c, d := -1.4, 1.6, 1.0, 0.7
 	x, y := 0.0, 0.0
 
-	for i := 0; i < numPoints; i++ {
+	for i := range numPoints {
 		nextX := math.Sin(a*y) + c*math.Cos(a*x)
 		nextY := math.Sin(b*x) + d*math.Cos(b*y)
 
@@ -44,6 +44,7 @@ func main() {
 	}
 
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("Space X", xData),
 		eng.NewFloat64Column("Space Y", yData),
@@ -72,5 +73,6 @@ func main() {
 	if err := p.Save(context.Background(), out, 900, 900); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }

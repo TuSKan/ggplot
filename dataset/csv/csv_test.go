@@ -24,6 +24,7 @@ Charlie,35,NA,true
 
 func TestReadMemory(t *testing.T) {
 	eng := memEngine.NewEngine(context.Background())
+
 	ds, err := Read(context.Background(), strings.NewReader(testCSV), eng)
 	if err != nil {
 		t.Fatal(err)
@@ -32,12 +33,14 @@ func TestReadMemory(t *testing.T) {
 	if ds.NumRows() != 3 {
 		t.Fatalf("expected 3 rows, got %d", ds.NumRows())
 	}
+
 	if ds.Schema().NumFields() != 4 {
 		t.Fatalf("expected 4 fields, got %d", ds.Schema().NumFields())
 	}
 
 	// name: string
 	nameCol, _ := ds.Column("name")
+
 	names := nameCol.(dataset.Column[string]).Values()
 	if names[0] != "Alice" || names[1] != "Bob" || names[2] != "Charlie" {
 		t.Errorf("names = %v", names)
@@ -45,6 +48,7 @@ func TestReadMemory(t *testing.T) {
 
 	// age: int64
 	ageCol, _ := ds.Column("age")
+
 	ages := ageCol.(dataset.Column[int64]).Values()
 	if ages[0] != 30 || ages[1] != 25 || ages[2] != 35 {
 		t.Errorf("ages = %v", ages)
@@ -52,16 +56,19 @@ func TestReadMemory(t *testing.T) {
 
 	// score: float64 (has "NA" → NaN)
 	scoreCol, _ := ds.Column("score")
+
 	scores := scoreCol.(dataset.Column[float64]).Values()
 	if scores[0] != 95.5 || scores[1] != 87.3 {
 		t.Errorf("scores = %v", scores)
 	}
+
 	if !math.IsNaN(scores[2]) {
 		t.Errorf("scores[2] should be NaN, got %v", scores[2])
 	}
 
 	// active: bool
 	activeCol, _ := ds.Column("active")
+
 	actives := activeCol.(dataset.Column[bool]).Values()
 	if !actives[0] || actives[1] || !actives[2] {
 		t.Errorf("actives = %v", actives)
@@ -71,13 +78,16 @@ func TestReadMemory(t *testing.T) {
 func TestReadMemoryNoHeader(t *testing.T) {
 	csv := "Alice,30\nBob,25\n"
 	eng := memEngine.NewEngine(context.Background())
+
 	ds, err := Read(context.Background(), strings.NewReader(csv), eng, WithHeader(false))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if ds.NumRows() != 2 {
 		t.Fatalf("expected 2 rows, got %d", ds.NumRows())
 	}
+
 	if !ds.Schema().HasField("V1") || !ds.Schema().HasField("V2") {
 		t.Errorf("expected V1, V2 columns")
 	}
@@ -86,14 +96,18 @@ func TestReadMemoryNoHeader(t *testing.T) {
 func TestReadMemoryTSV(t *testing.T) {
 	csv := "name\tage\nAlice\t30\nBob\t25\n"
 	eng := memEngine.NewEngine(context.Background())
+
 	ds, err := Read(context.Background(), strings.NewReader(csv), eng, WithComma('\t'))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if ds.NumRows() != 2 {
 		t.Fatalf("expected 2 rows, got %d", ds.NumRows())
 	}
+
 	nameCol, _ := ds.Column("name")
+
 	names := nameCol.(dataset.Column[string]).Values()
 	if names[0] != "Alice" {
 		t.Errorf("name[0] = %q", names[0])
@@ -109,6 +123,7 @@ func TestWriteMemory(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
+
 	err := Write(context.Background(), &buf, ds, eng)
 	if err != nil {
 		t.Fatal(err)
@@ -118,9 +133,11 @@ func TestWriteMemory(t *testing.T) {
 	if !strings.Contains(output, "name,age,score") {
 		t.Error("missing header")
 	}
+
 	if !strings.Contains(output, "Alice,30,95.5") {
 		t.Errorf("missing Alice row in:\n%s", output)
 	}
+
 	if !strings.Contains(output, "Bob,25,NA") {
 		t.Errorf("NaN should be written as NA, got:\n%s", output)
 	}
@@ -149,12 +166,14 @@ func TestRoundTripMemory(t *testing.T) {
 	}
 
 	cityCol, _ := ds2.Column("city")
+
 	cities := cityCol.(dataset.Column[string]).Values()
 	if cities[0] != "SP" || cities[1] != "RJ" || cities[2] != "BH" {
 		t.Errorf("cities = %v", cities)
 	}
 
 	popCol, _ := ds2.Column("pop")
+
 	pops := popCol.(dataset.Column[int64]).Values()
 	if pops[0] != 12000000 {
 		t.Errorf("pop[0] = %d, want 12000000", pops[0])
@@ -165,6 +184,7 @@ func TestRoundTripMemory(t *testing.T) {
 
 func TestReadArrow(t *testing.T) {
 	eng := arrowEngine.NewEngine(context.Background(), memory.DefaultAllocator)
+
 	ds, err := Read(context.Background(), strings.NewReader(testCSV), eng)
 	if err != nil {
 		t.Fatal(err)
@@ -175,6 +195,7 @@ func TestReadArrow(t *testing.T) {
 	}
 
 	nameCol, _ := ds.Column("name")
+
 	names := nameCol.(dataset.Column[string]).Values()
 	if names[0] != "Alice" {
 		t.Errorf("name[0] = %q", names[0])
@@ -189,6 +210,7 @@ func TestWriteArrow(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
+
 	err := Write(context.Background(), &buf, ds, eng)
 	if err != nil {
 		t.Fatal(err)
@@ -198,6 +220,7 @@ func TestWriteArrow(t *testing.T) {
 	if !strings.Contains(output, "x,y") {
 		t.Error("missing header")
 	}
+
 	if !strings.Contains(output, "a,1.5") {
 		t.Errorf("missing row in:\n%s", output)
 	}
@@ -227,13 +250,16 @@ func TestRoundTripArrow(t *testing.T) {
 
 func TestHeaderOnlyCSV(t *testing.T) {
 	eng := memEngine.NewEngine(context.Background())
+
 	ds, err := Read(context.Background(), strings.NewReader("name,age\n"), eng)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if ds.NumRows() != 0 {
 		t.Fatalf("expected 0 rows, got %d", ds.NumRows())
 	}
+
 	if ds.Schema().NumFields() != 2 {
 		t.Fatalf("expected 2 fields, got %d", ds.Schema().NumFields())
 	}

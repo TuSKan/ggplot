@@ -41,10 +41,13 @@ func assertGolden(t *testing.T, name string, got []byte) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("create golden dir: %v", err)
 		}
+
 		if err := os.WriteFile(path, got, 0o644); err != nil {
 			t.Fatalf("write golden %s: %v", path, err)
 		}
+
 		t.Logf("updated golden: %s (%d bytes, sha256:%s)", path, len(got), sha256hex(got))
+
 		return
 	}
 
@@ -55,17 +58,22 @@ func assertGolden(t *testing.T, name string, got []byte) {
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				t.Fatalf("create golden dir: %v", err)
 			}
+
 			if err := os.WriteFile(path, got, 0o644); err != nil {
 				t.Fatalf("write initial golden %s: %v", path, err)
 			}
+
 			t.Logf("created initial golden: %s (%d bytes, sha256:%s)", path, len(got), sha256hex(got))
 			t.Logf("re-run the test to validate against this golden")
+
 			return
 		}
+
 		t.Fatalf("read golden %s: %v", path, err)
 	}
 
 	wantHash := sha256hex(want)
+
 	gotHash := sha256hex(got)
 	if wantHash != gotHash {
 		// Write the actual output for diffing.
@@ -84,14 +92,18 @@ func sha256hex(data []byte) string {
 // renderPNG is a helper that renders a plot to PNG bytes.
 func renderPNG(t *testing.T, p *ggplot.Plot, w, h int) []byte {
 	t.Helper()
+
 	var buf bytes.Buffer
+
 	_, err := p.WriteTo(context.Background(), &buf, "png", w, h)
 	if err != nil {
 		t.Fatalf("render PNG: %v", err)
 	}
+
 	if buf.Len() < 100 {
 		t.Fatalf("rendered PNG too small: %d bytes", buf.Len())
 	}
+
 	return buf.Bytes()
 }
 
@@ -109,6 +121,7 @@ func renderPNG(t *testing.T, p *ggplot.Plot, w, h int) []byte {
 
 func TestGolden_ScatterPlot(t *testing.T) {
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
 		eng.NewFloat64Column("y", []float64{2.1, 4.3, 3.0, 7.8, 5.5, 8.1, 6.9, 9.2, 8.5, 10.0}),
@@ -131,6 +144,7 @@ func TestGolden_ScatterPlot(t *testing.T) {
 
 func TestGolden_BarChart(t *testing.T) {
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
 		eng.NewFloat64Column("count", []float64{10, 25, 15, 30, 20}),
@@ -153,6 +167,7 @@ func TestGolden_BarChart(t *testing.T) {
 
 func TestGolden_MultiLayer(t *testing.T) {
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
 		eng.NewFloat64Column("y", []float64{2.1, 4.3, 3.0, 7.8, 5.5, 8.1, 6.9, 9.2, 8.5, 10.0}),
@@ -176,6 +191,7 @@ func TestGolden_MultiLayer(t *testing.T) {
 
 func TestGolden_GroupedColor(t *testing.T) {
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{1, 2, 3, 1, 2, 3, 1, 2, 3}),
 		eng.NewFloat64Column("y", []float64{1, 4, 9, 2, 5, 8, 3, 6, 7}),
@@ -200,7 +216,9 @@ func TestGolden_Histogram(t *testing.T) {
 		// Simple deterministic distribution: sawtooth pattern.
 		xs[i] = float64(i%20) * 0.5
 	}
+
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs))
 	if err != nil {
 		t.Fatal(err)
@@ -216,6 +234,7 @@ func TestGolden_Histogram(t *testing.T) {
 
 func TestGolden_LabelsAndTheme(t *testing.T) {
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
 		eng.NewFloat64Column("y", []float64{10, 20, 15, 25, 30}),
@@ -245,16 +264,20 @@ func TestGolden_LabelsAndTheme(t *testing.T) {
 // TestGolden_Summary prints the golden directory and file count for CI visibility.
 func TestGolden_Summary(t *testing.T) {
 	dir := goldenDir()
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Logf("golden dir %s: %v", dir, err)
 		return
 	}
+
 	var count int
+
 	for _, e := range entries {
 		if !e.IsDir() && filepath.Ext(e.Name()) == ".png" {
 			count++
 		}
 	}
+
 	fmt.Fprintf(os.Stderr, "golden directory: %s (%d files)\n", dir, count)
 }

@@ -8,6 +8,7 @@ package stat
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"runtime"
@@ -20,6 +21,7 @@ import (
 // Name identifies a statistical transformation.
 type Name string
 
+// Identity is the identity (no-op) stat transform.
 const (
 	Identity Name = "identity"
 	Bin      Name = "bin"
@@ -80,6 +82,7 @@ func Lookup(name Name) (Stat, error) {
 	if s, ok := registry[name]; ok {
 		return s, nil
 	}
+
 	return nil, fmt.Errorf("stat: unknown stat %q", name)
 }
 
@@ -116,7 +119,7 @@ func (binStat) OutputMapping() map[string]string { return map[string]string{"x":
 func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
-		return dataset.Dataset{}, fmt.Errorf("stat_bin: missing 'x' aesthetic")
+		return dataset.Dataset{}, errors.New("stat_bin: missing 'x' aesthetic")
 	}
 
 	vals, err := ds.Float64(xCol, dataset.Clean)
@@ -129,42 +132,48 @@ func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string
 	if nBins <= 0 {
 		nBins = autoBins(vals, opts.BinMethod)
 	}
+
 	if nBins <= 0 {
 		nBins = 1
 	}
+
 	if nBins > len(vals) {
 		nBins = len(vals)
 	}
 
-	min, max := vals[0], vals[0]
+	lo, hi := vals[0], vals[0]
 	for _, v := range vals {
-		if v < min {
-			min = v
+		if v < lo {
+			lo = v
 		}
-		if v > max {
-			max = v
+
+		if v > hi {
+			hi = v
 		}
 	}
 
-	binWidth := (max - min) / float64(nBins)
+	binWidth := (hi - lo) / float64(nBins)
 	if binWidth <= 0 {
 		binWidth = 1
 	}
 
 	centers := make([]float64, nBins)
 	counts := make([]float64, nBins)
+
 	for i := range centers {
-		centers[i] = min + binWidth*(float64(i)+0.5)
+		centers[i] = lo + binWidth*(float64(i)+0.5)
 	}
 
 	for _, v := range vals {
-		idx := int((v - min) / binWidth)
+		idx := int((v - lo) / binWidth)
 		if idx >= nBins {
 			idx = nBins - 1
 		}
+
 		if idx < 0 {
 			idx = 0
 		}
+
 		counts[idx]++
 	}
 
@@ -186,7 +195,7 @@ func (countStat) OutputMapping() map[string]string { return map[string]string{"x
 func (countStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, _ Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
-		return dataset.Dataset{}, fmt.Errorf("stat_count: missing 'x' aesthetic")
+		return dataset.Dataset{}, errors.New("stat_count: missing 'x' aesthetic")
 	}
 
 	vals, err := ds.Float64(xCol, dataset.Clean)
@@ -196,16 +205,21 @@ func (countStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[stri
 
 	// Count unique values.
 	unique := make(map[float64]int)
+
 	var order []float64
+
 	for _, v := range vals {
 		if _, exists := unique[v]; !exists {
 			order = append(order, v)
 		}
+
 		unique[v]++
 	}
+
 	sort.Float64s(order)
 
 	xs := make([]float64, len(order))
+
 	counts := make([]float64, len(order))
 	for i, v := range order {
 		xs[i] = v
@@ -232,13 +246,14 @@ func (densityStat) OutputMapping() map[string]string {
 func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
-		return dataset.Dataset{}, fmt.Errorf("stat_density: missing 'x' aesthetic")
+		return dataset.Dataset{}, errors.New("stat_density: missing 'x' aesthetic")
 	}
 
 	vals, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
+
 	sort.Float64s(vals)
 
 	n := len(vals)
@@ -270,25 +285,26 @@ func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[
 	}
 
 	// Parallel KDE evaluation: chunk by CPU count.
-	nCPU := runtime.NumCPU()
-	if nCPU > points {
-		nCPU = points
-	}
+	nCPU := min(runtime.NumCPU(), points)
+
 	chunk := (points + nCPU - 1) / nCPU
+
 	var wg sync.WaitGroup
+
 	errCh := make(chan error, 1)
 
-	for c := 0; c < nCPU; c++ {
+	for c := range nCPU {
 		start := c * chunk
-		end := start + chunk
-		if end > points {
-			end = points
-		}
+
+		end := min(start+chunk, points)
+
 		wg.Add(1)
 		go func(start, end int) {
 			defer wg.Done()
+
 			bwInv := 1.0 / bandwidth
 			norm := 1.0 / (bandwidth * math.Sqrt(2*math.Pi) * float64(n))
+
 			for i := start; i < end; i++ {
 				if i%64 == 0 {
 					if err := ctx.Err(); err != nil {
@@ -296,19 +312,24 @@ func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[
 						case errCh <- err:
 						default:
 						}
+
 						return
 					}
 				}
+
 				x := xs[i]
 				density := 0.0
+
 				for _, v := range vals {
 					z := (x - v) * bwInv
 					density += math.Exp(-0.5 * z * z)
 				}
+
 				ys[i] = density * norm
 			}
 		}(start, end)
 	}
+
 	wg.Wait()
 
 	select {
@@ -323,22 +344,28 @@ func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[
 // silvermanBandwidth computes Silverman's rule-of-thumb bandwidth.
 func silvermanBandwidth(vals []float64) float64 {
 	n := len(vals)
+
 	mean := 0.0
 	for _, v := range vals {
 		mean += v
 	}
+
 	mean /= float64(n)
 
 	variance := 0.0
+
 	for _, v := range vals {
 		d := v - mean
 		variance += d * d
 	}
+
 	variance /= float64(n)
+
 	sd := math.Sqrt(variance)
 	if sd == 0 {
 		sd = 1
 	}
+
 	return 1.06 * sd * math.Pow(float64(n), -0.2)
 }
 
@@ -353,21 +380,24 @@ func (smoothStat) OutputMapping() map[string]string { return map[string]string{"
 
 func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
+
 	yCol := mapping["y"]
 	if xCol == "" || yCol == "" {
-		return dataset.Dataset{}, fmt.Errorf("stat_smooth: missing 'x' or 'y' aesthetic")
+		return dataset.Dataset{}, errors.New("stat_smooth: missing 'x' or 'y' aesthetic")
 	}
 
 	xData, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
+
 	yData, err := ds.Float64(yCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
+
 	if len(xData) != len(yData) {
-		return dataset.Dataset{}, fmt.Errorf("stat_smooth: x and y columns have different lengths")
+		return dataset.Dataset{}, errors.New("stat_smooth: x and y columns have different lengths")
 	}
 
 	n := len(xData)
@@ -380,6 +410,7 @@ func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[s
 	for i := range xData {
 		pts[i] = xyPair{xData[i], yData[i]}
 	}
+
 	sort.Slice(pts, func(i, j int) bool { return pts[i].x < pts[j].x })
 
 	xMin, xMax := pts[0].x, pts[n-1].x
@@ -389,6 +420,7 @@ func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[s
 	if nOut <= 0 {
 		nOut = 80
 	}
+
 	if nOut > n {
 		nOut = n
 	}
@@ -413,6 +445,7 @@ type xyPair struct{ x, y float64 }
 // linearFit performs simple OLS linear regression: y = a + b*x.
 func linearFit(ds dataset.Dataset, pts []xyPair, nOut int, xMin, xMax float64) (dataset.Dataset, error) {
 	n := float64(len(pts))
+
 	var sx, sy, sxx, sxy float64
 	for _, p := range pts {
 		sx += p.x
@@ -420,7 +453,9 @@ func linearFit(ds dataset.Dataset, pts []xyPair, nOut int, xMin, xMax float64) (
 		sxx += p.x * p.x
 		sxy += p.x * p.y
 	}
+
 	det := n*sxx - sx*sx
+
 	var a, b float64
 	if math.Abs(det) < 1e-15 {
 		a = sy / n
@@ -432,16 +467,18 @@ func linearFit(ds dataset.Dataset, pts []xyPair, nOut int, xMin, xMax float64) (
 
 	step := (xMax - xMin) / float64(nOut-1)
 	xs := make([]float64, nOut)
+
 	ys := make([]float64, nOut)
-	for i := 0; i < nOut; i++ {
+	for i := range nOut {
 		xs[i] = xMin + float64(i)*step
 		ys[i] = a + b*xs[i]
 	}
+
 	return newFloat64Dataset(ds, map[string][]float64{"x": xs, "y": ys})
 }
 
 // loessFit performs locally weighted regression with sliding window.
-func loessFit(ctx context.Context, ds dataset.Dataset, pts []xyPair, n, nOut int, xMin, xMax float64, opts Options) (dataset.Dataset, error) {
+func loessFit(ctx context.Context, ds dataset.Dataset, pts []xyPair, n, nOut int, xMin, xMax float64, _ Options) (dataset.Dataset, error) {
 	// LOESS parameters.
 	alpha := 0.3 // bandwidth: fraction of data used per local fit
 	if n < 20 {
@@ -455,23 +492,19 @@ func loessFit(ctx context.Context, ds dataset.Dataset, pts []xyPair, n, nOut int
 	xs := make([]float64, nOut)
 	ys := make([]float64, nOut)
 
-	k := int(math.Ceil(alpha * float64(n)))
-	if k < 3 {
-		k = 3
-	}
-	if k > n {
-		k = n
-	}
+	k := min(max(int(math.Ceil(alpha*float64(n))), 3), n)
 
 	// Sliding window: since pts is sorted and xEval advances monotonically,
 	// maintain a [lo, hi) window of size k instead of sorting distances per point.
 	lo, hi := 0, k
-	for i := 0; i < nOut; i++ {
+
+	for i := range nOut {
 		if i%32 == 0 {
 			if err := ctx.Err(); err != nil {
 				return dataset.Dataset{}, err
 			}
 		}
+
 		xEval := xMin + float64(i)*step
 		xs[i] = xEval
 
@@ -488,11 +521,13 @@ func loessFit(ctx context.Context, ds dataset.Dataset, pts []xyPair, n, nOut int
 
 		// Weighted local linear regression over pts[lo:hi].
 		var sw, swx, swy, swxx, swxy float64
+
 		for j := lo; j < hi; j++ {
 			u := math.Abs(pts[j].x-xEval) / maxDist
 			if u >= 1.0 {
 				continue
 			}
+
 			w := (1 - u*u*u)
 			w = w * w * w // tri-cube
 			dx := pts[j].x - xEval
@@ -507,6 +542,7 @@ func loessFit(ctx context.Context, ds dataset.Dataset, pts []xyPair, n, nOut int
 			ys[i] = 0
 			continue
 		}
+
 		det := sw*swxx - swx*swx
 		if math.Abs(det) < 1e-15 {
 			ys[i] = swy / sw
@@ -531,38 +567,47 @@ func (summaryStat) OutputMapping() map[string]string { return map[string]string{
 func (summaryStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, _ Options) (dataset.Dataset, error) {
 	// summaryStat computes mean(y) for each distinct x value.
 	xCol := mapping["x"]
+
 	yCol := mapping["y"]
 	if xCol == "" || yCol == "" {
-		return dataset.Dataset{}, fmt.Errorf("stat_summary: missing 'x' or 'y' aesthetic")
+		return dataset.Dataset{}, errors.New("stat_summary: missing 'x' or 'y' aesthetic")
 	}
 
 	xData, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
+
 	yData, err := ds.Float64(yCol, dataset.Clean)
 	if err != nil {
 		return dataset.Dataset{}, err
 	}
 
 	groups := make(map[float64][]float64)
+
 	var order []float64
+
 	for i, x := range xData {
 		if _, exists := groups[x]; !exists {
 			order = append(order, x)
 		}
+
 		groups[x] = append(groups[x], yData[i])
 	}
+
 	sort.Float64s(order)
 
 	xs := make([]float64, len(order))
+
 	means := make([]float64, len(order))
 	for i, x := range order {
 		xs[i] = x
+
 		sum := 0.0
 		for _, v := range groups[x] {
 			sum += v
 		}
+
 		means[i] = sum / float64(len(groups[x]))
 	}
 
@@ -576,22 +621,27 @@ func (summaryStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 func newFloat64Dataset(ds dataset.Dataset, cols map[string][]float64) (dataset.Dataset, error) {
 	eng := dataset.GetEngine(ds.Table())
 	if eng == nil {
-		return dataset.Dataset{}, fmt.Errorf("stat: source dataset has no engine")
+		return dataset.Dataset{}, errors.New("stat: source dataset has no engine")
 	}
+
 	factory, ok := eng.(dataset.ColumnFactory)
 	if !ok {
 		return dataset.Dataset{}, fmt.Errorf("stat: engine %q does not support ColumnFactory", eng.Name())
 	}
+
 	var anyCols []dataset.AnyColumn
 	// Deterministic column order: sort keys
 	keys := make([]string, 0, len(cols))
 	for k := range cols {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
+
 	for _, name := range keys {
 		anyCols = append(anyCols, factory.NewFloat64Column(name, cols[name]))
 	}
+
 	return dataset.NewDataset(eng, anyCols...)
 }
 
@@ -615,7 +665,7 @@ func (boxplotStat) OutputMapping() map[string]string {
 func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	yCol := mapping["y"]
 	if yCol == "" {
-		return dataset.Dataset{}, fmt.Errorf("stat_boxplot: missing 'y' aesthetic")
+		return dataset.Dataset{}, errors.New("stat_boxplot: missing 'y' aesthetic")
 	}
 
 	// Collect Y values, optionally grouped by X.
@@ -626,6 +676,7 @@ func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 
 	// Collect X values for grouping (if they exist).
 	xCol := mapping["x"]
+
 	var xVals []float64
 	if xCol != "" {
 		xVals, _ = ds.Float64(xCol, dataset.Clean)
@@ -638,9 +689,12 @@ func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 	}
 
 	var groups []group
+
 	if len(xVals) == len(yVals) {
 		groupMap := make(map[float64]*group)
+
 		var order []float64
+
 		for i, xv := range xVals {
 			g, exists := groupMap[xv]
 			if !exists {
@@ -648,9 +702,12 @@ func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 				groupMap[xv] = g
 				order = append(order, xv)
 			}
+
 			g.yAll = append(g.yAll, yVals[i])
 		}
+
 		sort.Float64s(order)
+
 		for _, xv := range order {
 			groups = append(groups, *groupMap[xv])
 		}
@@ -695,13 +752,16 @@ func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 			upperFence := q3[i] + 1.5*iqr
 
 			lower[i] = q1[i]
-			for j := 0; j < n; j++ {
+
+			for j := range n {
 				if g.yAll[j] >= lowerFence {
 					lower[i] = g.yAll[j]
 					break
 				}
 			}
+
 			upper[i] = q3[i]
+
 			for j := n - 1; j >= 0; j-- {
 				if g.yAll[j] <= upperFence {
 					upper[i] = g.yAll[j]
@@ -739,16 +799,21 @@ func quantile(sorted []float64, p float64) float64 {
 	if n == 0 {
 		return 0
 	}
+
 	if n == 1 {
 		return sorted[0]
 	}
+
 	idx := p * float64(n-1)
 	lo := int(math.Floor(idx))
+
 	hi := int(math.Ceil(idx))
 	if lo == hi || hi >= n {
 		return sorted[lo]
 	}
+
 	frac := idx - float64(lo)
+
 	return sorted[lo]*(1-frac) + sorted[hi]*frac
 }
 
@@ -759,11 +824,13 @@ func autoBins(vals []float64, method string) int {
 	if n <= 1 {
 		return 1
 	}
+
 	sorted := make([]float64, n)
 	copy(sorted, vals)
 	sort.Float64s(sorted)
 
 	vMin, vMax := sorted[0], sorted[n-1]
+
 	span := vMax - vMin
 	if span <= 0 {
 		return 1
@@ -776,19 +843,24 @@ func autoBins(vals []float64, method string) int {
 		if sd == 0 {
 			return 1
 		}
+
 		h := 3.49 * sd * math.Pow(float64(n), -1.0/3.0)
+
 		return int(math.Ceil(span / h))
 
 	case "fd":
 		// Freedman-Diaconis: h = 2 * IQR * n^(-1/3)
 		q1 := quantile(sorted, 0.25)
 		q3 := quantile(sorted, 0.75)
+
 		iqr := q3 - q1
 		if iqr <= 0 {
 			// Fall back to Sturges.
 			return int(math.Ceil(1.0 + math.Log2(float64(n))))
 		}
+
 		h := 2.0 * iqr * math.Pow(float64(n), -1.0/3.0)
+
 		return int(math.Ceil(span / h))
 
 	case "sqrt":
@@ -805,15 +877,19 @@ func stddev(vals []float64) float64 {
 	if n == 0 {
 		return 0
 	}
+
 	mean := 0.0
 	for _, v := range vals {
 		mean += v
 	}
+
 	mean /= float64(n)
 	variance := 0.0
+
 	for _, v := range vals {
 		d := v - mean
 		variance += d * d
 	}
+
 	return math.Sqrt(variance / float64(n))
 }

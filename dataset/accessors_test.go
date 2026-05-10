@@ -12,16 +12,21 @@ import (
 
 func newTestDataset(t *testing.T, cols ...dataset.AnyColumn) dataset.Dataset {
 	t.Helper()
+
 	eng := memory.NewEngine(context.Background())
+
 	schemaFields := make([]dataset.Field, len(cols))
 	for i, col := range cols {
 		schemaFields[i] = dataset.Field{Name: col.Name(), Dtype: col.DType()}
 	}
+
 	schema := dataset.NewSchema(schemaFields...)
+
 	tbl, err := eng.FromColumns(schema, cols...)
 	if err != nil {
 		t.Fatalf("failed to create table: %v", err)
 	}
+
 	return dataset.From(tbl)
 }
 
@@ -158,6 +163,7 @@ func TestAccessors_Chaining(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		want := []float64{1, 2}
 		if !reflect.DeepEqual(vals, want) {
 			t.Errorf("got %v, want %v", vals, want)
@@ -172,6 +178,7 @@ func TestAccessors_Chaining(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		want := []float64{2, 5, 1}
 		if !reflect.DeepEqual(vals, want) {
 			t.Errorf("got %v, want %v", vals, want)
@@ -219,6 +226,7 @@ func TestAccessors_Int64(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		want := []int64{-10, 1, 2, 3, 10}
 		if !reflect.DeepEqual(vals, want) {
 			t.Errorf("got %v, want %v", vals, want)
@@ -230,6 +238,7 @@ func TestAccessors_Int64(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		want := []int64{3, 1, 2, -5, 5}
 		if !reflect.DeepEqual(vals, want) {
 			t.Errorf("got %v, want %v", vals, want)
@@ -246,6 +255,7 @@ func TestAccessors_Strings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	want := []string{"a", "b", "c"}
 	if !reflect.DeepEqual(vals, want) {
 		t.Errorf("got %v, want %v", vals, want)
@@ -261,6 +271,7 @@ func TestAccessors_Bools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	want := []bool{true, false, true}
 	if !reflect.DeepEqual(vals, want) {
 		t.Errorf("got %v, want %v", vals, want)

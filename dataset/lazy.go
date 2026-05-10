@@ -4,11 +4,12 @@
 // immediately. Materialisation happens only when Collect(ctx) is called.
 // The executeOps function walks the chain and dispatches to exec* methods
 // that contain the actual engine logic (relocated from the old eager verbs).
+
 package dataset
 
 import (
 	"context"
-	"fmt"
+	"errors"
 )
 
 // opKind identifies the type of operation in a lazy Dataset chain.
@@ -94,6 +95,7 @@ func (f *Dataset) root() *Dataset {
 	for cur.parent != nil {
 		cur = cur.parent
 	}
+
 	return cur
 }
 
@@ -106,16 +108,19 @@ func (f *Dataset) flatten() []op {
 	for cur := f; cur != nil && cur.op.kind != opNone; cur = cur.parent {
 		n++
 	}
+
 	if n == 0 {
 		return nil
 	}
 	// Fill from tail to head (root-first order).
 	chain := make([]op, n)
+
 	i := n - 1
 	for cur := f; cur != nil && cur.op.kind != opNone; cur = cur.parent {
 		chain[i] = cur.op
 		i--
 	}
+
 	return chain
 }
 
@@ -133,6 +138,7 @@ func (f Dataset) Collect(ctx context.Context) (Dataset, error) {
 	if f.tbl != nil {
 		return f, f.err
 	}
+
 	if f.err != nil {
 		return f, f.err
 	}
@@ -140,7 +146,7 @@ func (f Dataset) Collect(ctx context.Context) (Dataset, error) {
 	// Find root table.
 	root := f.root()
 	if root.tbl == nil {
-		return f, fmt.Errorf("dataset: no root table in lazy chain")
+		return f, errors.New("dataset: no root table in lazy chain")
 	}
 
 	// Flatten verb chain.
@@ -160,16 +166,19 @@ func (f Dataset) Collect(ctx context.Context) (Dataset, error) {
 	if err != nil {
 		return Dataset{eng: eng, err: err}, err
 	}
+
 	return Dataset{eng: eng, tbl: tbl}, nil
 }
 
 // executeOps runs a sequence of operations against a starting Table.
 func executeOps(ctx context.Context, eng Engine, tbl Table, ops []op) (Table, error) {
 	cur := Dataset{eng: eng, tbl: tbl}
+
 	for _, o := range ops {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
+
 		switch o.kind {
 		case opSelect:
 			cur = cur.execSelect(o.cols)
@@ -210,9 +219,11 @@ func executeOps(ctx context.Context, eng Engine, tbl Table, ops []op) (Table, er
 		case opReplaceCol:
 			cur = cur.execReplaceCol(o.replaceCol, o.replaceVals)
 		}
+
 		if cur.err != nil {
 			return nil, cur.err
 		}
 	}
+
 	return cur.tbl, nil
 }

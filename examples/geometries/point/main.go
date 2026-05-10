@@ -1,3 +1,4 @@
+// Example point demonstrates the geom.point geometry.
 package main
 
 import (
@@ -18,14 +19,16 @@ func main() {
 	// Generate random data.
 	n := 200
 	xs := make([]float64, n)
+
 	ys := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		xs[i] = rand.NormFloat64() * 10.0
 		ys[i] = xs[i]*0.5 + rand.NormFloat64()*2.0
 	}
 
 	// Create dataset using the new dplyr-style API.
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", xs),
 		eng.NewFloat64Column("y", ys),

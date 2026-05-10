@@ -40,7 +40,7 @@ func main() {
 	sepalLen := make([]float64, n)
 	sepalWid := make([]float64, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		switch species[i] {
 		case "setosa":
 			sepalLen[i] = 5.0 + rand.NormFloat64()*0.35
@@ -55,6 +55,7 @@ func main() {
 	}
 
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("sepal_length", sepalLen),
 		eng.NewFloat64Column("sepal_width", sepalWid),
@@ -79,9 +80,11 @@ func main() {
 		)
 
 	_, filename, _, _ := runtime.Caller(0)
+
 	outPath := filepath.Join(filepath.Dir(filename), "color_mapping.png")
 	if err := p.Save(context.Background(), outPath, 900, 600); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", outPath)
 }

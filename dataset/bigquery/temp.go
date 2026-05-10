@@ -1,6 +1,7 @@
 package bigquery
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -18,6 +19,7 @@ func (e *Engine) execToTempTable(sql string) (tableRef, *bigquery.TableMetadata,
 		if err != nil {
 			return tableRef{}, nil, fmt.Errorf("dry-run failed: %w", err)
 		}
+
 		status := job.LastStatus()
 		if status.Statistics != nil {
 			total := status.Statistics.TotalBytesProcessed
@@ -26,17 +28,20 @@ func (e *Engine) execToTempTable(sql string) (tableRef, *bigquery.TableMetadata,
 				"bytes", total,
 				"mb", fmt.Sprintf("%.2f", float64(total)/(1<<20)))
 		}
-		return tableRef{}, nil, fmt.Errorf("bigquery: dry-run mode — query not executed")
+
+		return tableRef{}, nil, errors.New("bigquery: dry-run mode — query not executed")
 	}
 
 	// MaxQueryBytes guard
 	if e.quota.MaxQueryBytes > 0 {
 		q := e.bqClient.Query(sql)
 		q.DryRun = true
+
 		job, err := q.Run(e.ctx)
 		if err != nil {
 			return tableRef{}, nil, fmt.Errorf("cost estimation failed: %w", err)
 		}
+
 		status := job.LastStatus()
 		if status.Statistics != nil {
 			total := status.Statistics.TotalBytesProcessed
@@ -67,6 +72,7 @@ func (e *Engine) execToTempTable(sql string) (tableRef, *bigquery.TableMetadata,
 	if err != nil {
 		return tableRef{}, nil, fmt.Errorf("query job failed: %w", err)
 	}
+
 	if status.Err() != nil {
 		return tableRef{}, nil, fmt.Errorf("query job error: %w", status.Err())
 	}
@@ -80,6 +86,7 @@ func (e *Engine) execToTempTable(sql string) (tableRef, *bigquery.TableMetadata,
 
 	tbl := e.bqClient.Dataset(tempDatasetID).Table(tempID)
 	expiration := time.Now().Add(1 * time.Hour)
+
 	_, err = tbl.Update(e.ctx, bigquery.TableMetadataToUpdate{
 		ExpirationTime: expiration,
 	}, "")

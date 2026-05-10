@@ -1,8 +1,10 @@
 package arrow
 
 import (
+	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/TuSKan/ggplot/dataset"
@@ -13,11 +15,13 @@ import (
 // PivotLonger reshapes a wide dataset to long format.
 func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (dataset.Table, error) {
 	if len(spec.Cols) == 0 {
-		return nil, fmt.Errorf("arrow: PivotLonger requires at least one column to pivot")
+		return nil, errors.New("arrow: PivotLonger requires at least one column to pivot")
 	}
+
 	if spec.NamesTo == "" {
 		spec.NamesTo = "name"
 	}
+
 	if spec.ValuesTo == "" {
 		spec.ValuesTo = "value"
 	}
@@ -28,15 +32,18 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 	outLen := nRows * nPivot
 
 	pivotSet := make(map[string]bool, nPivot)
+
 	for _, name := range spec.Cols {
 		if !schema.HasField(name) {
 			return nil, fmt.Errorf("arrow: PivotLonger: column %q not found", name)
 		}
+
 		pivotSet[name] = true
 	}
 
 	// Validate same type.
 	var pivotDType dataset.DType
+
 	for i, name := range spec.Cols {
 		f := schema.Field(schema.FieldIndex(name))
 		if i == 0 {
@@ -48,8 +55,10 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 	}
 
 	// Build output.
-	var outFields []dataset.Field
-	var outCols []dataset.AnyColumn
+	var (
+		outFields []dataset.Field
+		outCols   []dataset.AnyColumn
+	)
 
 	// ID columns: repeat each value nPivot times.
 	for i := 0; i < schema.NumFields(); i++ {
@@ -57,6 +66,7 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 		if pivotSet[f.Name] {
 			continue
 		}
+
 		outFields = append(outFields, f)
 		col, _ := ds.Column(f.Name)
 		outCols = append(outCols, e.arrowRepeatColumn(col, nPivot, outLen, f.Name))
@@ -64,11 +74,13 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 
 	// Names column.
 	namesData := make([]string, outLen)
-	for row := 0; row < nRows; row++ {
+
+	for row := range nRows {
 		for p, name := range spec.Cols {
 			namesData[row*nPivot+p] = name
 		}
 	}
+
 	outFields = append(outFields, dataset.StringCol(spec.NamesTo))
 	outCols = append(outCols, e.NewStringColumn(spec.NamesTo, namesData))
 
@@ -78,6 +90,7 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 	outCols = append(outCols, valCol)
 
 	outSchema := dataset.NewSchema(outFields...)
+
 	return e.FromColumns(outSchema, outCols...)
 }
 
@@ -86,46 +99,58 @@ func (e *Engine) arrowRepeatColumn(col dataset.AnyColumn, times, outLen int, nam
 	case *arrowFloat64Column:
 		b := array.NewFloat64Builder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(outLen)
+
 		for row := 0; row < c.arr.Len(); row++ {
 			v := c.arr.Value(row)
-			for t := 0; t < times; t++ {
+			for range times {
 				b.Append(v)
 			}
 		}
+
 		return &arrowFloat64Column{name: name, arr: b.NewFloat64Array()}
 	case *arrowInt64Column:
 		b := array.NewInt64Builder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(outLen)
+
 		for row := 0; row < c.arr.Len(); row++ {
 			v := c.arr.Value(row)
-			for t := 0; t < times; t++ {
+			for range times {
 				b.Append(v)
 			}
 		}
+
 		return &arrowInt64Column{name: name, arr: b.NewInt64Array(), dtype: c.dtype}
 	case *arrowStringColumn:
 		b := array.NewStringBuilder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(outLen)
+
 		for row := 0; row < c.arr.Len(); row++ {
 			v := c.arr.Value(row)
-			for t := 0; t < times; t++ {
+			for range times {
 				b.Append(v)
 			}
 		}
+
 		return &arrowStringColumn{name: name, arr: b.NewStringArray()}
 	case *arrowBoolColumn:
 		b := array.NewBooleanBuilder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(outLen)
+
 		for row := 0; row < c.arr.Len(); row++ {
 			v := c.arr.Value(row)
-			for t := 0; t < times; t++ {
+			for range times {
 				b.Append(v)
 			}
 		}
+
 		return &arrowBoolColumn{name: name, arr: b.NewBooleanArray()}
 	default:
 		return col
@@ -133,52 +158,64 @@ func (e *Engine) arrowRepeatColumn(col dataset.AnyColumn, times, outLen int, nam
 }
 
 func (e *Engine) arrowGatherPivotValues(ds dataset.Table, cols []string, dtype dataset.DType,
-	nRows, nPivot, outLen int, name string) dataset.AnyColumn {
+	nRows, _ /* nPivot */, outLen int, name string) dataset.AnyColumn {
 	switch dtype {
 	case dataset.DTypeFloat64:
 		b := array.NewFloat64Builder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(outLen)
+
 		pivotCols := make([]*arrowFloat64Column, len(cols))
 		for i, cn := range cols {
 			c, _ := ds.Column(cn)
 			pivotCols[i] = c.(*arrowFloat64Column)
 		}
-		for row := 0; row < nRows; row++ {
+
+		for row := range nRows {
 			for _, pc := range pivotCols {
 				b.Append(pc.arr.Value(row))
 			}
 		}
+
 		return &arrowFloat64Column{name: name, arr: b.NewFloat64Array()}
 	case dataset.DTypeInt64:
 		b := array.NewInt64Builder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(outLen)
+
 		pivotCols := make([]*arrowInt64Column, len(cols))
 		for i, cn := range cols {
 			c, _ := ds.Column(cn)
 			pivotCols[i] = c.(*arrowInt64Column)
 		}
-		for row := 0; row < nRows; row++ {
+
+		for row := range nRows {
 			for _, pc := range pivotCols {
 				b.Append(pc.arr.Value(row))
 			}
 		}
+
 		return &arrowInt64Column{name: name, arr: b.NewInt64Array()}
 	case dataset.DTypeString:
 		b := array.NewStringBuilder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(outLen)
+
 		pivotCols := make([]*arrowStringColumn, len(cols))
 		for i, cn := range cols {
 			c, _ := ds.Column(cn)
 			pivotCols[i] = c.(*arrowStringColumn)
 		}
-		for row := 0; row < nRows; row++ {
+
+		for row := range nRows {
 			for _, pc := range pivotCols {
 				b.Append(pc.arr.Value(row))
 			}
 		}
+
 		return &arrowStringColumn{name: name, arr: b.NewStringArray()}
 	default:
 		return e.NewStringColumn(name, make([]string, outLen))
@@ -188,7 +225,7 @@ func (e *Engine) arrowGatherPivotValues(ds dataset.Table, cols []string, dtype d
 // PivotWider reshapes a long dataset to wide format.
 func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (dataset.Table, error) {
 	if spec.NamesFrom == "" || spec.ValuesFrom == "" {
-		return nil, fmt.Errorf("arrow: PivotWider requires NamesFrom and ValuesFrom")
+		return nil, errors.New("arrow: PivotWider requires NamesFrom and ValuesFrom")
 	}
 
 	schema := ds.Schema()
@@ -198,10 +235,12 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 	if err != nil {
 		return nil, err
 	}
+
 	valCol, err := ds.Column(spec.ValuesFrom)
 	if err != nil {
 		return nil, err
 	}
+
 	nameStr, ok := nameCol.(*arrowStringColumn)
 	if !ok {
 		return nil, fmt.Errorf("arrow: PivotWider: NamesFrom %q must be string column", spec.NamesFrom)
@@ -209,7 +248,9 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 
 	// Find unique pivot names.
 	var pivotNames []string
+
 	seen := map[string]bool{}
+
 	for i := 0; i < nameStr.arr.Len(); i++ {
 		v := nameStr.arr.Value(i)
 		if !seen[v] {
@@ -220,11 +261,13 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 
 	// ID columns.
 	var idColNames []string
+
 	for i := 0; i < schema.NumFields(); i++ {
 		f := schema.Field(i)
 		if f.Name == spec.NamesFrom || f.Name == spec.ValuesFrom {
 			continue
 		}
+
 		idColNames = append(idColNames, f.Name)
 	}
 
@@ -235,14 +278,17 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 	}
 
 	idKeyToRow := map[string]int{}
+
 	rowIDKeys := make([]string, nRows)
-	for row := 0; row < nRows; row++ {
+	for row := range nRows {
 		key := arrowIDKey(idCols, row)
+
 		rowIDKeys[row] = key
 		if _, ok := idKeyToRow[key]; !ok {
 			idKeyToRow[key] = len(idKeyToRow)
 		}
 	}
+
 	outLen := len(idKeyToRow)
 
 	// Output schema.
@@ -250,26 +296,31 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 	for _, name := range idColNames {
 		outFields = append(outFields, schema.Field(schema.FieldIndex(name)))
 	}
+
 	valDType := valCol.DType()
 	for _, pn := range pivotNames {
 		outFields = append(outFields, dataset.Field{Name: pn, Dtype: valDType})
 	}
+
 	outSchema := dataset.NewSchema(outFields...)
 
 	// Gather id columns.
 	firstRowMap := map[int]int{}
-	for row := 0; row < nRows; row++ {
+
+	for row := range nRows {
 		idx := idKeyToRow[rowIDKeys[row]]
 		if _, exists := firstRowMap[idx]; !exists {
 			firstRowMap[idx] = row
 		}
 	}
+
 	idIndices := make([]int, outLen)
 	for idx, row := range firstRowMap {
 		idIndices[idx] = row
 	}
 
 	var outCols []dataset.AnyColumn
+
 	for _, name := range idColNames {
 		col, _ := ds.Column(name)
 		outCols = append(outCols, e.arrowGatherColumn(col, idIndices, outLen, name))
@@ -284,79 +335,94 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 	switch c := valCol.(type) {
 	case *arrowFloat64Column:
 		pivotData := make([][]float64, len(pivotNames))
+
 		pivotValid := make([][]bool, len(pivotNames))
 		for i := range pivotData {
 			pivotData[i] = make([]float64, outLen)
 			pivotValid[i] = make([]bool, outLen)
 		}
-		for row := 0; row < nRows; row++ {
+
+		for row := range nRows {
 			outRow := idKeyToRow[rowIDKeys[row]]
 			pIdx := pivotNameToIdx[nameStr.arr.Value(row)]
 			pivotData[pIdx][outRow] = c.arr.Value(row)
 			pivotValid[pIdx][outRow] = true
 		}
+
 		for i, pn := range pivotNames {
 			b := array.NewFloat64Builder(e.alloc)
 			b.Reserve(outLen)
-			for j := 0; j < outLen; j++ {
+
+			for j := range outLen {
 				if pivotValid[i][j] {
 					b.Append(pivotData[i][j])
 				} else {
 					b.AppendNull()
 				}
 			}
+
 			outCols = append(outCols, &arrowFloat64Column{name: pn, arr: b.NewFloat64Array()})
 			b.Release()
 		}
 	case *arrowInt64Column:
 		pivotData := make([][]int64, len(pivotNames))
+
 		pivotValid := make([][]bool, len(pivotNames))
 		for i := range pivotData {
 			pivotData[i] = make([]int64, outLen)
 			pivotValid[i] = make([]bool, outLen)
 		}
-		for row := 0; row < nRows; row++ {
+
+		for row := range nRows {
 			outRow := idKeyToRow[rowIDKeys[row]]
 			pIdx := pivotNameToIdx[nameStr.arr.Value(row)]
 			pivotData[pIdx][outRow] = c.arr.Value(row)
 			pivotValid[pIdx][outRow] = true
 		}
+
 		for i, pn := range pivotNames {
 			b := array.NewInt64Builder(e.alloc)
 			b.Reserve(outLen)
-			for j := 0; j < outLen; j++ {
+
+			for j := range outLen {
 				if pivotValid[i][j] {
 					b.Append(pivotData[i][j])
 				} else {
 					b.AppendNull()
 				}
 			}
+
 			outCols = append(outCols, &arrowInt64Column{name: pn, arr: b.NewInt64Array(), dtype: c.dtype})
 			b.Release()
 		}
 	case *arrowStringColumn:
 		pivotData := make([][]string, len(pivotNames))
+
 		pivotValid := make([][]bool, len(pivotNames))
 		for i := range pivotData {
 			pivotData[i] = make([]string, outLen)
 			pivotValid[i] = make([]bool, outLen)
 		}
-		for row := 0; row < nRows; row++ {
+
+		for row := range nRows {
 			outRow := idKeyToRow[rowIDKeys[row]]
 			pIdx := pivotNameToIdx[nameStr.arr.Value(row)]
 			pivotData[pIdx][outRow] = c.arr.Value(row)
 			pivotValid[pIdx][outRow] = true
 		}
+
 		for i, pn := range pivotNames {
 			b := array.NewStringBuilder(e.alloc)
 			b.Reserve(outLen)
-			for j := 0; j < outLen; j++ {
+
+			for j := range outLen {
 				if pivotValid[i][j] {
 					b.Append(pivotData[i][j])
 				} else {
 					b.AppendNull()
 				}
 			}
+
 			outCols = append(outCols, &arrowStringColumn{name: pn, arr: b.NewStringArray()})
 			b.Release()
 		}
@@ -371,16 +437,21 @@ func arrowIDKey(cols []dataset.AnyColumn, row int) string {
 	if len(cols) == 0 {
 		return ""
 	}
+
 	if len(cols) == 1 {
 		return arrowColValueString(cols[0], row)
 	}
+
 	var b strings.Builder
+
 	for i, col := range cols {
 		if i > 0 {
 			b.WriteByte('\x00')
 		}
+
 		b.WriteString(arrowColValueString(col, row))
 	}
+
 	return b.String()
 }
 
@@ -390,6 +461,7 @@ func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep strin
 	if err != nil {
 		return nil, err
 	}
+
 	sc, ok := srcCol.(*arrowStringColumn)
 	if !ok {
 		return nil, fmt.Errorf("arrow: Separate: column %q must be string", col)
@@ -397,14 +469,15 @@ func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep strin
 
 	n := int(ds.NumRows())
 	nParts := len(into)
+
 	partData := make([][]string, nParts)
 	for i := range partData {
 		partData[i] = make([]string, n)
 	}
 
-	for row := 0; row < n; row++ {
+	for row := range n {
 		parts := strings.SplitN(sc.arr.Value(row), sep, nParts)
-		for p := 0; p < nParts; p++ {
+		for p := range nParts {
 			if p < len(parts) {
 				partData[p][row] = parts[p]
 			}
@@ -412,8 +485,11 @@ func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep strin
 	}
 
 	schema := ds.Schema()
-	var outFields []dataset.Field
-	var outCols []dataset.AnyColumn
+
+	var (
+		outFields []dataset.Field
+		outCols   []dataset.AnyColumn
+	)
 
 	for i := 0; i < schema.NumFields(); i++ {
 		f := schema.Field(i)
@@ -430,6 +506,7 @@ func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep strin
 	}
 
 	outSchema := dataset.NewSchema(outFields...)
+
 	return e.FromColumns(outSchema, outCols...)
 }
 
@@ -444,19 +521,23 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 		if err != nil {
 			return nil, err
 		}
+
 		sc, ok := c.(*arrowStringColumn)
 		if !ok {
 			return nil, fmt.Errorf("arrow: Concatenate: column %q must be string", name)
 		}
+
 		srcCols[i] = sc
 	}
 
 	data := make([]string, n)
 	parts := make([]string, len(from))
-	for row := 0; row < n; row++ {
+
+	for row := range n {
 		for i, sc := range srcCols {
 			parts[i] = sc.arr.Value(row)
 		}
+
 		data[row] = strings.Join(parts, sep)
 	}
 
@@ -465,8 +546,11 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 		fromSet[name] = true
 	}
 
-	var outFields []dataset.Field
-	var outCols []dataset.AnyColumn
+	var (
+		outFields []dataset.Field
+		outCols   []dataset.AnyColumn
+	)
+
 	added := false
 
 	for i := 0; i < schema.NumFields(); i++ {
@@ -477,18 +561,22 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 				outCols = append(outCols, e.NewStringColumn(col, data))
 				added = true
 			}
+
 			continue
 		}
+
 		outFields = append(outFields, f)
 		c, _ := ds.Column(f.Name)
 		outCols = append(outCols, c)
 	}
+
 	if !added {
 		outFields = append(outFields, dataset.StringCol(col))
 		outCols = append(outCols, e.NewStringColumn(col, data))
 	}
 
 	outSchema := dataset.NewSchema(outFields...)
+
 	return e.FromColumns(outSchema, outCols...)
 }
 
@@ -505,21 +593,26 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 		name   string
 		values []string
 	}
+
 	uniques := make([]colUniques, len(cols))
 	for i, name := range cols {
 		col, err := ds.Column(name)
 		if err != nil {
 			return nil, err
 		}
+
 		seen := map[string]bool{}
+
 		var vals []string
-		for row := 0; row < n; row++ {
+
+		for row := range n {
 			v := arrowColValueString(col, row)
 			if !seen[v] {
 				vals = append(vals, v)
 				seen[v] = true
 			}
 		}
+
 		uniques[i] = colUniques{name: name, values: vals}
 	}
 
@@ -530,14 +623,18 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 
 	combos := make([][]string, totalCombos)
 	repeat := 1
-	for i := len(uniques) - 1; i >= 0; i-- {
-		uLen := len(uniques[i].values)
-		for c := 0; c < totalCombos; c++ {
+
+	for i, v := range slices.Backward(uniques) {
+		uLen := len(v.values)
+
+		for c := range totalCombos {
 			if combos[c] == nil {
 				combos[c] = make([]string, len(cols))
 			}
-			combos[c][i] = uniques[i].values[(c/repeat)%uLen]
+
+			combos[c][i] = v.values[(c/repeat)%uLen]
 		}
+
 		repeat *= uLen
 	}
 
@@ -545,26 +642,33 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 	for i, name := range cols {
 		completeCols[i], _ = ds.Column(name)
 	}
+
 	existingRows := map[string]int{}
-	for row := 0; row < n; row++ {
+
+	for row := range n {
 		key := arrowIDKey(completeCols, row)
 		existingRows[key] = row
 	}
 
 	outIndices := make([]int, totalCombos)
+
 	outKeys := make([][]string, totalCombos)
-	for c := 0; c < totalCombos; c++ {
+	for c := range totalCombos {
 		key := strings.Join(combos[c], "\x00")
 		if row, ok := existingRows[key]; ok {
 			outIndices[c] = row
 		} else {
 			outIndices[c] = -1
 		}
+
 		outKeys[c] = combos[c]
 	}
 
-	var outFields []dataset.Field
-	var outCols []dataset.AnyColumn
+	var (
+		outFields []dataset.Field
+		outCols   []dataset.AnyColumn
+	)
+
 	completeSet := map[string]int{}
 	for i, name := range cols {
 		completeSet[name] = i
@@ -576,9 +680,10 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 
 		if cIdx, isComplete := completeSet[f.Name]; isComplete {
 			data := make([]string, totalCombos)
-			for c := 0; c < totalCombos; c++ {
+			for c := range totalCombos {
 				data[c] = outKeys[c][cIdx]
 			}
+
 			col, _ := ds.Column(f.Name)
 			outCols = append(outCols, e.arrowCastStringSlice(col, data, f.Name, totalCombos))
 		} else {
@@ -588,6 +693,7 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 	}
 
 	outSchema := dataset.NewSchema(outFields...)
+
 	return e.FromColumns(outSchema, outCols...)
 }
 
@@ -596,9 +702,12 @@ func (e *Engine) arrowCastStringSlice(original dataset.AnyColumn, data []string,
 	case *arrowFloat64Column:
 		b := array.NewFloat64Builder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(n)
+
 		for _, s := range data {
 			var v float64
+
 			_, err := fmt.Sscanf(s, "%g", &v)
 			if err != nil {
 				b.Append(math.NaN())
@@ -606,13 +715,17 @@ func (e *Engine) arrowCastStringSlice(original dataset.AnyColumn, data []string,
 				b.Append(v)
 			}
 		}
+
 		return &arrowFloat64Column{name: name, arr: b.NewFloat64Array()}
 	case *arrowInt64Column:
 		b := array.NewInt64Builder(e.alloc)
 		defer b.Release()
+
 		b.Reserve(n)
+
 		for _, s := range data {
 			var v int64
+
 			_, err := fmt.Sscanf(s, "%d", &v)
 			if err != nil {
 				b.AppendNull()
@@ -620,6 +733,7 @@ func (e *Engine) arrowCastStringSlice(original dataset.AnyColumn, data []string,
 				b.Append(v)
 			}
 		}
+
 		return &arrowInt64Column{name: name, arr: b.NewInt64Array(), dtype: c.dtype}
 	default:
 		return e.NewStringColumn(name, data)

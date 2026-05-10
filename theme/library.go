@@ -24,6 +24,7 @@ func newMinimal() Theme {
 	t.Grid.MinorColor = color.Transparent
 	t.Ticks.Color = color.Transparent
 	t.Ticks.Length = 0
+
 	return t
 }
 
@@ -88,5 +89,6 @@ func newBW() Theme {
 	t.Geom.PatchEdgeColor = color.Black
 	t.Geom.PatchEdgeWidth = 0.5
 	t.Geom.PatchAlpha = 1.0
+
 	return t
 }

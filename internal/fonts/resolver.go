@@ -29,6 +29,7 @@ func (r *Resolver) LoadFace(req FaceRequest) (*FaceHandle, error) {
 		if handle == nil {
 			return nil, ErrFontNotFound
 		}
+
 		return handle, nil
 	}
 
@@ -64,6 +65,7 @@ func (r *Resolver) Resolve(q Query) *Font {
 	best := r.resolveCascade(q)
 
 	r.fontCache.Set(q, best)
+
 	return best
 }
 
@@ -82,6 +84,7 @@ func (r *Resolver) resolveCascade(q Query) *Font {
 	if aliases, ok := r.config.Aliases[normTarget]; ok && q.Family != "" {
 		for _, alias := range aliases {
 			aliasQuery := q
+
 			aliasQuery.Family = alias
 			if aliasMatch := r.registry.Match(aliasQuery); aliasMatch != nil {
 				if normalizeFamily(aliasMatch.Family) == normalizeFamily(alias) {
@@ -99,13 +102,14 @@ func (r *Resolver) resolveCascade(q Query) *Font {
 	// Phase 3: Structural Fallback Cascade
 	var cascade []string
 
-	if q.PreferMonospace || isMonoSub(normTarget) {
+	switch {
+	case q.PreferMonospace || isMonoSub(normTarget):
 		cascade = r.config.Monospace
-	} else if isSerifSub(normTarget) {
+	case isSerifSub(normTarget):
 		cascade = r.config.Serif
-	} else if isEmojiSub(normTarget) {
+	case isEmojiSub(normTarget):
 		cascade = r.config.Emoji
-	} else {
+	default:
 		// Default: sans-serif cascade.
 		cascade = r.config.SansSerif
 	}

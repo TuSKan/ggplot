@@ -32,16 +32,20 @@ func extendedWilkinson(dmin, dmax float64, targetDensity int) []float64 {
 	if targetDensity <= 0 {
 		targetDensity = 5
 	}
+
 	if dmin == dmax {
 		return []float64{dmin}
 	}
+
 	if dmin > dmax {
 		dmin, dmax = dmax, dmin
 	}
 
 	w := defaultWeights
 	bestScore := -2.0
+
 	var bestLmin, bestLmax, bestLstep float64
+
 	bestK := 0
 
 	// j iterates "skip" values (1 = every Q, 2 = every 2nd, etc.)
@@ -94,6 +98,7 @@ func extendedWilkinson(dmin, dmax float64, targetDensity int) []float64 {
 				}
 			}
 		}
+
 	nextJ:
 	}
 
@@ -107,6 +112,7 @@ func extendedWilkinson(dmin, dmax float64, targetDensity int) []float64 {
 	for v := bestLmin; v <= bestLmax+bestLstep*0.5; v += bestLstep {
 		ticks = append(ticks, roundSig(v, 12))
 	}
+
 	return ticks
 }
 
@@ -119,6 +125,7 @@ func simplicity(qi, j int, lmin, lmax, lstep float64) float64 {
 	if containsZero(lmin, lmax, lstep) {
 		v = 1.0
 	}
+
 	return 1.0 - float64(qi)/(float64(len(Q))-1.0) - float64(j) + v
 }
 
@@ -133,7 +140,9 @@ func coverage(dmin, dmax, lmin, lmax float64) float64 {
 	if dataRange <= 0 {
 		return 1.0
 	}
+
 	halfCover := 0.5 * (dataRange - (lmax - lmin))
+
 	return 1.0 - 0.5*(halfCover*halfCover)/(0.1*dataRange)/(0.1*dataRange)
 }
 
@@ -143,7 +152,9 @@ func coverageMax(dmin, dmax, span float64) float64 {
 	if span >= dataRange {
 		return 1.0
 	}
+
 	halfCover := 0.5 * (dataRange - span)
+
 	return 1.0 - 0.5*(halfCover*halfCover)/(0.1*dataRange)/(0.1*dataRange)
 }
 
@@ -151,10 +162,12 @@ func coverageMax(dmin, dmax, span float64) float64 {
 func density(k, m int, dmin, dmax, lmin, lmax float64) float64 {
 	// r = actual density, rt = target density
 	r := float64(k-1) / (lmax - lmin)
+
 	rt := float64(m-1) / (dmax - dmin)
 	if rt == 0 {
 		return 1.0
 	}
+
 	return 2.0 - math.Max(r/rt, rt/r)
 }
 
@@ -163,6 +176,7 @@ func densityMax(k, m int) float64 {
 	if k >= m {
 		return 2.0 - float64(k-1)/float64(m-1)
 	}
+
 	return 1.0
 }
 
@@ -173,11 +187,13 @@ func containsZero(lmin, lmax, lstep float64) bool {
 	if lstep <= 0 {
 		return false
 	}
+
 	if lmin > 0 || lmax < 0 {
 		return false
 	}
 	// Check if 0 is exactly on a step boundary.
 	steps := -lmin / lstep
+
 	return math.Abs(steps-math.Round(steps)) < 1e-10
 }
 
@@ -191,9 +207,11 @@ func roundSig(v float64, n int) float64 {
 	if v == 0 {
 		return 0
 	}
+
 	d := math.Ceil(math.Log10(math.Abs(v)))
 	power := float64(n) - d
 	mag := math.Pow(10, power)
+
 	return math.Round(v*mag) / mag
 }
 
@@ -208,5 +226,6 @@ func fallbackTicks(lo, hi float64, n int) []float64 {
 	for v := lo; v <= hi+step*0.5; v += step {
 		ticks = append(ticks, roundTo(v, 10))
 	}
+
 	return ticks
 }

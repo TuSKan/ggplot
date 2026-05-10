@@ -28,6 +28,7 @@ func SliceSum[T Lanes](data []T) T {
 	for _, v := range data {
 		total += v
 	}
+
 	return total
 }
 
@@ -37,12 +38,14 @@ func SliceMin[T Lanes](data []T) T {
 		var zero T
 		return zero
 	}
+
 	result := data[0]
 	for _, v := range data[1:] {
 		if v < result {
 			result = v
 		}
 	}
+
 	return result
 }
 
@@ -52,28 +55,33 @@ func SliceMax[T Lanes](data []T) T {
 		var zero T
 		return zero
 	}
+
 	result := data[0]
 	for _, v := range data[1:] {
 		if v > result {
 			result = v
 		}
 	}
+
 	return result
 }
 
 // SliceMinMax computes both min and max of a slice in a single pass.
-func SliceMinMax[T Lanes](data []T) (min, max T) {
+func SliceMinMax[T Lanes](data []T) (lo, hi T) {
 	if len(data) == 0 {
 		return
 	}
-	min, max = data[0], data[0]
+
+	lo, hi = data[0], data[0]
 	for _, v := range data[1:] {
-		if v < min {
-			min = v
+		if v < lo {
+			lo = v
 		}
-		if v > max {
-			max = v
+
+		if v > hi {
+			hi = v
 		}
 	}
+
 	return
 }

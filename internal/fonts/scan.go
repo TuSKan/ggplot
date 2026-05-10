@@ -34,8 +34,9 @@ func DiscoverFonts(dirs []string) ([]Font, error) {
 	for _, dir := range dirs {
 		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 			if err != nil || d == nil {
-				return nil
+				return nil //nolint:nilerr // Intentionally skip unreadable dirs during font discovery.
 			}
+
 			if d.IsDir() {
 				return nil
 			}
@@ -45,9 +46,9 @@ func DiscoverFonts(dirs []string) ([]Font, error) {
 				return nil
 			}
 
-			data, err := os.ReadFile(path)
+			data, err := os.ReadFile(path) //nolint:gosec // G304: path is from trusted OS font directory walk.
 			if err != nil {
-				return nil
+				return nil //nolint:nilerr // Intentionally skip unreadable font files during discovery.
 			}
 
 			fonts, err := parseFontFile(path, data)

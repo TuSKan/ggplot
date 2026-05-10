@@ -39,6 +39,7 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 	if err := p.Save(context.Background(), out, w, h); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
@@ -46,11 +47,13 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 func pointExample(dir string) {
 	rng := rand.New(rand.NewSource(42))
 	n := 150
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = rng.NormFloat64() * 5
 		ys[i] = xs[i]*0.6 + rng.NormFloat64()*2
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs), eng.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -63,12 +66,14 @@ func pointExample(dir string) {
 // --- Line ---
 func lineExample(dir string) {
 	n := 100
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		t := float64(i) * 0.1
 		xs[i] = t
 		ys[i] = math.Sin(t) * math.Exp(-t*0.1)
 	}
+
 	eng2 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng2, eng2.NewFloat64Column("t", xs), eng2.NewFloat64Column("amplitude", ys))
 	p := ggplot.New(ds, aes.X("t"), aes.Y("amplitude")).
@@ -81,11 +86,13 @@ func lineExample(dir string) {
 // --- Step ---
 func stepExample(dir string) {
 	n := 40
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i)
 		ys[i] = math.Floor(math.Sin(float64(i)*0.3)*4) + 5
 	}
+
 	eng3 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng3, eng3.NewFloat64Column("time", xs), eng3.NewFloat64Column("level", ys))
 	p := ggplot.New(ds, aes.X("time"), aes.Y("level")).
@@ -113,10 +120,12 @@ func barExample(dir string) {
 func histogramExample(dir string) {
 	rng := rand.New(rand.NewSource(42))
 	n := 500
+
 	xs := make([]float64, n)
 	for i := range xs {
 		xs[i] = rng.NormFloat64()*15 + 50
 	}
+
 	eng5 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng5, eng5.NewFloat64Column("score", xs))
 	p := ggplot.New(ds, aes.X("score")).
@@ -129,12 +138,14 @@ func histogramExample(dir string) {
 // --- Area ---
 func areaExample(dir string) {
 	n := 80
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		t := float64(i) * 0.1
 		xs[i] = t
 		ys[i] = math.Sin(t) * math.Sin(t) * 3
 	}
+
 	eng6 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng6, eng6.NewFloat64Column("x", xs), eng6.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -148,6 +159,7 @@ func areaExample(dir string) {
 func densityExample(dir string) {
 	rng := rand.New(rand.NewSource(42))
 	n := 400
+
 	xs := make([]float64, n)
 	for i := range xs {
 		if i < n/2 {
@@ -156,6 +168,7 @@ func densityExample(dir string) {
 			xs[i] = rng.NormFloat64()*3 + 50
 		}
 	}
+
 	eng7 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng7, eng7.NewFloat64Column("value", xs))
 	p := ggplot.New(ds, aes.X("value")).
@@ -169,11 +182,13 @@ func densityExample(dir string) {
 func rugExample(dir string) {
 	rng := rand.New(rand.NewSource(42))
 	n := 80
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = rng.Float64() * 10
 		ys[i] = math.Sin(xs[i]) + rng.NormFloat64()*0.3
 	}
+
 	eng8 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng8, eng8.NewFloat64Column("x", xs), eng8.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -188,11 +203,13 @@ func rugExample(dir string) {
 func hlineVlineExample(dir string) {
 	rng := rand.New(rand.NewSource(42))
 	n := 100
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = rng.Float64() * 20
 		ys[i] = xs[i]*1.5 + rng.NormFloat64()*5
 	}
+
 	eng9 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng9, eng9.NewFloat64Column("x", xs), eng9.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -223,14 +240,17 @@ func textExample(dir string) {
 // --- BoxPlot ---
 func boxplotExample(dir string) {
 	rng := rand.New(rand.NewSource(42))
+
 	var x, y []float64
+
 	means := []float64{50, 65, 55}
 	for g, m := range means {
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			x = append(x, float64(g+1))
 			y = append(y, math.Max(0, m+rng.NormFloat64()*10))
 		}
 	}
+
 	eng11 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng11, eng11.NewFloat64Column("group", x), eng11.NewFloat64Column("score", y))
 	p := ggplot.New(ds, aes.X("group"), aes.Y("score")).
@@ -244,11 +264,13 @@ func boxplotExample(dir string) {
 func smoothExample(dir string) {
 	rng := rand.New(rand.NewSource(42))
 	n := 80
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i) * 0.15
 		ys[i] = math.Sin(xs[i]) + rng.NormFloat64()*0.4
 	}
+
 	eng12 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng12, eng12.NewFloat64Column("x", xs), eng12.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).

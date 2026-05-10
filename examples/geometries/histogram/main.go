@@ -1,3 +1,4 @@
+// Example histogram demonstrates the geom.histogram geometry.
 package main
 
 import (
@@ -16,12 +17,14 @@ import (
 
 func main() {
 	n := 5000
+
 	xs := make([]float64, n)
 	for i := range xs {
 		xs[i] = rand.NormFloat64()*5 + 10
 	}
 
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs))
 	if err != nil {
 		log.Fatalln(err)

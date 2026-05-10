@@ -29,6 +29,7 @@ func fewChrome(name string) Theme {
 	t.Geom.PatchEdgeColor = color.Black
 	t.Geom.PatchEdgeWidth = 0.5
 	t.Geom.PatchAlpha = 1.0
+
 	return t
 }
 
@@ -47,6 +48,7 @@ func newFewLight() Theme {
 		hex("EDDD46"), // yellow
 		hex("F07E6E"), // salmon
 	}
+
 	return t
 }
 
@@ -65,5 +67,6 @@ func newFewDark() Theme {
 		hex("C7B42E"), // dark yellow
 		hex("CB2027"), // dark red
 	}
+
 	return t
 }

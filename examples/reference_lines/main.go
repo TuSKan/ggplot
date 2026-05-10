@@ -33,17 +33,20 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 	if err := p.Save(context.Background(), out, w, h); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
 // ── 1. HLine — threshold / target line ──────────────────────────────────
 func hlineThreshold(dir string) {
 	n := 30
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i + 1)
 		ys[i] = 60 + 40*rand.Float64() // sales between 60–100
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("day", xs),
@@ -79,18 +82,23 @@ func hlineThreshold(dir string) {
 // ── 2. VLine — marking events ───────────────────────────────────────────
 func vlineEvents(dir string) {
 	n := 100
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i)
+
 		growth := 0.0
 		if i > 30 {
 			growth = 0.5
 		}
+
 		if i > 70 {
 			growth = 1.2
 		}
+
 		ys[i] = 10 + growth*float64(i-30) + 5*rand.Float64()
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("day", xs),
@@ -120,11 +128,13 @@ func vlineEvents(dir string) {
 // ── 3. ABLine — regression / trend line ─────────────────────────────────
 func ablineRegression(dir string) {
 	n := 50
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i)
 		ys[i] = 2.3*xs[i] + 5 + 8*(rand.Float64()-0.5) // y ≈ 2.3x + 5 + noise
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", xs),
@@ -139,6 +149,7 @@ func ablineRegression(dir string) {
 		sumXY += xs[i] * ys[i]
 		sumX2 += xs[i] * xs[i]
 	}
+
 	fn := float64(n)
 	slope := (fn*sumXY - sumX*sumY) / (fn*sumX2 - sumX*sumX)
 	intercept := (sumY - slope*sumX) / fn
@@ -163,11 +174,13 @@ func ablineRegression(dir string) {
 // ── 4. Combined — all three reference line types ────────────────────────
 func combined(dir string) {
 	n := 80
+
 	xs, ys := make([]float64, n), make([]float64, n)
 	for i := range xs {
 		xs[i] = float64(i)
 		ys[i] = 50*math.Sin(float64(i)*0.08) + 50 + 10*(rand.Float64()-0.5)
 	}
+
 	eng := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", xs),

@@ -1,3 +1,5 @@
+// Package grammar provides the internal compilation pipeline that transforms
+// a declarative PlotSpec into a fully resolved RenderPlan.
 package grammar
 
 import (

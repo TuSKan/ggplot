@@ -14,6 +14,7 @@ func TestLookup_Identity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if s.Name() != stat.Identity {
 		t.Errorf("expected identity, got %s", s.Name())
 	}
@@ -28,6 +29,7 @@ func TestLookup_Unknown_ReturnsError(t *testing.T) {
 
 func TestBinStat(t *testing.T) {
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
 	)
@@ -39,6 +41,7 @@ func TestBinStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x"}, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -47,24 +50,29 @@ func TestBinStat(t *testing.T) {
 	// Bin stat produces "x" (centers) and "count" columns.
 	cols := []string{"x", "count"}
 	hasX, hasCount := false, false
+
 	for _, c := range cols {
 		if c == "x" {
 			hasX = true
 		}
+
 		if c == "count" {
 			hasCount = true
 		}
 	}
+
 	if !hasX || !hasCount {
 		t.Errorf("bin stat should produce x and count columns, got %v", cols)
 	}
 
 	// Total counts should equal input length.
 	vals := getFloat64Values(t, result, "count")
+
 	sum := 0.0
 	for _, v := range vals {
 		sum += v
 	}
+
 	if sum != 10 {
 		t.Errorf("bin stat total count: expected 10, got %v", sum)
 	}
@@ -73,10 +81,12 @@ func TestBinStat(t *testing.T) {
 func TestBinStat_MissingX(t *testing.T) {
 	eng2 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng2, eng2.NewFloat64Column("y", []float64{1}))
+
 	s, err := stat.Lookup(stat.Bin)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	_, err = s.Compute(context.Background(), ds, map[string]string{}, stat.Options{})
 	if err == nil {
 		t.Fatal("expected error for missing x aesthetic")
@@ -93,6 +103,7 @@ func TestCountStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x"}, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -103,6 +114,7 @@ func TestCountStat(t *testing.T) {
 	if len(counts) != 3 {
 		t.Fatalf("expected 3 unique values, got %d", len(counts))
 	}
+
 	if counts[0] != 1 || counts[1] != 2 || counts[2] != 3 {
 		t.Errorf("count stat: got %v", counts)
 	}
@@ -113,6 +125,7 @@ func TestDensityStat(t *testing.T) {
 	for i := range xs {
 		xs[i] = float64(i)
 	}
+
 	eng4 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng4, eng4.NewFloat64Column("x", xs))
 
@@ -120,6 +133,7 @@ func TestDensityStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x"}, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -151,6 +165,7 @@ func TestSmoothStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x", "y": "y"}, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -168,6 +183,7 @@ func TestSmoothStat(t *testing.T) {
 
 	for i := range xVals {
 		expected := 2 * xVals[i]
+
 		diff := yVals[i] - expected
 		if diff > 0.5 || diff < -0.5 {
 			t.Errorf("smooth[%d]: x=%v y=%v expected ~%v", i, xVals[i], yVals[i], expected)
@@ -187,6 +203,7 @@ func TestSummaryStat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x", "y": "y"}, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -206,14 +223,17 @@ func TestSummaryStat(t *testing.T) {
 func TestIdentityStat(t *testing.T) {
 	eng7 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng7, eng7.NewFloat64Column("x", []float64{1, 2, 3}))
+
 	s, err := stat.Lookup(stat.Identity)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	result, err := s.Compute(context.Background(), ds, nil, stat.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if result.Table() != ds.Table() {
 		t.Error("identity stat should return the same dataset")
 	}
@@ -237,6 +257,7 @@ func TestOutputSchema(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Lookup(%q): %v", tc.name, err)
 		}
+
 		schema := s.OutputSchema()
 		if len(schema) != len(tc.expect) {
 			t.Errorf("OutputSchema(%q) = %v, want %v", tc.name, schema, tc.expect)
@@ -246,13 +267,16 @@ func TestOutputSchema(t *testing.T) {
 
 func getFloat64Values(t *testing.T, ds dataset.Table, colName string) []float64 {
 	t.Helper()
+
 	col, err := ds.Column(colName)
 	if err != nil {
 		t.Fatalf("missing column %s: %v", colName, err)
 	}
+
 	floatCol, ok := col.(dataset.Column[float64])
 	if !ok {
 		t.Fatalf("column %s is not float64", colName)
 	}
+
 	return floatCol.Values()
 }

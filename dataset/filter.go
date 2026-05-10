@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -17,11 +18,13 @@ func validateColName(name string) string {
 	if validSQLIdentifier.MatchString(name) {
 		return name
 	}
+
 	return strings.Map(func(r rune) rune {
 		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') ||
 			(r >= '0' && r <= '9') || r == '_' {
 			return r
 		}
+
 		return -1
 	}, name)
 }
@@ -38,6 +41,7 @@ type Masker interface {
 // Op identifies a comparison operator.
 type Op int
 
+// OpGt identifies the greater-than operator.
 const (
 	OpGt        Op = iota // col > val
 	OpLt                  // col < val
@@ -80,43 +84,61 @@ type CompPred struct {
 	Val any
 }
 
+// Gt builds a col > val predicate.
 func Gt(col string, val any) CompPred { return CompPred{Col: col, Op: OpGt, Val: val} }
+
+// Lt builds a col < val predicate.
 func Lt(col string, val any) CompPred { return CompPred{Col: col, Op: OpLt, Val: val} }
+
+// Ge builds a col >= val predicate.
 func Ge(col string, val any) CompPred { return CompPred{Col: col, Op: OpGe, Val: val} }
+
+// Le builds a col <= val predicate.
 func Le(col string, val any) CompPred { return CompPred{Col: col, Op: OpLe, Val: val} }
+
+// Eq builds a col == val predicate.
 func Eq(col string, val any) CompPred { return CompPred{Col: col, Op: OpEq, Val: val} }
+
+// Ne builds a col != val predicate.
 func Ne(col string, val any) CompPred { return CompPred{Col: col, Op: OpNe, Val: val} }
 
+// Expr returns the SQL representation of this comparison.
 func (p CompPred) Expr() string {
 	return fmt.Sprintf("`%s` %s %s", validateColName(p.Col), p.Op.sql(), sqlVal(p.Val))
 }
 
+// Mask evaluates the comparison predicate against each row.
 func (p CompPred) Mask(ds Table) ([]bool, error) {
 	col, err := ds.Column(p.Col)
 	if err != nil {
 		return nil, err
 	}
+
 	n := int(col.Len())
 	mask := make([]bool, n)
 
 	switch c := col.(type) {
 	case Column[float64]:
 		v := toFloat64(p.Val)
+
 		vals := c.Values()
 		for i, x := range vals {
 			if math.IsNaN(x) {
 				continue
 			}
+
 			mask[i] = cmpFloat64(x, v, p.Op)
 		}
 	case Column[int64]:
 		v := toInt64(p.Val)
+
 		vals := c.Values()
 		for i, x := range vals {
 			mask[i] = cmpInt64(x, v, p.Op)
 		}
 	case Column[string]:
 		v := fmt.Sprintf("%v", p.Val)
+
 		vals := c.Values()
 		for i, x := range vals {
 			mask[i] = cmpString(x, v, p.Op)
@@ -124,29 +146,35 @@ func (p CompPred) Mask(ds Table) ([]bool, error) {
 	default:
 		return nil, fmt.Errorf("dataset: CompPred unsupported column type %T", col)
 	}
+
 	return mask, nil
 }
 
 // --- Between ---
 
+// BetweenPred selects rows where a column value is between Lo and Hi.
 type BetweenPred struct {
 	Col    string
 	Lo, Hi any
 }
 
+// Between builds a BETWEEN predicate for the given column and bounds.
 func Between(col string, lo, hi any) BetweenPred {
 	return BetweenPred{Col: col, Lo: lo, Hi: hi}
 }
 
+// Expr returns the SQL representation of this BETWEEN predicate.
 func (p BetweenPred) Expr() string {
 	return fmt.Sprintf("`%s` BETWEEN %s AND %s", validateColName(p.Col), sqlVal(p.Lo), sqlVal(p.Hi))
 }
 
+// Mask evaluates the BETWEEN predicate against each row.
 func (p BetweenPred) Mask(ds Table) ([]bool, error) {
 	col, err := ds.Column(p.Col)
 	if err != nil {
 		return nil, err
 	}
+
 	n := int(col.Len())
 	mask := make([]bool, n)
 
@@ -169,33 +197,40 @@ func (p BetweenPred) Mask(ds Table) ([]bool, error) {
 	default:
 		return nil, fmt.Errorf("dataset: BetweenPred unsupported column type %T", col)
 	}
+
 	return mask, nil
 }
 
 // --- In ---
 
+// InPred selects rows where a column value is in a set of values.
 type InPred struct {
 	Col  string
 	Vals []any
 }
 
+// In builds an IN predicate for the given column and value set.
 func In(col string, vals ...any) InPred {
 	return InPred{Col: col, Vals: vals}
 }
 
+// Expr returns the SQL representation of this IN predicate.
 func (p InPred) Expr() string {
 	parts := make([]string, len(p.Vals))
 	for i, v := range p.Vals {
 		parts[i] = sqlVal(v)
 	}
+
 	return fmt.Sprintf("`%s` IN (%s)", validateColName(p.Col), strings.Join(parts, ", "))
 }
 
+// Mask evaluates the IN predicate against each row.
 func (p InPred) Mask(ds Table) ([]bool, error) {
 	col, err := ds.Column(p.Col)
 	if err != nil {
 		return nil, err
 	}
+
 	n := int(col.Len())
 	mask := make([]bool, n)
 
@@ -205,6 +240,7 @@ func (p InPred) Mask(ds Table) ([]bool, error) {
 		for _, v := range p.Vals {
 			set[toFloat64(v)] = true
 		}
+
 		for i, x := range c.Values() {
 			mask[i] = set[x]
 		}
@@ -213,6 +249,7 @@ func (p InPred) Mask(ds Table) ([]bool, error) {
 		for _, v := range p.Vals {
 			set[toInt64(v)] = true
 		}
+
 		for i, x := range c.Values() {
 			mask[i] = set[x]
 		}
@@ -221,30 +258,45 @@ func (p InPred) Mask(ds Table) ([]bool, error) {
 		for _, v := range p.Vals {
 			set[fmt.Sprintf("%v", v)] = true
 		}
+
 		for i, x := range c.Values() {
 			mask[i] = set[x]
 		}
 	default:
 		return nil, fmt.Errorf("dataset: InPred unsupported column type %T", col)
 	}
+
 	return mask, nil
 }
 
 // --- Null checks ---
 
+// IsNullPred selects rows where a column value is null.
 type IsNullPred struct{ Col string }
+
+// IsNotNullPred selects rows where a column value is not null.
 type IsNotNullPred struct{ Col string }
 
-func IsNull(col string) IsNullPred       { return IsNullPred{Col: col} }
+// IsNull builds a null-check predicate.
+func IsNull(col string) IsNullPred { return IsNullPred{Col: col} }
+
+// IsNotNull builds a not-null-check predicate.
 func IsNotNull(col string) IsNotNullPred { return IsNotNullPred{Col: col} }
 
-func (p IsNullPred) Expr() string    { return fmt.Sprintf("`%s` IS NULL", validateColName(p.Col)) }
-func (p IsNotNullPred) Expr() string { return fmt.Sprintf("`%s` IS NOT NULL", validateColName(p.Col)) }
+// Expr returns the SQL representation of an IS NULL check.
+func (p IsNullPred) Expr() string { return fmt.Sprintf("`%s` IS NULL", validateColName(p.Col)) }
 
+// Expr returns the SQL representation of an IS NOT NULL check.
+func (p IsNotNullPred) Expr() string {
+	return fmt.Sprintf("`%s` IS NOT NULL", validateColName(p.Col))
+}
+
+// Mask evaluates the IS NULL predicate against each row.
 func (p IsNullPred) Mask(ds Table) ([]bool, error) {
 	return nullMask(ds, p.Col, true)
 }
 
+// Mask evaluates the IS NOT NULL predicate against each row.
 func (p IsNotNullPred) Mask(ds Table) ([]bool, error) {
 	return nullMask(ds, p.Col, false)
 }
@@ -254,6 +306,7 @@ func nullMask(ds Table, colName string, wantNull bool) ([]bool, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	n := int(col.Len())
 	mask := make([]bool, n)
 
@@ -266,8 +319,10 @@ func nullMask(ds Table, colName string, wantNull bool) ([]bool, error) {
 			for i := range mask {
 				mask[i] = !wantNull // all non-null
 			}
+
 			return mask, nil
 		}
+
 		for i, isNull := range nulls {
 			if wantNull {
 				mask[i] = isNull
@@ -275,6 +330,7 @@ func nullMask(ds Table, colName string, wantNull bool) ([]bool, error) {
 				mask[i] = !isNull
 			}
 		}
+
 		return mask, nil
 	}
 
@@ -288,6 +344,7 @@ func nullMask(ds Table, colName string, wantNull bool) ([]bool, error) {
 				mask[i] = !isNull
 			}
 		}
+
 		return mask, nil
 	}
 
@@ -295,6 +352,7 @@ func nullMask(ds Table, colName string, wantNull bool) ([]bool, error) {
 	for i := range mask {
 		mask[i] = !wantNull
 	}
+
 	return mask, nil
 }
 
@@ -303,8 +361,10 @@ func nullMask(ds Table, colName string, wantNull bool) ([]bool, error) {
 // AndPred combines masks with AND.
 type AndPred struct{ Preds []Masker }
 
+// And combines multiple predicates with logical AND.
 func And(preds ...Masker) AndPred { return AndPred{Preds: preds} }
 
+// Expr returns the SQL representation of the AND combination.
 func (p AndPred) Expr() string {
 	parts := make([]string, len(p.Preds))
 	for i, sub := range p.Preds {
@@ -314,32 +374,40 @@ func (p AndPred) Expr() string {
 			parts[i] = "?"
 		}
 	}
+
 	return "(" + strings.Join(parts, " AND ") + ")"
 }
 
+// Mask evaluates all sub-predicates and combines them with AND.
 func (p AndPred) Mask(ds Table) ([]bool, error) {
 	n := int(ds.NumRows())
+
 	result := make([]bool, n)
 	for i := range result {
 		result[i] = true
 	}
+
 	for _, sub := range p.Preds {
 		m, err := sub.Mask(ds)
 		if err != nil {
 			return nil, err
 		}
+
 		for i := range result {
 			result[i] = result[i] && m[i]
 		}
 	}
+
 	return result, nil
 }
 
 // OrPred combines masks with OR.
 type OrPred struct{ Preds []Masker }
 
+// Or combines multiple predicates with logical OR.
 func Or(preds ...Masker) OrPred { return OrPred{Preds: preds} }
 
+// Expr returns the SQL representation of the OR combination.
 func (p OrPred) Expr() string {
 	parts := make([]string, len(p.Preds))
 	for i, sub := range p.Preds {
@@ -349,44 +417,55 @@ func (p OrPred) Expr() string {
 			parts[i] = "?"
 		}
 	}
+
 	return "(" + strings.Join(parts, " OR ") + ")"
 }
 
+// Mask evaluates the OR predicate against the dataset rows.
 func (p OrPred) Mask(ds Table) ([]bool, error) {
 	n := int(ds.NumRows())
 	result := make([]bool, n)
+
 	for _, sub := range p.Preds {
 		m, err := sub.Mask(ds)
 		if err != nil {
 			return nil, err
 		}
+
 		for i := range result {
 			result[i] = result[i] || m[i]
 		}
 	}
+
 	return result, nil
 }
 
 // NotPred inverts a mask.
 type NotPred struct{ Pred Masker }
 
+// Not returns a predicate that inverts the given mask.
 func Not(pred Masker) NotPred { return NotPred{Pred: pred} }
 
+// Expr returns the SQL NOT(...) expression.
 func (p NotPred) Expr() string {
 	if e, ok := p.Pred.(interface{ Expr() string }); ok {
 		return "NOT(" + e.Expr() + ")"
 	}
+
 	return "NOT(?)"
 }
 
+// Mask evaluates the NOT predicate against the dataset rows.
 func (p NotPred) Mask(ds Table) ([]bool, error) {
 	m, err := p.Pred.Mask(ds)
 	if err != nil {
 		return nil, err
 	}
+
 	for i := range m {
 		m[i] = !m[i]
 	}
+
 	return m, nil
 }
 
@@ -398,24 +477,27 @@ func sqlVal(v any) string {
 		// Escape single quotes to prevent SQL injection.
 		escaped := strings.ReplaceAll(val, "'", "''")
 		escaped = strings.ReplaceAll(escaped, "\\", "\\\\")
+
 		return fmt.Sprintf("'%s'", escaped)
 	case float64:
 		if val == float64(int64(val)) {
-			return fmt.Sprintf("%d", int64(val))
+			return strconv.FormatInt(int64(val), 10)
 		}
+
 		return fmt.Sprintf("%g", val)
 	case float32:
 		return fmt.Sprintf("%g", val)
 	case int:
-		return fmt.Sprintf("%d", val)
+		return strconv.Itoa(val)
 	case int64:
-		return fmt.Sprintf("%d", val)
+		return strconv.FormatInt(val, 10)
 	case int32:
-		return fmt.Sprintf("%d", val)
+		return strconv.Itoa(int(val))
 	case bool:
 		if val {
 			return "TRUE"
 		}
+
 		return "FALSE"
 	default:
 		return fmt.Sprintf("%v", val)
@@ -528,10 +610,12 @@ var (
 // Useful when the filter has already been computed externally (e.g. faceting).
 type BoolMask []bool
 
+// Mask returns the pre-computed boolean slice unchanged.
 func (m BoolMask) Mask(_ Table) ([]bool, error) {
 	return []bool(m), nil
 }
 
+// Expr returns a constant "TRUE" placeholder for SQL contexts.
 func (m BoolMask) Expr() string {
 	return "TRUE" // fallback for SQL — not meaningful for pre-computed masks
 }

@@ -40,23 +40,23 @@ func VQSort[T hwy.Lanes](data []T) { hwysort.VQSort(data) }
 //	NthElement(data, n/2)  // data[n/2] is now the median
 func NthElement[T hwy.Lanes](data []T, k int) { hwysort.NthElement(data, k) }
 
-// SortSmall sorts data of length ≤32 using a SIMD sorting network.
+// Small sorts data of length ≤32 using a SIMD sorting network.
 // For larger data, use Sort instead.
-func SortSmall[T hwy.Lanes](data []T) { hwysort.SortSmall(data) }
+func Small[T hwy.Lanes](data []T) { hwysort.SortSmall(data) }
 
-// SortIndicesFloat64 returns the indices that would sort the data.
+// IndicesFloat64 returns the indices that would sort the data.
 // Uses Go's stdlib pdqsort (slices.SortFunc) on (value, index) pairs.
-func SortIndicesFloat64(data []float64) []int {
+func IndicesFloat64(data []float64) []int {
 	return sortIndices(data, cmp.Compare)
 }
 
-// SortIndicesInt64 returns the indices that would sort the data.
-func SortIndicesInt64(data []int64) []int {
+// IndicesInt64 returns the indices that would sort the data.
+func IndicesInt64(data []int64) []int {
 	return sortIndices(data, cmp.Compare)
 }
 
-// SortIndicesString returns the indices that would sort the data.
-func SortIndicesString(data []string) []int {
+// IndicesString returns the indices that would sort the data.
+func IndicesString(data []string) []int {
 	return sortIndices(data, cmp.Compare)
 }
 
@@ -66,12 +66,15 @@ func sortIndices[T any](data []T, cmpFn func(a, b T) int) []int {
 	if n == 0 {
 		return nil
 	}
+
 	indices := make([]int, n)
 	for i := range indices {
 		indices[i] = i
 	}
+
 	slices.SortFunc(indices, func(a, b int) int {
 		return cmpFn(data[a], data[b])
 	})
+
 	return indices
 }

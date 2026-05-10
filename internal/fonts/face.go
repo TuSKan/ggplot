@@ -1,6 +1,7 @@
 package fonts
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/gogpu/gg/text"
@@ -54,8 +55,9 @@ func (h *FaceHandle) MeasureExtents(s string) (Extents, error) {
 		} else {
 			loaded, err := text.NewFontSourceFromFile(h.Font.Path)
 			if err != nil {
-				return Extents{}, err
+				return Extents{}, fmt.Errorf("fonts: load source %q: %w", h.Font.Path, err)
 			}
+
 			h.sources.Set(h.Font.Path, loaded)
 			src = loaded
 		}
@@ -86,5 +88,6 @@ func (h *FaceHandle) TextFace() text.Face {
 		h.mu.Lock()
 	}
 	defer h.mu.Unlock()
+
 	return h.tFace
 }

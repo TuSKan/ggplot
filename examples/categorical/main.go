@@ -49,6 +49,7 @@ func categoricalBars(dir string) {
 	if err := p.Save(context.Background(), out, 800, 500); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
@@ -58,6 +59,7 @@ func boxplot(dir string) {
 
 	// Generate 3 groups of normally distributed data with different means.
 	var x, y []float64
+
 	groups := []struct {
 		name string
 		mean float64
@@ -69,9 +71,10 @@ func boxplot(dir string) {
 	}
 
 	for _, g := range groups {
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			// Use numeric group IDs for X.
 			gID := float64(0)
+
 			switch g.name {
 			case "Control":
 				gID = 1
@@ -80,6 +83,7 @@ func boxplot(dir string) {
 			case "Treatment B":
 				gID = 3
 			}
+
 			x = append(x, gID)
 			y = append(y, g.mean+g.std*rng.NormFloat64())
 		}
@@ -113,5 +117,6 @@ func boxplot(dir string) {
 	if err := p.Save(context.Background(), out, 700, 500); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }

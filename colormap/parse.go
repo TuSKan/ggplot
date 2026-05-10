@@ -1,6 +1,7 @@
 package colormap
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,7 +25,7 @@ import (
 func Parse(s string) (gg.RGBA, error) {
 	raw := strings.TrimSpace(s)
 	if raw == "" {
-		return gg.RGBA{}, fmt.Errorf("colormap: empty color string")
+		return gg.RGBA{}, errors.New("colormap: empty color string")
 	}
 
 	// Hex first — covers "#abc" / "abc123" / "#aabbccdd" without scanning
@@ -42,15 +43,17 @@ func Parse(s string) (gg.RGBA, error) {
 	if strings.HasPrefix(lower, "rgb(") || strings.HasPrefix(lower, "rgba(") {
 		return parseRGBFunc(lower)
 	}
+
 	if strings.HasPrefix(lower, "hsl(") {
 		return parseHSLFunc(lower)
 	}
 
 	// Matplotlib "tab:*" aliases.
-	if strings.HasPrefix(lower, "tab:") {
-		if c, ok := tabColors[strings.TrimPrefix(lower, "tab:")]; ok {
+	if after, ok := strings.CutPrefix(lower, "tab:"); ok {
+		if c, ok := tabColors[after]; ok {
 			return c, nil
 		}
+
 		return gg.RGBA{}, fmt.Errorf("colormap: unknown tab alias %q", raw)
 	}
 
@@ -68,6 +71,7 @@ func MustParse(s string) gg.RGBA {
 	if err != nil {
 		panic(err)
 	}
+
 	return c
 }
 
@@ -77,10 +81,12 @@ func ParseRGB(spec string, defR, defG, defB float64) (r, g, b float64) {
 	if spec == "" {
 		return defR, defG, defB
 	}
+
 	c, err := Parse(spec)
 	if err != nil {
 		return defR, defG, defB
 	}
+
 	return c.R, c.G, c.B
 }
 
@@ -90,14 +96,16 @@ func isHexCandidate(s string) bool {
 	if len(s) == 0 {
 		return false
 	}
+
 	if s[0] == '#' {
 		return true
 	}
 	// Bare hex: 3, 4, 6, or 8 hex digits with no other characters.
 	switch len(s) {
 	case 3, 4, 6, 8:
-		for i := 0; i < len(s); i++ {
+		for i := range len(s) {
 			c := s[i]
+
 			isHex := ('0' <= c && c <= '9') ||
 				('a' <= c && c <= 'f') ||
 				('A' <= c && c <= 'F')
@@ -105,35 +113,44 @@ func isHexCandidate(s string) bool {
 				return false
 			}
 		}
+
 		return true
 	}
+
 	return false
 }
 
 // parseRGBFunc handles "rgb(r,g,b)" and "rgba(r,g,b,a)".
 func parseRGBFunc(s string) (gg.RGBA, error) {
 	open := strings.IndexByte(s, '(')
-	close := strings.IndexByte(s, ')')
-	if open < 0 || close < 0 || close <= open {
+
+	end := strings.IndexByte(s, ')')
+	if open < 0 || end < 0 || end <= open {
 		return gg.RGBA{}, fmt.Errorf("colormap: malformed rgb literal %q", s)
 	}
-	body := s[open+1 : close]
+
+	body := s[open+1 : end]
+
 	parts := splitArgs(body)
 	if len(parts) != 3 && len(parts) != 4 {
 		return gg.RGBA{}, fmt.Errorf("colormap: rgb requires 3 or 4 components, got %d in %q", len(parts), s)
 	}
+
 	r, err := parseChannelByte(parts[0])
 	if err != nil {
 		return gg.RGBA{}, err
 	}
+
 	g, err := parseChannelByte(parts[1])
 	if err != nil {
 		return gg.RGBA{}, err
 	}
+
 	b, err := parseChannelByte(parts[2])
 	if err != nil {
 		return gg.RGBA{}, err
 	}
+
 	a := 1.0
 	if len(parts) == 4 {
 		a, err = parseAlpha(parts[3])
@@ -141,30 +158,38 @@ func parseRGBFunc(s string) (gg.RGBA, error) {
 			return gg.RGBA{}, err
 		}
 	}
+
 	return gg.RGBA{R: r, G: g, B: b, A: a}, nil
 }
 
 // parseHSLFunc handles "hsl(h,s%,l%)" — h in degrees, s and l in percent.
 func parseHSLFunc(s string) (gg.RGBA, error) {
 	open := strings.IndexByte(s, '(')
-	close := strings.IndexByte(s, ')')
-	if open < 0 || close < 0 || close <= open {
+
+	end := strings.IndexByte(s, ')')
+	if open < 0 || end < 0 || end <= open {
 		return gg.RGBA{}, fmt.Errorf("colormap: malformed hsl literal %q", s)
 	}
-	body := s[open+1 : close]
+
+	body := s[open+1 : end]
+
 	parts := splitArgs(body)
 	if len(parts) != 3 {
 		return gg.RGBA{}, fmt.Errorf("colormap: hsl requires 3 components, got %d in %q", len(parts), s)
 	}
+
 	hRaw := strings.TrimSuffix(parts[0], "deg")
+
 	h, err := strconv.ParseFloat(strings.TrimSpace(hRaw), 64)
 	if err != nil {
 		return gg.RGBA{}, fmt.Errorf("colormap: hsl hue %q: %w", parts[0], err)
 	}
+
 	sat, err := parsePercent(parts[1])
 	if err != nil {
 		return gg.RGBA{}, err
 	}
+
 	light, err := parsePercent(parts[2])
 	if err != nil {
 		return gg.RGBA{}, err
@@ -173,9 +198,11 @@ func parseHSLFunc(s string) (gg.RGBA, error) {
 	for h < 0 {
 		h += 360
 	}
+
 	for h >= 360 {
 		h -= 360
 	}
+
 	return gg.HSL(h, sat, light), nil
 }
 
@@ -186,64 +213,76 @@ func splitArgs(body string) []string {
 	if body == "" {
 		return nil
 	}
+
 	if strings.Contains(body, ",") {
 		parts := strings.Split(body, ",")
 		for i, p := range parts {
 			parts[i] = strings.TrimSpace(p)
 		}
+
 		return parts
 	}
+
 	return strings.Fields(body)
 }
 
 // parseChannelByte parses an rgb channel: integer 0–255 or "<n>%" 0–100.
 func parseChannelByte(s string) (float64, error) {
 	s = strings.TrimSpace(s)
-	if strings.HasSuffix(s, "%") {
-		v, err := strconv.ParseFloat(strings.TrimSuffix(s, "%"), 64)
+	if before, ok := strings.CutSuffix(s, "%"); ok {
+		v, err := strconv.ParseFloat(before, 64)
 		if err != nil {
 			return 0, fmt.Errorf("colormap: bad channel %q: %w", s, err)
 		}
+
 		return clamp01(v / 100.0), nil
 	}
+
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return 0, fmt.Errorf("colormap: bad channel %q: %w", s, err)
 	}
+
 	return clamp01(v / 255.0), nil
 }
 
 // parseAlpha parses an alpha component: 0–1 float or "<n>%".
 func parseAlpha(s string) (float64, error) {
 	s = strings.TrimSpace(s)
-	if strings.HasSuffix(s, "%") {
-		v, err := strconv.ParseFloat(strings.TrimSuffix(s, "%"), 64)
+	if before, ok := strings.CutSuffix(s, "%"); ok {
+		v, err := strconv.ParseFloat(before, 64)
 		if err != nil {
 			return 0, fmt.Errorf("colormap: bad alpha %q: %w", s, err)
 		}
+
 		return clamp01(v / 100.0), nil
 	}
+
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return 0, fmt.Errorf("colormap: bad alpha %q: %w", s, err)
 	}
+
 	return clamp01(v), nil
 }
 
 // parsePercent parses an "<n>%" or bare 0–1 fraction.
 func parsePercent(s string) (float64, error) {
 	s = strings.TrimSpace(s)
-	if strings.HasSuffix(s, "%") {
-		v, err := strconv.ParseFloat(strings.TrimSuffix(s, "%"), 64)
+	if before, ok := strings.CutSuffix(s, "%"); ok {
+		v, err := strconv.ParseFloat(before, 64)
 		if err != nil {
 			return 0, fmt.Errorf("colormap: bad percent %q: %w", s, err)
 		}
+
 		return clamp01(v / 100.0), nil
 	}
+
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return 0, fmt.Errorf("colormap: bad percent %q: %w", s, err)
 	}
+
 	return clamp01(v), nil
 }
 
@@ -251,8 +290,10 @@ func clamp01(v float64) float64 {
 	if v < 0 {
 		return 0
 	}
+
 	if v > 1 {
 		return 1
 	}
+
 	return v
 }

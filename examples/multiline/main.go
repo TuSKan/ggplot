@@ -48,6 +48,7 @@ func wideFormat(dir string) {
 	}
 
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng,
 		eng.NewFloat64Column("x", x),
 		eng.NewFloat64Column("sin", sin),
@@ -73,6 +74,7 @@ func wideFormat(dir string) {
 	if err := p.Save(context.Background(), out, 900, 600); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }
 
@@ -85,7 +87,7 @@ func longFormat(dir string) {
 	ys := make([]float64, 0, n*3)
 	groups := make([]string, 0, n*3)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		t := float64(i) / float64(n-1) * 2 * math.Pi
 		xs = append(xs, t, t, t)
 		ys = append(ys, math.Sin(t), math.Cos(t), math.Sin(2*t)*0.5)
@@ -93,6 +95,7 @@ func longFormat(dir string) {
 	}
 
 	eng2 := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng2,
 		eng2.NewFloat64Column("x", xs),
 		eng2.NewFloat64Column("y", ys),
@@ -119,5 +122,6 @@ func longFormat(dir string) {
 	if err := p.Save(context.Background(), out, 900, 600); err != nil {
 		log.Fatalln(err)
 	}
+
 	log.Printf("Saved %s", out)
 }

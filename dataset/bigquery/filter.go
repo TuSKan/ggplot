@@ -1,7 +1,8 @@
 package bigquery
 
 import (
-	"fmt"
+	"errors"
+
 	"github.com/TuSKan/ggplot/dataset"
 )
 
@@ -20,5 +21,5 @@ func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, e
 		return bq.withRestriction(ex.Expr()), nil
 	}
 
-	return nil, fmt.Errorf("bigquery: filter mask does not implement Expr()")
+	return nil, errors.New("bigquery: filter mask does not implement Expr()")
 }

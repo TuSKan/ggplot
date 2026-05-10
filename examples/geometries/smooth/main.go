@@ -1,3 +1,4 @@
+// Example smooth demonstrates the geom.smooth geometry.
 package main
 
 import (
@@ -18,12 +19,14 @@ func main() {
 	n := 100
 	xs := make([]float64, n)
 	ys := make([]float64, n)
+
 	for i := range xs {
 		xs[i] = rand.Float64() * 10
 		ys[i] = xs[i]*0.5 + rand.NormFloat64()*1.5
 	}
 
 	eng := memory.NewEngine(context.Background())
+
 	ds, err := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs), eng.NewFloat64Column("y", ys))
 	if err != nil {
 		log.Fatalln(err)

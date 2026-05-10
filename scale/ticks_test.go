@@ -2,6 +2,7 @@ package scale
 
 import (
 	"math"
+	"slices"
 	"testing"
 )
 
@@ -14,6 +15,7 @@ func TestExtendedWilkinson_BasicRange(t *testing.T) {
 	if ticks[0] > 0 {
 		t.Errorf("first tick %v > 0", ticks[0])
 	}
+
 	if ticks[len(ticks)-1] < 100 {
 		t.Errorf("last tick %v < 100", ticks[len(ticks)-1])
 	}
@@ -28,13 +30,8 @@ func TestExtendedWilkinson_BasicRange(t *testing.T) {
 
 func TestExtendedWilkinson_IncludesZero(t *testing.T) {
 	ticks := extendedWilkinson(-50, 50, 5)
-	found := false
-	for _, v := range ticks {
-		if v == 0 {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(ticks, 0)
+
 	if !found {
 		t.Errorf("expected ticks to include 0 for range [-50, 50], got %v", ticks)
 	}
@@ -66,9 +63,11 @@ func TestExtendedWilkinson_NegativeRange(t *testing.T) {
 	if len(ticks) < 2 {
 		t.Fatalf("expected multiple ticks, got %v", ticks)
 	}
+
 	if ticks[0] > -100 {
 		t.Errorf("first tick %v > -100", ticks[0])
 	}
+
 	if ticks[len(ticks)-1] < -10 {
 		t.Errorf("last tick %v < -10", ticks[len(ticks)-1])
 	}
@@ -92,19 +91,23 @@ func TestExtendedWilkinson_NiceSteps(t *testing.T) {
 	// For range [0, 10] with 5 ticks, we should get clean step sizes.
 	ticks := extendedWilkinson(0, 10, 5)
 	t.Logf("ticks for [0,10] target 5: %v", ticks)
+
 	if len(ticks) < 3 {
 		t.Fatal("expected at least 3 ticks")
 	}
+
 	step := ticks[1] - ticks[0]
 	// Step should be 1, 2, 2.5, or 5.
 	niceSteps := []float64{1, 2, 2.5, 5}
 	isNice := false
+
 	for _, ns := range niceSteps {
 		if math.Abs(step-ns) < 1e-10 {
 			isNice = true
 			break
 		}
 	}
+
 	if !isNice {
 		t.Errorf("step %v is not a nice number for [0,10] with 5 ticks", step)
 	}
@@ -149,6 +152,7 @@ func TestContainsZero(t *testing.T) {
 	if !containsZero(-10, 10, 5) {
 		t.Error("expected containsZero(-10, 10, 5) = true")
 	}
+
 	if containsZero(1, 10, 3) {
 		t.Error("expected containsZero(1, 10, 3) = false")
 	}
