@@ -156,7 +156,7 @@ func (e *Engine) AddScalar(col dataset.AnyColumn, val float64) (dataset.AnyColum
 
 	result, err := compute.Add(ctx, compute.ArithmeticOptions{}, compute.NewDatum(c.arr), compute.NewDatum(val))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("arrow: %w", err)
 	}
 	defer result.Release()
 
@@ -174,7 +174,7 @@ func (e *Engine) MulScalar(col dataset.AnyColumn, val float64) (dataset.AnyColum
 
 	result, err := compute.Multiply(ctx, compute.ArithmeticOptions{}, compute.NewDatum(c.arr), compute.NewDatum(val))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("arrow: %w", err)
 	}
 	defer result.Release()
 
@@ -214,7 +214,7 @@ func (e *Engine) Pow(col dataset.AnyColumn, exp float64) (dataset.AnyColumn, err
 
 	result, err := compute.Power(ctx, compute.ArithmeticOptions{}, compute.NewDatum(c.arr), compute.NewDatum(exp))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("arrow: %w", err)
 	}
 	defer result.Release()
 
@@ -291,7 +291,7 @@ func (e *Engine) Atan2(y, x dataset.AnyColumn) (dataset.AnyColumn, error) {
 
 	result, err := compute.Atan2(ctx, compute.NewDatum(cy.arr), compute.NewDatum(cx.arr))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("arrow: %w", err)
 	}
 	defer result.Release()
 

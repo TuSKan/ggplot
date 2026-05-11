@@ -53,21 +53,37 @@ func (e *Engine) PercentRank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 
 // RowNumber returns a 1-based sequential row-number column (delegates locally).
 func (e *Engine) RowNumber(n int) (dataset.AnyColumn, error) {
-	return e.localEngine().RowNumber(n)
+	result, rnErr := e.localEngine().RowNumber(n)
+	if rnErr != nil {
+		return nil, fmt.Errorf("bigquery: %w", rnErr)
+	}
+
+	return result, nil
 }
 
 // lazyWindowFn creates a lazy LAG/LEAD bqColumn.
 func (e *Engine) lazyWindowFn(fn string, col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
+		var (
+			result dataset.AnyColumn
+			wErr   error
+		)
+
 		switch fn {
 		case "LAG":
-			return e.localEngine().Lag(col, n)
+			result, wErr = e.localEngine().Lag(col, n)
 		case "LEAD":
-			return e.localEngine().Lead(col, n)
+			result, wErr = e.localEngine().Lead(col, n)
 		default:
 			return nil, fmt.Errorf("bigquery: unknown window function %q", fn)
 		}
+
+		if wErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", wErr)
+		}
+
+		return result, nil
 	}
 
 	resultName := fmt.Sprintf("%s_%s_%d", fn, bqCol.name, n)
@@ -92,16 +108,27 @@ func (e *Engine) lazyWindowFn(fn string, col dataset.AnyColumn, n int) (dataset.
 func (e *Engine) lazyCumulativeWindowFn(fn string, col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
+		var (
+			result dataset.AnyColumn
+			cErr   error
+		)
+
 		switch fn {
 		case "SUM":
-			return e.localEngine().CumSum(col)
+			result, cErr = e.localEngine().CumSum(col)
 		case "MAX":
-			return e.localEngine().CumMax(col)
+			result, cErr = e.localEngine().CumMax(col)
 		case "MIN":
-			return e.localEngine().CumMin(col)
+			result, cErr = e.localEngine().CumMin(col)
 		default:
 			return nil, fmt.Errorf("bigquery: unknown cumulative function %q", fn)
 		}
+
+		if cErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", cErr)
+		}
+
+		return result, nil
 	}
 
 	resultName := fmt.Sprintf("cum_%s_%s", fn, bqCol.name)
@@ -125,16 +152,27 @@ func (e *Engine) lazyCumulativeWindowFn(fn string, col dataset.AnyColumn) (datas
 func (e *Engine) lazyRankWindowFn(fn string, col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
+		var (
+			result dataset.AnyColumn
+			rErr   error
+		)
+
 		switch fn {
 		case "RANK":
-			return e.localEngine().Rank(col)
+			result, rErr = e.localEngine().Rank(col)
 		case "DENSE_RANK":
-			return e.localEngine().DenseRank(col)
+			result, rErr = e.localEngine().DenseRank(col)
 		case "PERCENT_RANK":
-			return e.localEngine().PercentRank(col)
+			result, rErr = e.localEngine().PercentRank(col)
 		default:
 			return nil, fmt.Errorf("bigquery: unknown rank function %q", fn)
 		}
+
+		if rErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", rErr)
+		}
+
+		return result, nil
 	}
 
 	resultName := fmt.Sprintf("%s_%s", fn, bqCol.name)
@@ -166,7 +204,12 @@ func (e *Engine) lazyRankWindowFn(fn string, col dataset.AnyColumn) (dataset.Any
 func (e *Engine) Cast(col dataset.AnyColumn, target dataset.DType) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
-		return e.localEngine().Cast(col, target)
+		result, castErr := e.localEngine().Cast(col, target)
+		if castErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", castErr)
+		}
+
+		return result, nil
 	}
 
 	bqType := DtypeToBQSQL(target)

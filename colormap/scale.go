@@ -143,7 +143,11 @@ func (s *Scale) Train(col dataset.AnyColumn) error {
 		s.norm = &LinearNorm{}
 	}
 
-	return s.norm.Train(col)
+	if err := s.norm.Train(col); err != nil {
+		return fmt.Errorf("colormap: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Scale) trainDiscrete(col dataset.AnyColumn) error {

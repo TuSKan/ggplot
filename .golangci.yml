@@ -60,6 +60,7 @@ linters:
     - inamedparam      # interface method parameter names are usually clear from type/docs
     - gochecknoinits   # theme self-registration and engine bootstrapping use init()
     - interfacebloat   # Canvas is a cohesive rendering backend; splitting would fragment a natural API boundary
+    - containedctx     # engine owns its lifecycle context by design
 
   settings:
     gocognit:

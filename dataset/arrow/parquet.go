@@ -67,7 +67,7 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 				start := len(data)
 
 				data = append(data, arr.Float64Values()...)
-				for j := 0; j < arr.Len(); j++ {
+				for j := range arr.Len() {
 					if arr.IsNull(j) {
 						data[start+j] = math.NaN()
 					}
@@ -93,7 +93,7 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 
 			for _, chunk := range chunked.Data().Chunks() {
 				arr := chunk.(*arrowarray.Boolean)
-				for j := 0; j < arr.Len(); j++ {
+				for j := range arr.Len() {
 					data = append(data, arr.Value(j))
 				}
 			}
@@ -106,7 +106,7 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 
 			for _, chunk := range chunked.Data().Chunks() {
 				arr := chunk.(*arrowarray.String)
-				for j := 0; j < arr.Len(); j++ {
+				for j := range arr.Len() {
 					data = append(data, arr.Value(j))
 				}
 			}
@@ -143,7 +143,7 @@ func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, 
 
 		col, err := ds.Column(f.Name)
 		if err != nil {
-			return err
+			return fmt.Errorf("arrow: %w", err)
 		}
 
 		appendToBuilder(bld.Field(i), col, nRows)
@@ -157,7 +157,11 @@ func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, 
 	defer tbl.Release()
 
 	// Write table to parquet via pqarrow.
-	return pqarrow.WriteTable(tbl, w, int64(nRows), nil, pqarrow.DefaultWriterProps())
+	if err := pqarrow.WriteTable(tbl, w, int64(nRows), nil, pqarrow.DefaultWriterProps()); err != nil {
+		return fmt.Errorf("arrow: %w", err)
+	}
+
+	return nil
 }
 
 func dtypeToArrowType(dt dataset.DType) arrow.DataType {

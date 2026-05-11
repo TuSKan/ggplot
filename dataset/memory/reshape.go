@@ -63,7 +63,7 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 	)
 
 	// ID columns: each value repeats nPivot times.
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		if pivotSet[f.Name] {
 			continue
@@ -205,12 +205,12 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 
 	nameCol, err := ds.Column(spec.NamesFrom)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("memory: %w", err)
 	}
 
 	valCol, err := ds.Column(spec.ValuesFrom)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("memory: %w", err)
 	}
 
 	nameStr, ok := nameCol.(*stringColumn)
@@ -232,7 +232,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 	// Identify id columns (everything except NamesFrom and ValuesFrom).
 	var idColNames []string
 
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		if f.Name == spec.NamesFrom || f.Name == spec.ValuesFrom {
 			continue
@@ -395,7 +395,7 @@ func idKey(cols []dataset.AnyColumn, row int) string {
 func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep string) (dataset.Table, error) {
 	srcCol, err := ds.Column(col)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("memory: %w", err)
 	}
 
 	sc, ok := srcCol.(*stringColumn)
@@ -428,7 +428,7 @@ func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep strin
 		outCols   []dataset.AnyColumn
 	)
 
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		if f.Name == col {
 			// Replace with split columns.
@@ -457,7 +457,7 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 	for i, name := range from {
 		c, err := ds.Column(name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("memory: %w", err)
 		}
 
 		sc, ok := c.(*stringColumn)
@@ -493,7 +493,7 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 
 	added := false
 
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		if fromSet[f.Name] {
 			if !added {
@@ -541,7 +541,7 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 	for i, name := range cols {
 		col, err := ds.Column(name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("memory: %w", err)
 		}
 
 		seen := map[string]bool{}
@@ -621,7 +621,7 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 		completeSet[name] = i
 	}
 
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		outFields = append(outFields, f)
 
@@ -685,7 +685,7 @@ func parseFloat(s string) (float64, error) {
 
 	_, err := fmt.Sscanf(s, "%g", &v)
 
-	return v, err
+	return v, fmt.Errorf("memory: %w", err)
 }
 
 func parseInt(s string) (int64, error) {
@@ -693,5 +693,5 @@ func parseInt(s string) (int64, error) {
 
 	_, err := fmt.Sscanf(s, "%d", &v)
 
-	return v, err
+	return v, fmt.Errorf("memory: %w", err)
 }

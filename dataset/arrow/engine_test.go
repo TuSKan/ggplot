@@ -162,8 +162,8 @@ func TestBuilder(t *testing.T) {
 
 // --- Helpers ---
 
-func makeGroupDS(t testing.TB) dataset.Table {
-	t.Helper()
+func makeGroupDS(tb testing.TB) dataset.Table {
+	tb.Helper()
 
 	eng := newEng()
 	schema := dataset.NewSchema(
@@ -178,7 +178,7 @@ func makeGroupDS(t testing.TB) dataset.Table {
 		eng.NewInt64Column("id", []int64{1, 2, 3, 4, 5}),
 	)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 
 	return ds

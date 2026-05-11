@@ -241,7 +241,8 @@ func textExample(dir string) {
 func boxplotExample(dir string) {
 	rng := rand.New(rand.NewSource(42))
 
-	var x, y []float64
+	x := make([]float64, 0, 150)
+	y := make([]float64, 0, 150)
 
 	means := []float64{50, 65, 55}
 	for g, m := range means {

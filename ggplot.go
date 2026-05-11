@@ -411,24 +411,28 @@ func (p *Plot) Save(ctx context.Context, filename string, width, height int, opt
 func (p *Plot) saveRaster(ctx context.Context, filename string, width, height int) error {
 	cv := canvas.NewGGCanvas(width, height)
 	if err := p.renderTo(ctx, cv, width, height); err != nil {
-		return err
+		return fmt.Errorf("ggplot: %w", err)
 	}
 
-	return cv.SavePNG(filename)
+	if err := cv.SavePNG(filename); err != nil {
+		return fmt.Errorf("ggplot: %w", err)
+	}
+
+	return nil
 }
 
 // saveVector renders via RecordingCanvas and exports to SVG or PDF.
 func (p *Plot) saveVector(ctx context.Context, filename, ext string, width, height int) error {
 	cv := canvas.NewRecordingCanvas(width, height)
 	if err := p.renderTo(ctx, cv, width, height); err != nil {
-		return err
+		return fmt.Errorf("ggplot: %w", err)
 	}
 
 	rec := cv.FinishRecording()
 
 	f, err := os.Create(filename)
 	if err != nil {
-		return err
+		return fmt.Errorf("ggplot: %w", err)
 	}
 	defer f.Close()
 
@@ -439,7 +443,11 @@ func (p *Plot) saveVector(ctx context.Context, filename, ext string, width, heig
 		_, err = canvas.ExportPDF(rec, f)
 	}
 
-	return err
+	if err != nil {
+		return fmt.Errorf("ggplot: %w", err)
+	}
+
+	return nil
 }
 
 // Render produces the rendered canvas for further processing.
@@ -472,12 +480,12 @@ func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, h
 	case "png", "":
 		cv := canvas.NewGGCanvas(sw, sh)
 		if err := p.renderTo(ctx, cv, sw, sh); err != nil {
-			return 0, err
+			return 0, fmt.Errorf("ggplot: %w", err)
 		}
 
 		cw := &countWriter{w: w}
 		if err := cv.EncodePNG(cw); err != nil {
-			return cw.n, err
+			return cw.n, fmt.Errorf("ggplot: %w", err)
 		}
 
 		return cw.n, nil
@@ -489,16 +497,26 @@ func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, h
 func (p *Plot) writeVector(ctx context.Context, w io.Writer, format string, width, height int) (int64, error) {
 	cv := canvas.NewRecordingCanvas(width, height)
 	if err := p.renderTo(ctx, cv, width, height); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("ggplot: %w", err)
 	}
 
 	rec := cv.FinishRecording()
 
 	switch format {
 	case "svg":
-		return canvas.ExportSVG(rec, w)
+		n, err := canvas.ExportSVG(rec, w)
+		if err != nil {
+			return n, fmt.Errorf("ggplot: %w", err)
+		}
+
+		return n, nil
 	case "pdf":
-		return canvas.ExportPDF(rec, w)
+		n, err := canvas.ExportPDF(rec, w)
+		if err != nil {
+			return n, fmt.Errorf("ggplot: %w", err)
+		}
+
+		return n, nil
 	default:
 		return 0, fmt.Errorf("ggplot: unsupported vector format %q", format)
 	}
@@ -514,7 +532,11 @@ func (cw *countWriter) Write(p []byte) (int, error) {
 	n, err := cw.w.Write(p)
 	cw.n += int64(n)
 
-	return n, err
+	if err != nil {
+		return n, fmt.Errorf("ggplot: %w", err)
+	}
+
+	return n, nil
 }
 
 // renderTo is the core rendering pipeline orchestrator.
@@ -522,7 +544,7 @@ func (cw *countWriter) Write(p []byte) (int, error) {
 // Pipeline: Stat Transform → Scale Training → Layout → Grid → Data → Axes → Labels.
 func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("ggplot: %w", err)
 	}
 
 	if len(p.spec.Layers) == 0 {

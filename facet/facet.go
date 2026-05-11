@@ -99,7 +99,7 @@ func (f *wrapFacet) Split(ctx context.Context, ds dataset.Dataset) ([]Panel, err
 
 		collected, cerr := filtered.Collect(ctx)
 		if cerr != nil {
-			return nil, cerr
+			return nil, fmt.Errorf("facet: %w", cerr)
 		}
 
 		panels = append(panels, Panel{
@@ -185,7 +185,7 @@ func (g *gridFacet) Split(ctx context.Context, ds dataset.Dataset) ([]Panel, err
 
 			collected, cerr := filtered.Collect(ctx)
 			if cerr != nil {
-				return nil, cerr
+				return nil, fmt.Errorf("facet: %w", cerr)
 			}
 
 			panels = append(panels, Panel{
@@ -222,7 +222,7 @@ func (g *gridFacet) String() string { return "grid(" + g.rowCol + " ~ " + g.colC
 func facetStrings(ds dataset.Dataset, col string) ([]string, error) {
 	c, err := ds.Column(col)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("facet: %w", err)
 	}
 
 	n := int(c.Len())

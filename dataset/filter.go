@@ -111,7 +111,7 @@ func (p CompPred) Expr() string {
 func (p CompPred) Mask(ds Table) ([]bool, error) {
 	col, err := ds.Column(p.Col)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dataset: %w", err)
 	}
 
 	n := int(col.Len())
@@ -172,7 +172,7 @@ func (p BetweenPred) Expr() string {
 func (p BetweenPred) Mask(ds Table) ([]bool, error) {
 	col, err := ds.Column(p.Col)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dataset: %w", err)
 	}
 
 	n := int(col.Len())
@@ -228,7 +228,7 @@ func (p InPred) Expr() string {
 func (p InPred) Mask(ds Table) ([]bool, error) {
 	col, err := ds.Column(p.Col)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dataset: %w", err)
 	}
 
 	n := int(col.Len())
@@ -304,7 +304,7 @@ func (p IsNotNullPred) Mask(ds Table) ([]bool, error) {
 func nullMask(ds Table, colName string, wantNull bool) ([]bool, error) {
 	col, err := ds.Column(colName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dataset: %w", err)
 	}
 
 	n := int(col.Len())
@@ -390,7 +390,7 @@ func (p AndPred) Mask(ds Table) ([]bool, error) {
 	for _, sub := range p.Preds {
 		m, err := sub.Mask(ds)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
 		for i := range result {
@@ -429,7 +429,7 @@ func (p OrPred) Mask(ds Table) ([]bool, error) {
 	for _, sub := range p.Preds {
 		m, err := sub.Mask(ds)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
 		for i := range result {
@@ -459,7 +459,7 @@ func (p NotPred) Expr() string {
 func (p NotPred) Mask(ds Table) ([]bool, error) {
 	m, err := p.Pred.Mask(ds)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dataset: %w", err)
 	}
 
 	for i := range m {

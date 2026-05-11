@@ -54,7 +54,7 @@ func NewDataset(eng Engine, cols ...AnyColumn) (Dataset, error) {
 
 	tbl, err := factory.FromColumns(schema, cols...)
 	if err != nil {
-		return Dataset{}, err
+		return Dataset{}, fmt.Errorf("dataset: %w", err)
 	}
 
 	return Dataset{eng: eng, tbl: tbl, op: op{kind: opNone}}, nil
@@ -85,7 +85,12 @@ func (f Dataset) Column(name string) (AnyColumn, error) {
 		return nil, errors.New("dataset: Column() on uncollected Dataset — call Collect(ctx) first")
 	}
 
-	return f.tbl.Column(name)
+	col, colErr := f.tbl.Column(name)
+	if colErr != nil {
+		return nil, fmt.Errorf("dataset: %w", colErr)
+	}
+
+	return col, nil
 }
 
 // NumRows returns the number of rows, or 0 if uncollected.
@@ -188,7 +193,7 @@ func (f Dataset) execSelect(cols []string) Dataset {
 	for _, name := range cols {
 		idx := f.tbl.Schema().FieldIndex(name)
 		if idx < 0 {
-			return f.withError(&ErrColumnNotFound{Name: name})
+			return f.withError(&ColumnNotFoundError{Name: name})
 		}
 
 		fields = append(fields, f.tbl.Schema().Field(idx))
@@ -226,7 +231,7 @@ func (f Dataset) execRename(oldName, newName string) Dataset {
 	fields := make([]Field, schema.NumFields())
 
 	columns := make([]AnyColumn, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		field := schema.Field(i)
 
 		col, err := f.tbl.Column(field.Name)
@@ -731,7 +736,7 @@ func (f Dataset) replaceColumn(factory ColumnFactory, name string, newCol AnyCol
 	schema := f.tbl.Schema()
 
 	columns := make([]AnyColumn, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		field := schema.Field(i)
 		if field.Name == name {
 			columns[i] = newCol
@@ -825,21 +830,54 @@ func (gf GroupedFrame) Summarize(specs ...AggSpec) Dataset {
 func dispatchAgg(agg Aggregator, fn AggFunc, col AnyColumn) (AnyColumn, error) {
 	switch fn {
 	case AggSum:
-		return agg.Sum(col)
+		result, err := agg.Sum(col)
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return result, nil
 	case AggMean:
-		return agg.Mean(col)
+		result, err := agg.Mean(col)
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return result, nil
 	case AggMin:
 		lo, _, err := agg.MinMax(col)
-		return lo, err
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return lo, nil
 	case AggMax:
 		_, hi, err := agg.MinMax(col)
-		return hi, err
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return hi, nil
 	case AggCount:
-		return agg.Count(col)
+		result, err := agg.Count(col)
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return result, nil
 	case AggMedian:
-		return agg.Median(col)
+		result, err := agg.Median(col)
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return result, nil
 	case AggVariance:
-		return agg.Variance(col)
+		result, err := agg.Variance(col)
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return result, nil
 	default:
 		return nil, fmt.Errorf("dataset: unknown AggFunc %d", fn)
 	}
@@ -925,21 +963,26 @@ func applySelect(sel Selector, factory ColumnFactory, ds Table, indices []int) (
 	schema := ds.Schema()
 
 	columns := make([]AnyColumn, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		col, err := ds.Column(schema.Field(i).Name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
 		taken, err := sel.Select(col, indices)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
 		columns[i] = taken
 	}
 
-	return factory.FromColumns(schema, columns...)
+	result, err := factory.FromColumns(schema, columns...)
+	if err != nil {
+		return nil, fmt.Errorf("dataset: %w", err)
+	}
+
+	return result, nil
 }
 
 // applySlice applies a SliceColumn to all columns in a dataset using the engine's Selector.
@@ -947,21 +990,26 @@ func applySlice(sel Selector, factory ColumnFactory, ds Table, start, end int) (
 	schema := ds.Schema()
 
 	columns := make([]AnyColumn, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		col, err := ds.Column(schema.Field(i).Name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
 		sliced, err := sel.Slice(col, start, end)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
 		columns[i] = sliced
 	}
 
-	return factory.FromColumns(schema, columns...)
+	result, err := factory.FromColumns(schema, columns...)
+	if err != nil {
+		return nil, fmt.Errorf("dataset: %w", err)
+	}
+
+	return result, nil
 }
 
 // rowHasher caches the underlying Value arrays to avoid O(N^2) allocations
@@ -1119,7 +1167,7 @@ func (f Dataset) execGroupBy(groupCols []string, specs []AggSpec) Dataset {
 	for _, name := range groupCols {
 		idx := f.tbl.Schema().FieldIndex(name)
 		if idx < 0 {
-			return f.withError(&ErrColumnNotFound{Name: name})
+			return f.withError(&ColumnNotFoundError{Name: name})
 		}
 
 		outFields = append(outFields, f.tbl.Schema().Field(idx))
@@ -1218,7 +1266,7 @@ func (f Dataset) execMutate(name string, fn MutateFunc) Dataset {
 	newSchema := NewSchema(fields...)
 
 	columns := make([]AnyColumn, schema.NumFields()+1)
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		col, err := f.tbl.Column(schema.Field(i).Name)
 		if err != nil {
 			return f.withError(err)

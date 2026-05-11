@@ -398,6 +398,8 @@ func BenchmarkGroupBySummarize(b *testing.B) {
 // --- MathKernel Benchmarks ---
 
 func benchMemMathUnary(b *testing.B, fn func(*memory.Engine, dataset.AnyColumn) (dataset.AnyColumn, error)) {
+	b.Helper()
+
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)

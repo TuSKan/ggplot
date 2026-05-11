@@ -55,7 +55,7 @@ func Read(ctx context.Context, r io.ReaderAt, size int64, eng dataset.Engine, op
 
 	tbl, err := reader.ReadParquet(ctx, r, size, buildConfig(opts))
 	if err != nil {
-		return dataset.Dataset{}, err
+		return dataset.Dataset{}, fmt.Errorf("parquet: %w", err)
 	}
 
 	return dataset.From(tbl), nil
@@ -69,5 +69,9 @@ func Write(ctx context.Context, w io.Writer, ds dataset.Dataset, eng dataset.Eng
 		return fmt.Errorf("parquet: engine %q does not implement ParquetWriter", eng.Name())
 	}
 
-	return writer.WriteParquet(ctx, w, ds.Table(), buildConfig(opts))
+	if err := writer.WriteParquet(ctx, w, ds.Table(), buildConfig(opts)); err != nil {
+		return fmt.Errorf("parquet: %w", err)
+	}
+
+	return nil
 }

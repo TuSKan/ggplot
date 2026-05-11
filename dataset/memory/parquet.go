@@ -149,7 +149,7 @@ func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, 
 
 		col, err := ds.Column(f.Name)
 		if err != nil {
-			return err
+			return fmt.Errorf("memory: %w", err)
 		}
 
 		colData[i] = col
@@ -184,7 +184,11 @@ func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, 
 		return fmt.Errorf("memory: parquet write row group: %w", err)
 	}
 
-	return writer.Close()
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("memory: %w", err)
+	}
+
+	return nil
 }
 
 // parquetNodeToDType maps a parquet-go Node to our DType.

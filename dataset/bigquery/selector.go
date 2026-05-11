@@ -40,13 +40,23 @@ func (e *Engine) Select(col dataset.AnyColumn, indices []int) (dataset.AnyColumn
 
 		localCol, err := localDS.Column(bqCol.name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("bigquery: %w", err)
 		}
 
-		return e.localEngine().Select(localCol, indices)
+		result, selErr := e.localEngine().Select(localCol, indices)
+		if selErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", selErr)
+		}
+
+		return result, nil
 	}
 
-	return e.localEngine().Select(col, indices)
+	result, selErr := e.localEngine().Select(col, indices)
+	if selErr != nil {
+		return nil, fmt.Errorf("bigquery: %w", selErr)
+	}
+
+	return result, nil
 }
 
 // Slice applies a range restriction on a column.
@@ -63,7 +73,12 @@ func (e *Engine) Slice(col dataset.AnyColumn, start, end int) (dataset.AnyColumn
 		}, nil
 	}
 
-	return e.localEngine().Slice(col, start, end)
+	result, slErr := e.localEngine().Slice(col, start, end)
+	if slErr != nil {
+		return nil, fmt.Errorf("bigquery: %w", slErr)
+	}
+
+	return result, nil
 }
 
 // errNotBQDataset returns a typed error for wrong dataset type.

@@ -156,7 +156,7 @@ func (e *Engine) WriteCSV(_ context.Context, w io.Writer, ds dataset.Table, cfg 
 		}
 
 		if err := writer.Write(header); err != nil {
-			return err
+			return fmt.Errorf("arrow: %w", err)
 		}
 	}
 
@@ -167,7 +167,7 @@ func (e *Engine) WriteCSV(_ context.Context, w io.Writer, ds dataset.Table, cfg 
 
 		col, err := ds.Column(f.Name)
 		if err != nil {
-			return err
+			return fmt.Errorf("arrow: %w", err)
 		}
 
 		formatters[i] = arrowMakeFormatter(col)
@@ -181,7 +181,7 @@ func (e *Engine) WriteCSV(_ context.Context, w io.Writer, ds dataset.Table, cfg 
 		}
 
 		if err := writer.Write(row); err != nil {
-			return err
+			return fmt.Errorf("arrow: %w", err)
 		}
 	}
 

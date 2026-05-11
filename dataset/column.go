@@ -149,7 +149,7 @@ type Column[T any] interface {
 func GetColumn[T any](ds Table, name string) (Column[T], error) {
 	raw, err := ds.Column(name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dataset: %w", err)
 	}
 
 	typed, ok := raw.(Column[T])

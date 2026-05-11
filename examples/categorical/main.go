@@ -58,7 +58,8 @@ func boxplot(dir string) {
 	rng := rand.New(rand.NewSource(42))
 
 	// Generate 3 groups of normally distributed data with different means.
-	var x, y []float64
+	x := make([]float64, 0, 150)
+	y := make([]float64, 0, 150)
 
 	groups := []struct {
 		name string

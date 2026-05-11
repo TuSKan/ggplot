@@ -79,10 +79,9 @@ func coordFlipped(dir string) {
 func facetWrap(dir string) {
 	rng := rand.New(rand.NewSource(42))
 
-	var (
-		xs, ys  []float64
-		seasons []string
-	)
+	xs := make([]float64, 0, 120)
+	ys := make([]float64, 0, 120)
+	seasons := make([]string, 0, 120)
 
 	for _, s := range []string{"Spring", "Summer", "Autumn", "Winter"} {
 		for i := range 30 {
@@ -110,10 +109,10 @@ func facetWrap(dir string) {
 func facetGrid(dir string) {
 	rng := rand.New(rand.NewSource(42))
 
-	var (
-		xs, ys         []float64
-		regions, types []string
-	)
+	xs := make([]float64, 0, 80)
+	ys := make([]float64, 0, 80)
+	regions := make([]string, 0, 80)
+	types := make([]string, 0, 80)
 
 	for _, r := range []string{"North", "South"} {
 		for _, t := range []string{"Urban", "Rural"} {
@@ -179,10 +178,9 @@ func allThemes(dir string) {
 func legendPositions(dir string) {
 	rng := rand.New(rand.NewSource(42))
 
-	var (
-		xs, ys []float64
-		groups []string
-	)
+	xs := make([]float64, 0, 90)
+	ys := make([]float64, 0, 90)
+	groups := make([]string, 0, 90)
 
 	for _, g := range []string{"Alpha", "Beta", "Gamma"} {
 		for i := range 30 {
@@ -224,11 +222,12 @@ func aestheticsShowcase(dir string) {
 		ys[i] = xs[i]*0.8 + rng.NormFloat64()*2
 
 		sizes[i] = rng.Float64()*4 + 1
-		if i < n/3 {
+		switch {
+		case i < n/3:
 			groups = append(groups, "Group A")
-		} else if i < 2*n/3 {
+		case i < 2*n/3:
 			groups = append(groups, "Group B")
-		} else {
+		default:
 			groups = append(groups, "Group C")
 		}
 	}

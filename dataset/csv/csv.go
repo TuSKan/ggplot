@@ -77,7 +77,7 @@ func Read(ctx context.Context, r io.Reader, eng dataset.Engine, opts ...Option) 
 
 	tbl, err := reader.ReadCSV(ctx, r, buildConfig(opts))
 	if err != nil {
-		return dataset.Dataset{}, err
+		return dataset.Dataset{}, fmt.Errorf("csv: %w", err)
 	}
 
 	return dataset.From(tbl), nil
@@ -91,5 +91,9 @@ func Write(ctx context.Context, w io.Writer, ds dataset.Dataset, eng dataset.Eng
 		return fmt.Errorf("csv: engine %q does not implement CSVWriter", eng.Name())
 	}
 
-	return writer.WriteCSV(ctx, w, ds.Table(), buildConfig(opts))
+	if err := writer.WriteCSV(ctx, w, ds.Table(), buildConfig(opts)); err != nil {
+		return fmt.Errorf("csv: %w", err)
+	}
+
+	return nil
 }

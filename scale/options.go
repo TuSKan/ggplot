@@ -1,6 +1,7 @@
 package scale
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/TuSKan/ggplot/dataset"
@@ -116,7 +117,11 @@ func (c *ConfiguredScale) Inner() Scale { return c.inner }
 
 // Train delegates to the inner scale.
 func (c *ConfiguredScale) Train(col dataset.AnyColumn) error {
-	return c.inner.Train(col)
+	if err := c.inner.Train(col); err != nil {
+		return fmt.Errorf("scale: %w", err)
+	}
+
+	return nil
 }
 
 // Map normalizes a data value using the effective bounds (which may

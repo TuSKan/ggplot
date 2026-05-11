@@ -65,13 +65,33 @@ func (e *Engine) localBinaryOp(op string, a, b dataset.AnyColumn) (dataset.AnyCo
 
 	switch op {
 	case "+":
-		return mk.AddCols(a, b)
+		result, err := mk.AddCols(a, b)
+		if err != nil {
+			return nil, fmt.Errorf("bigquery: %w", err)
+		}
+
+		return result, nil
 	case "-":
-		return mk.SubCols(a, b)
+		result, err := mk.SubCols(a, b)
+		if err != nil {
+			return nil, fmt.Errorf("bigquery: %w", err)
+		}
+
+		return result, nil
 	case "*":
-		return mk.MulCols(a, b)
+		result, err := mk.MulCols(a, b)
+		if err != nil {
+			return nil, fmt.Errorf("bigquery: %w", err)
+		}
+
+		return result, nil
 	case "/":
-		return mk.DivCols(a, b)
+		result, err := mk.DivCols(a, b)
+		if err != nil {
+			return nil, fmt.Errorf("bigquery: %w", err)
+		}
+
+		return result, nil
 	default:
 		return nil, fmt.Errorf("bigquery: unknown binary op %q", op)
 	}
@@ -94,9 +114,19 @@ func (e *Engine) scalarOp(op string, val float64, col dataset.AnyColumn) (datase
 	if !ok {
 		switch op {
 		case "+":
-			return e.localEngine().AddScalar(col, val)
+			result, addErr := e.localEngine().AddScalar(col, val)
+			if addErr != nil {
+				return nil, fmt.Errorf("bigquery: %w", addErr)
+			}
+
+			return result, nil
 		case "*":
-			return e.localEngine().MulScalar(col, val)
+			result, mulErr := e.localEngine().MulScalar(col, val)
+			if mulErr != nil {
+				return nil, fmt.Errorf("bigquery: %w", mulErr)
+			}
+
+			return result, nil
 		}
 
 		return nil, fmt.Errorf("bigquery: unknown scalar op %q", op)
@@ -141,7 +171,12 @@ func (e *Engine) Sqrt(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) Pow(col dataset.AnyColumn, exp float64) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
-		return e.localEngine().Pow(col, exp)
+		result, powErr := e.localEngine().Pow(col, exp)
+		if powErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", powErr)
+		}
+
+		return result, nil
 	}
 
 	return e.lazyExprCol(bqCol, fmt.Sprintf("POW(`%s`, %v)", bqCol.name, exp), bqCol.name, dataset.DTypeFloat64)
@@ -206,7 +241,12 @@ func (e *Engine) Atan2(y, x dataset.AnyColumn) (dataset.AnyColumn, error) {
 
 	xBQ, xOK := x.(*bqColumn)
 	if !yOK || !xOK {
-		return e.localEngine().Atan2(y, x)
+		result, atanErr := e.localEngine().Atan2(y, x)
+		if atanErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", atanErr)
+		}
+
+		return result, nil
 	}
 
 	resultName := fmt.Sprintf("atan2_%s_%s", yBQ.name, xBQ.name)
@@ -225,7 +265,12 @@ func (e *Engine) Tanh(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) Sigmoid(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
-		return e.localEngine().Sigmoid(col)
+		result, sigErr := e.localEngine().Sigmoid(col)
+		if sigErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", sigErr)
+		}
+
+		return result, nil
 	}
 	// sigmoid(x) = 1 / (1 + EXP(-x))
 	return e.lazyExprCol(bqCol, fmt.Sprintf("1.0 / (1.0 + EXP(-`%s`))", bqCol.name), bqCol.name, dataset.DTypeFloat64)
@@ -242,13 +287,23 @@ func (e *Engine) Erf(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 
 		localCol, err := ds.Column(bqCol.name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("bigquery: %w", err)
 		}
 
-		return e.localEngine().Erf(localCol)
+		result, erfErr := e.localEngine().Erf(localCol)
+		if erfErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", erfErr)
+		}
+
+		return result, nil
 	}
 
-	return e.localEngine().Erf(col)
+	result, erfErr := e.localEngine().Erf(col)
+	if erfErr != nil {
+		return nil, fmt.Errorf("bigquery: %w", erfErr)
+	}
+
+	return result, nil
 }
 
 // --- Rounding ---
@@ -294,7 +349,12 @@ func (e *Engine) BitNot(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) BitShiftLeft(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
-		return e.localEngine().BitShiftLeft(col, n)
+		result, shErr := e.localEngine().BitShiftLeft(col, n)
+		if shErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", shErr)
+		}
+
+		return result, nil
 	}
 
 	return e.lazyExprCol(bqCol, fmt.Sprintf("`%s` << %d", bqCol.name, n), bqCol.name, dataset.DTypeInt64)
@@ -304,7 +364,12 @@ func (e *Engine) BitShiftLeft(col dataset.AnyColumn, n int) (dataset.AnyColumn, 
 func (e *Engine) BitShiftRight(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
-		return e.localEngine().BitShiftRight(col, n)
+		result, shErr := e.localEngine().BitShiftRight(col, n)
+		if shErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", shErr)
+		}
+
+		return result, nil
 	}
 
 	return e.lazyExprCol(bqCol, fmt.Sprintf("`%s` >> %d", bqCol.name, n), bqCol.name, dataset.DTypeInt64)
@@ -337,7 +402,7 @@ func (e *Engine) unaryExpr(exprFmt, suffix string, col dataset.AnyColumn) (datas
 // lazyExprCol creates a lazy bqColumn backed by SELECT expr AS resultName FROM source.
 // If resultName matches an existing column, the SQL uses a replacement SELECT
 // (no SELECT *) to avoid duplicate field panics.
-func (e *Engine) lazyExprCol(bqCol *bqColumn, expr, resultName string, dtype dataset.DType) (*bqColumn, error) {
+func (e *Engine) lazyExprCol(bqCol *bqColumn, expr, resultName string, dtype dataset.DType) (*bqColumn, error) { //nolint:unparam // error kept for interface symmetry; lazy SQL never fails.
 	origFields := bqCol.ds.schema.Fields()
 	replaced := false
 
@@ -390,46 +455,57 @@ func (e *Engine) lazyExprCol(bqCol *bqColumn, expr, resultName string, dtype dat
 func (e *Engine) localUnaryMath(fn string, col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	mk := e.localEngine()
 
+	var (
+		result dataset.AnyColumn
+		err    error
+	)
+
 	switch fn {
 	case "ABS":
-		return mk.Abs(col)
+		result, err = mk.Abs(col)
 	case "neg":
-		return mk.Neg(col)
+		result, err = mk.Neg(col)
 	case "SIGN":
-		return mk.Sign(col)
+		result, err = mk.Sign(col)
 	case "SQRT":
-		return mk.Sqrt(col)
+		result, err = mk.Sqrt(col)
 	case "EXP":
-		return mk.Exp(col)
+		result, err = mk.Exp(col)
 	case "LN":
-		return mk.Ln(col)
+		result, err = mk.Ln(col)
 	case "LOG2":
-		return mk.Log2(col)
+		result, err = mk.Log2(col)
 	case "LOG10":
-		return mk.Log10(col)
+		result, err = mk.Log10(col)
 	case "SIN":
-		return mk.Sin(col)
+		result, err = mk.Sin(col)
 	case "COS":
-		return mk.Cos(col)
+		result, err = mk.Cos(col)
 	case "TAN":
-		return mk.Tan(col)
+		result, err = mk.Tan(col)
 	case "ASIN":
-		return mk.Asin(col)
+		result, err = mk.Asin(col)
 	case "ACOS":
-		return mk.Acos(col)
+		result, err = mk.Acos(col)
 	case "ATAN":
-		return mk.Atan(col)
+		result, err = mk.Atan(col)
 	case "TANH":
-		return mk.Tanh(col)
+		result, err = mk.Tanh(col)
 	case "ROUND":
-		return mk.Round(col)
+		result, err = mk.Round(col)
 	case "FLOOR":
-		return mk.Floor(col)
+		result, err = mk.Floor(col)
 	case "CEIL":
-		return mk.Ceil(col)
+		result, err = mk.Ceil(col)
 	case "bitnot":
-		return mk.BitNot(col)
+		result, err = mk.BitNot(col)
 	default:
 		return nil, fmt.Errorf("bigquery: unsupported unary math %q", fn)
 	}
+
+	if err != nil {
+		return nil, fmt.Errorf("bigquery: %w", err)
+	}
+
+	return result, nil
 }

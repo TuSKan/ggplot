@@ -331,7 +331,12 @@ func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) 
 	}
 
 	// Local data — delegate to arrow engine
-	return e.localEngine().FromColumns(schema, cols...)
+	result, fErr := e.localEngine().FromColumns(schema, cols...)
+	if fErr != nil {
+		return nil, fmt.Errorf("bigquery: %w", fErr)
+	}
+
+	return result, nil
 }
 
 // Compile-time interface assertions — ensures all sub-interfaces are satisfied.

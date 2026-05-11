@@ -101,7 +101,7 @@ func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 	b := &memBuilder{eng: e, schema: schema}
 
 	b.appenders = make(map[string]any, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		switch f.Dtype {
 		case dataset.DTypeFloat64:
@@ -430,7 +430,7 @@ func (d *memDataset) Engine() dataset.Engine  { return d.eng }
 func (d *memDataset) Column(name string) (dataset.AnyColumn, error) {
 	col, ok := d.columns[name]
 	if !ok {
-		return nil, &dataset.ErrColumnNotFound{Name: name}
+		return nil, &dataset.ColumnNotFoundError{Name: name}
 	}
 
 	return col, nil
@@ -459,7 +459,7 @@ func (b *memBuilder) Bool(col string) dataset.BoolAppender {
 
 func (b *memBuilder) Build() (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, b.schema.NumFields())
-	for i := 0; i < b.schema.NumFields(); i++ {
+	for i := range b.schema.NumFields() {
 		f := b.schema.Field(i)
 		switch f.Dtype {
 		case dataset.DTypeFloat64:
@@ -636,7 +636,7 @@ func (e *Engine) FilterIndices(mask []bool) []int {
 func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, error) {
 	bools, err := mask.Mask(ds)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("memory: %w", err)
 	}
 
 	indices := e.FilterIndices(bools)
@@ -645,7 +645,7 @@ func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, e
 		schema := ds.Schema()
 
 		cols := make([]dataset.AnyColumn, schema.NumFields())
-		for i := 0; i < schema.NumFields(); i++ {
+		for i := range schema.NumFields() {
 			f := schema.Field(i)
 			switch f.Dtype {
 			case dataset.DTypeFloat64:
@@ -667,10 +667,10 @@ func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, e
 	schema := ds.Schema()
 
 	cols := make([]dataset.AnyColumn, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		col, err := ds.Column(schema.Field(i).Name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("memory: %w", err)
 		}
 
 		taken, err := e.Select(col, indices)
@@ -790,7 +790,7 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 		schema := ds.Schema()
 
 		cols = make([]string, schema.NumFields())
-		for i := 0; i < schema.NumFields(); i++ {
+		for i := range schema.NumFields() {
 			cols[i] = schema.Field(i).Name
 		}
 	}
@@ -804,7 +804,7 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 	for _, name := range cols {
 		col, err := ds.Column(name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("memory: %w", err)
 		}
 
 		switch c := col.(type) {
@@ -843,10 +843,10 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 	schema := ds.Schema()
 
 	outCols := make([]dataset.AnyColumn, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		col, err := ds.Column(schema.Field(i).Name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("memory: %w", err)
 		}
 
 		taken, err := e.Select(col, indices)
@@ -902,7 +902,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 				schema.NumFields(), i, s.NumFields())
 		}
 
-		for j := 0; j < schema.NumFields(); j++ {
+		for j := range schema.NumFields() {
 			if s.Field(j).Name != schema.Field(j).Name || s.Field(j).Dtype != schema.Field(j).Dtype {
 				return nil, fmt.Errorf("memory: Stack schema mismatch at field %d: %q(%s) vs %q(%s)",
 					j, schema.Field(j).Name, schema.Field(j).Dtype, s.Field(j).Name, s.Field(j).Dtype)
@@ -918,7 +918,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 
 	// Concatenate each column
 	cols := make([]dataset.AnyColumn, schema.NumFields())
-	for ci := 0; ci < schema.NumFields(); ci++ {
+	for ci := range schema.NumFields() {
 		name := schema.Field(ci).Name
 		switch schema.Field(ci).Dtype {
 		case dataset.DTypeFloat64:
@@ -995,7 +995,7 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 
 	for _, ds := range datasets {
 		s := ds.Schema()
-		for i := 0; i < s.NumFields(); i++ {
+		for i := range s.NumFields() {
 			fields = append(fields, s.Field(i))
 			col, _ := ds.Column(s.Field(i).Name)
 			cols = append(cols, col)

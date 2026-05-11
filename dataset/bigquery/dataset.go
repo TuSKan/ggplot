@@ -57,7 +57,7 @@ func (d *bqDataset) Engine() dataset.Engine { return d.engine }
 func (d *bqDataset) Column(name string) (dataset.AnyColumn, error) {
 	idx := d.schema.FieldIndex(name)
 	if idx < 0 {
-		return nil, &dataset.ErrColumnNotFound{Name: name}
+		return nil, &dataset.ColumnNotFoundError{Name: name}
 	}
 
 	field := d.schema.Field(idx)
@@ -386,7 +386,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 // buildEmptyDataset creates an empty dataset with the given schema.
 func buildEmptyDataset(eng *arrowEngine.Engine, schema *dataset.Schema) (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		switch f.Dtype {
 		case dataset.DTypeFloat64:
@@ -402,5 +402,10 @@ func buildEmptyDataset(eng *arrowEngine.Engine, schema *dataset.Schema) (dataset
 		}
 	}
 
-	return eng.FromColumns(schema, cols...)
+	result, err := eng.FromColumns(schema, cols...)
+	if err != nil {
+		return nil, fmt.Errorf("bigquery: %w", err)
+	}
+
+	return result, nil
 }

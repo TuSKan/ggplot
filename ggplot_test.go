@@ -737,10 +737,8 @@ func TestOrientation_HorizontalBar(t *testing.T) {
 }
 
 func TestOrientation_HorizontalBoxplot(t *testing.T) {
-	var (
-		groups []string
-		vals   []float64
-	)
+	groups := make([]string, 0, 30)
+	vals := make([]float64, 0, 30)
 
 	for i := range 30 {
 		groups = append(groups, "A")

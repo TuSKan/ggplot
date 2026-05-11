@@ -60,7 +60,7 @@ func buildHashIndex(ds dataset.Table, cols []string) (map[string][]int, error) {
 	for i, name := range cols {
 		col, err := ds.Column(name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("memory: %w", err)
 		}
 
 		keyCols[i] = col
@@ -121,7 +121,7 @@ func probeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 	for i, name := range spec.LeftCols {
 		col, err := left.Column(name)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("memory: %w", err)
 		}
 
 		leftKeyCols[i] = col
@@ -241,13 +241,13 @@ func buildJoinResult(e *Engine, left, right dataset.Table, spec dataset.JoinSpec
 	var fields []dataset.Field
 
 	leftSchema := left.Schema()
-	for i := 0; i < leftSchema.NumFields(); i++ {
+	for i := range leftSchema.NumFields() {
 		fields = append(fields, leftSchema.Field(i))
 	}
 
 	if !isSemiAnti {
 		rightSchema := right.Schema()
-		for i := 0; i < rightSchema.NumFields(); i++ {
+		for i := range rightSchema.NumFields() {
 			f := rightSchema.Field(i)
 			if rightKeySet[f.Name] {
 				continue // skip duplicate key columns
@@ -268,7 +268,7 @@ func buildJoinResult(e *Engine, left, right dataset.Table, spec dataset.JoinSpec
 	var outCols []dataset.AnyColumn
 
 	// Left columns.
-	for i := 0; i < leftSchema.NumFields(); i++ {
+	for i := range leftSchema.NumFields() {
 		f := leftSchema.Field(i)
 		col, _ := left.Column(f.Name)
 		gathered := gatherColumn(col, leftIdx, n, f.Name)
@@ -278,7 +278,7 @@ func buildJoinResult(e *Engine, left, right dataset.Table, spec dataset.JoinSpec
 	// Right columns (skip key columns, skip for semi/anti).
 	if !isSemiAnti {
 		rightSchema := right.Schema()
-		for i := 0; i < rightSchema.NumFields(); i++ {
+		for i := range rightSchema.NumFields() {
 			f := rightSchema.Field(i)
 			if rightKeySet[f.Name] {
 				continue

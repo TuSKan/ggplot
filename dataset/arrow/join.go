@@ -61,7 +61,7 @@ func arrowBuildHashIndex(ds dataset.Table, cols []string) (map[string][]int, err
 	for i, name := range cols {
 		col, err := ds.Column(name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("arrow: %w", err)
 		}
 
 		keyCols[i] = col
@@ -121,7 +121,7 @@ func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
 	for i, name := range spec.LeftCols {
 		col, err := left.Column(name)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("arrow: %w", err)
 		}
 
 		leftKeyCols[i] = col
@@ -240,13 +240,13 @@ func arrowBuildJoinResult(e *Engine, left, right dataset.Table, spec dataset.Joi
 	var fields []dataset.Field
 
 	leftSchema := left.Schema()
-	for i := 0; i < leftSchema.NumFields(); i++ {
+	for i := range leftSchema.NumFields() {
 		fields = append(fields, leftSchema.Field(i))
 	}
 
 	if !isSemiAnti {
 		rightSchema := right.Schema()
-		for i := 0; i < rightSchema.NumFields(); i++ {
+		for i := range rightSchema.NumFields() {
 			f := rightSchema.Field(i)
 			if rightKeySet[f.Name] {
 				continue
@@ -267,7 +267,7 @@ func arrowBuildJoinResult(e *Engine, left, right dataset.Table, spec dataset.Joi
 	var outCols []dataset.AnyColumn
 
 	// Left columns.
-	for i := 0; i < leftSchema.NumFields(); i++ {
+	for i := range leftSchema.NumFields() {
 		f := leftSchema.Field(i)
 		col, _ := left.Column(f.Name)
 		gathered := e.arrowGatherColumn(col, leftIdx, n, f.Name)
@@ -277,7 +277,7 @@ func arrowBuildJoinResult(e *Engine, left, right dataset.Table, spec dataset.Joi
 	// Right columns (skip key columns, skip for semi/anti).
 	if !isSemiAnti {
 		rightSchema := right.Schema()
-		for i := 0; i < rightSchema.NumFields(); i++ {
+		for i := range rightSchema.NumFields() {
 			f := rightSchema.Field(i)
 			if rightKeySet[f.Name] {
 				continue

@@ -56,7 +56,7 @@ func joinFloat64(t *testing.T, ds dataset.Table, name string) []float64 {
 	return c.Values()
 }
 
-func joinInt64(t *testing.T, ds dataset.Table, name string) []int64 {
+func joinInt64(t *testing.T, ds dataset.Table, name string) []int64 { //nolint:unparam // Test helper keeps name generic for reuse.
 	t.Helper()
 
 	col, err := ds.Column(name)

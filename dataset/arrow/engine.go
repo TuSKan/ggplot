@@ -138,7 +138,7 @@ func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 	b := &arrowBuilder{eng: e, schema: schema}
 
 	b.builders = make(map[string]any, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		switch f.Dtype {
 		case dataset.DTypeFloat64:
@@ -355,7 +355,7 @@ func (e *Engine) castToFloat64(col dataset.AnyColumn) (dataset.AnyColumn, error)
 		b := array.NewFloat64Builder(e.alloc)
 		defer b.Release()
 
-		for i := 0; i < c.arr.Len(); i++ {
+		for i := range c.arr.Len() {
 			if c.arr.IsNull(i) {
 				b.AppendNull()
 			} else {
@@ -377,7 +377,7 @@ func (e *Engine) castToInt64(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 		b := array.NewInt64Builder(e.alloc)
 		defer b.Release()
 
-		for i := 0; i < c.arr.Len(); i++ {
+		for i := range c.arr.Len() {
 			if c.arr.IsNull(i) {
 				b.AppendNull()
 			} else {
@@ -399,7 +399,7 @@ func (e *Engine) castToString(col dataset.AnyColumn) (dataset.AnyColumn, error) 
 		b := array.NewStringBuilder(e.alloc)
 		defer b.Release()
 
-		for i := 0; i < c.arr.Len(); i++ {
+		for i := range c.arr.Len() {
 			if c.arr.IsNull(i) {
 				b.AppendNull()
 			} else {
@@ -540,7 +540,7 @@ func (d *arrowDataset) Engine() dataset.Engine  { return d.engine }
 func (d *arrowDataset) Column(name string) (dataset.AnyColumn, error) {
 	col, ok := d.columns[name]
 	if !ok {
-		return nil, &dataset.ErrColumnNotFound{Name: name}
+		return nil, &dataset.ColumnNotFoundError{Name: name}
 	}
 
 	return col, nil
@@ -569,7 +569,7 @@ func (b *arrowBuilder) Bool(col string) dataset.BoolAppender {
 
 func (b *arrowBuilder) Build() (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, b.schema.NumFields())
-	for i := 0; i < b.schema.NumFields(); i++ {
+	for i := range b.schema.NumFields() {
 		f := b.schema.Field(i)
 		switch f.Dtype {
 		case dataset.DTypeFloat64:
@@ -772,7 +772,7 @@ func (e *Engine) FilterIndices(mask []bool) []int {
 func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, error) {
 	bools, err := mask.Mask(ds)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("arrow: %w", err)
 	}
 
 	// Build Arrow boolean filter array
@@ -789,10 +789,10 @@ func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, e
 	cols := make([]dataset.AnyColumn, schema.NumFields())
 	opts := compute.FilterOptions{}
 
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		col, err := ds.Column(schema.Field(i).Name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("arrow: %w", err)
 		}
 
 		switch c := col.(type) {
@@ -1087,7 +1087,7 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 		schema := ds.Schema()
 
 		cols = make([]string, schema.NumFields())
-		for i := 0; i < schema.NumFields(); i++ {
+		for i := range schema.NumFields() {
 			cols[i] = schema.Field(i).Name
 		}
 	}
@@ -1100,13 +1100,13 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 	for _, name := range cols {
 		col, err := ds.Column(name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("arrow: %w", err)
 		}
 		// Use Arrow's native null bitmap
 		switch c := col.(type) {
 		case *arrowFloat64Column:
 			if c.arr.NullN() > 0 {
-				for i := 0; i < c.arr.Len(); i++ {
+				for i := range c.arr.Len() {
 					if c.arr.IsNull(i) {
 						keep[i] = false
 					}
@@ -1114,7 +1114,7 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 			}
 		case *arrowInt64Column:
 			if c.arr.NullN() > 0 {
-				for i := 0; i < c.arr.Len(); i++ {
+				for i := range c.arr.Len() {
 					if c.arr.IsNull(i) {
 						keep[i] = false
 					}
@@ -1122,7 +1122,7 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 			}
 		case *arrowStringColumn:
 			if c.arr.NullN() > 0 {
-				for i := 0; i < c.arr.Len(); i++ {
+				for i := range c.arr.Len() {
 					if c.arr.IsNull(i) {
 						keep[i] = false
 					}
@@ -1130,7 +1130,7 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 			}
 		case *arrowBoolColumn:
 			if c.arr.NullN() > 0 {
-				for i := 0; i < c.arr.Len(); i++ {
+				for i := range c.arr.Len() {
 					if c.arr.IsNull(i) {
 						keep[i] = false
 					}
@@ -1147,10 +1147,10 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 	schema := ds.Schema()
 
 	outCols := make([]dataset.AnyColumn, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		col, err := ds.Column(schema.Field(i).Name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("arrow: %w", err)
 		}
 
 		taken, err := e.Select(col, indices)
@@ -1209,7 +1209,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 				schema.NumFields(), i, s.NumFields())
 		}
 
-		for j := 0; j < schema.NumFields(); j++ {
+		for j := range schema.NumFields() {
 			if s.Field(j).Name != schema.Field(j).Name || s.Field(j).Dtype != schema.Field(j).Dtype {
 				return nil, fmt.Errorf("arrow: Stack schema mismatch at field %d: %q(%s) vs %q(%s)",
 					j, schema.Field(j).Name, schema.Field(j).Dtype, s.Field(j).Name, s.Field(j).Dtype)
@@ -1223,7 +1223,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	}
 
 	cols := make([]dataset.AnyColumn, schema.NumFields())
-	for ci := 0; ci < schema.NumFields(); ci++ {
+	for ci := range schema.NumFields() {
 		name := schema.Field(ci).Name
 		switch schema.Field(ci).Dtype {
 		case dataset.DTypeFloat64:
@@ -1298,7 +1298,7 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 
 	for _, ds := range datasets {
 		s := ds.Schema()
-		for i := 0; i < s.NumFields(); i++ {
+		for i := range s.NumFields() {
 			fields = append(fields, s.Field(i))
 			col, _ := ds.Column(s.Field(i).Name)
 			cols = append(cols, col)

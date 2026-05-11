@@ -32,7 +32,7 @@ type Table interface {
 	// Schema returns the dataset's schema.
 	Schema() *Schema
 
-	// Column retrieves a named column. Returns [ErrColumnNotFound] if absent.
+	// Column retrieves a named column. Returns [ColumnNotFoundError] if absent.
 	// The returned [AnyColumn] can be type-asserted to [Column[T]] for typed
 	// access, or use [GetColumn] for a safe generic retrieval.
 	Column(name string) (AnyColumn, error)
@@ -66,17 +66,19 @@ type Closer interface {
 // on any Dataset — returns nil for datasets without resources.
 func Close(ds Table) error {
 	if c, ok := ds.(Closer); ok {
-		return c.Close()
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("dataset: %w", err)
+		}
 	}
 
 	return nil
 }
 
-// ErrColumnNotFound indicates a requested column does not exist.
-type ErrColumnNotFound struct {
+// ColumnNotFoundError indicates a requested column does not exist.
+type ColumnNotFoundError struct {
 	Name string
 }
 
-func (e *ErrColumnNotFound) Error() string {
+func (e *ColumnNotFoundError) Error() string {
 	return fmt.Sprintf("dataset: column %q not found", e.Name)
 }

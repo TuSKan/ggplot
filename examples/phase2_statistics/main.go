@@ -27,7 +27,7 @@ func main() {
 	boxplotStat(dir)
 }
 
-func save(p *ggplot.Plot, dir, name string, w, h int) {
+func save(p *ggplot.Plot, dir, name string, w, h int) { //nolint:unparam // Example helper keeps w generic.
 	out := filepath.Join(dir, name+".png")
 	if err := p.Save(context.Background(), out, w, h); err != nil {
 		log.Fatalln(err)

@@ -10,6 +10,7 @@ package dataset
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 // opKind identifies the type of operation in a lazy Dataset chain.
@@ -175,8 +176,8 @@ func executeOps(ctx context.Context, eng Engine, tbl Table, ops []op) (Table, er
 	cur := Dataset{eng: eng, tbl: tbl}
 
 	for _, o := range ops {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
 		switch o.kind {

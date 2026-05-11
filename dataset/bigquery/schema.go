@@ -59,7 +59,7 @@ func bqFieldToDataset(fs *bigquery.FieldSchema) dataset.Field {
 // datasetSchemaToBQ converts a dataset.Schema to a BigQuery TableSchema.
 func datasetSchemaToBQ(schema *dataset.Schema) bigquery.Schema {
 	bqFields := make([]*bigquery.FieldSchema, schema.NumFields())
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		bqFields[i] = datasetFieldToBQ(f)
 	}
@@ -121,7 +121,12 @@ func arrowRecordToDataset(eng *arrowEngine.Engine, rec arrow.RecordBatch) (datas
 
 	dsSchema := dataset.NewSchema(fields...)
 
-	return eng.FromColumns(dsSchema, cols...)
+	result, err := eng.FromColumns(dsSchema, cols...)
+	if err != nil {
+		return nil, fmt.Errorf("bigquery: %w", err)
+	}
+
+	return result, nil
 }
 
 // arrowTypeToDType maps Arrow types to dataset DType.
@@ -150,7 +155,7 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 		vals := make([]float64, arr.Len())
 		switch a := arr.(type) {
 		case *arrowarray.Float64:
-			for i := 0; i < a.Len(); i++ {
+			for i := range a.Len() {
 				if a.IsNull(i) {
 					vals[i] = 0 // or NaN
 				} else {
@@ -158,11 +163,11 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 				}
 			}
 		case *arrowarray.Float32:
-			for i := 0; i < a.Len(); i++ {
+			for i := range a.Len() {
 				vals[i] = float64(a.Value(i))
 			}
 		case *arrowarray.Int64:
-			for i := 0; i < a.Len(); i++ {
+			for i := range a.Len() {
 				vals[i] = float64(a.Value(i))
 			}
 		default:
@@ -175,11 +180,11 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 		vals := make([]int64, arr.Len())
 		switch a := arr.(type) {
 		case *arrowarray.Int64:
-			for i := 0; i < a.Len(); i++ {
+			for i := range a.Len() {
 				vals[i] = a.Value(i)
 			}
 		case *arrowarray.Int32:
-			for i := 0; i < a.Len(); i++ {
+			for i := range a.Len() {
 				vals[i] = int64(a.Value(i))
 			}
 		default:
@@ -192,11 +197,11 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 		vals := make([]string, arr.Len())
 		switch a := arr.(type) {
 		case *arrowarray.String:
-			for i := 0; i < a.Len(); i++ {
+			for i := range a.Len() {
 				vals[i] = a.Value(i)
 			}
 		case *arrowarray.Binary:
-			for i := 0; i < a.Len(); i++ {
+			for i := range a.Len() {
 				vals[i] = string(a.Value(i))
 			}
 		default:
@@ -208,7 +213,7 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 	case dataset.DTypeBool:
 		vals := make([]bool, arr.Len())
 		if a, ok := arr.(*arrowarray.Boolean); ok {
-			for i := 0; i < a.Len(); i++ {
+			for i := range a.Len() {
 				vals[i] = a.Value(i)
 			}
 		}
@@ -218,7 +223,7 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 	default:
 		// Fallback: treat as string
 		vals := make([]string, arr.Len())
-		for i := 0; i < arr.Len(); i++ {
+		for i := range arr.Len() {
 			vals[i] = arr.ValueStr(i)
 		}
 

@@ -215,10 +215,8 @@ func main() {
 	// ---------- 9. Horizontal Boxplot ----------
 	log.Println("09_horizontal_boxplot.png")
 
-	var (
-		bxGroups []string
-		bxVals   []float64
-	)
+	bxGroups := make([]string, 0, 120)
+	bxVals := make([]float64, 0, 120)
 
 	rng3 := rand.New(rand.NewSource(77))
 

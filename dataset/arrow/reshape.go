@@ -61,7 +61,7 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 	)
 
 	// ID columns: repeat each value nPivot times.
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		if pivotSet[f.Name] {
 			continue
@@ -102,7 +102,7 @@ func (e *Engine) arrowRepeatColumn(col dataset.AnyColumn, times, outLen int, nam
 
 		b.Reserve(outLen)
 
-		for row := 0; row < c.arr.Len(); row++ {
+		for row := range c.arr.Len() {
 			v := c.arr.Value(row)
 			for range times {
 				b.Append(v)
@@ -116,7 +116,7 @@ func (e *Engine) arrowRepeatColumn(col dataset.AnyColumn, times, outLen int, nam
 
 		b.Reserve(outLen)
 
-		for row := 0; row < c.arr.Len(); row++ {
+		for row := range c.arr.Len() {
 			v := c.arr.Value(row)
 			for range times {
 				b.Append(v)
@@ -130,7 +130,7 @@ func (e *Engine) arrowRepeatColumn(col dataset.AnyColumn, times, outLen int, nam
 
 		b.Reserve(outLen)
 
-		for row := 0; row < c.arr.Len(); row++ {
+		for row := range c.arr.Len() {
 			v := c.arr.Value(row)
 			for range times {
 				b.Append(v)
@@ -144,7 +144,7 @@ func (e *Engine) arrowRepeatColumn(col dataset.AnyColumn, times, outLen int, nam
 
 		b.Reserve(outLen)
 
-		for row := 0; row < c.arr.Len(); row++ {
+		for row := range c.arr.Len() {
 			v := c.arr.Value(row)
 			for range times {
 				b.Append(v)
@@ -233,12 +233,12 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 
 	nameCol, err := ds.Column(spec.NamesFrom)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("arrow: %w", err)
 	}
 
 	valCol, err := ds.Column(spec.ValuesFrom)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("arrow: %w", err)
 	}
 
 	nameStr, ok := nameCol.(*arrowStringColumn)
@@ -251,7 +251,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 
 	seen := map[string]bool{}
 
-	for i := 0; i < nameStr.arr.Len(); i++ {
+	for i := range nameStr.arr.Len() {
 		v := nameStr.arr.Value(i)
 		if !seen[v] {
 			pivotNames = append(pivotNames, v)
@@ -262,7 +262,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 	// ID columns.
 	var idColNames []string
 
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		if f.Name == spec.NamesFrom || f.Name == spec.ValuesFrom {
 			continue
@@ -459,7 +459,7 @@ func arrowIDKey(cols []dataset.AnyColumn, row int) string {
 func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep string) (dataset.Table, error) {
 	srcCol, err := ds.Column(col)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("arrow: %w", err)
 	}
 
 	sc, ok := srcCol.(*arrowStringColumn)
@@ -491,7 +491,7 @@ func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep strin
 		outCols   []dataset.AnyColumn
 	)
 
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		if f.Name == col {
 			for p, name := range into {
@@ -519,7 +519,7 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 	for i, name := range from {
 		c, err := ds.Column(name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("arrow: %w", err)
 		}
 
 		sc, ok := c.(*arrowStringColumn)
@@ -553,7 +553,7 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 
 	added := false
 
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		if fromSet[f.Name] {
 			if !added {
@@ -598,7 +598,7 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 	for i, name := range cols {
 		col, err := ds.Column(name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("arrow: %w", err)
 		}
 
 		seen := map[string]bool{}
@@ -674,7 +674,7 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 		completeSet[name] = i
 	}
 
-	for i := 0; i < schema.NumFields(); i++ {
+	for i := range schema.NumFields() {
 		f := schema.Field(i)
 		outFields = append(outFields, f)
 

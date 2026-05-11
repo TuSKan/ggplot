@@ -32,7 +32,12 @@ func (e *Engine) Count(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) Median(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
-		return e.localEngine().Median(col)
+		result, medErr := e.localEngine().Median(col)
+		if medErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", medErr)
+		}
+
+		return result, nil
 	}
 	// BQ: APPROX_QUANTILES(col, 2)[OFFSET(1)]
 	sql := fmt.Sprintf(
@@ -56,7 +61,12 @@ func (e *Engine) Variance(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
-		return e.localEngine().MinMax(col)
+		lo, hi, mmErr := e.localEngine().MinMax(col)
+		if mmErr != nil {
+			return nil, nil, fmt.Errorf("bigquery: %w", mmErr)
+		}
+
+		return lo, hi, nil
 	}
 
 	minName := "min_" + bqCol.name
@@ -81,19 +91,29 @@ func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyCo
 func (e *Engine) lazyAgg(fn string, col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
 	if !ok {
-		// Local column — delegate
+		var (
+			result dataset.AnyColumn
+			aggErr error
+		)
+
 		switch fn {
 		case "SUM":
-			return e.localEngine().Sum(col)
+			result, aggErr = e.localEngine().Sum(col)
 		case "AVG":
-			return e.localEngine().Mean(col)
+			result, aggErr = e.localEngine().Mean(col)
 		case "COUNT":
-			return e.localEngine().Count(col)
+			result, aggErr = e.localEngine().Count(col)
 		case "VARIANCE":
-			return e.localEngine().Variance(col)
+			result, aggErr = e.localEngine().Variance(col)
 		default:
 			return nil, fmt.Errorf("bigquery: unknown agg function %q", fn)
 		}
+
+		if aggErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", aggErr)
+		}
+
+		return result, nil
 	}
 
 	sql := fmt.Sprintf(
@@ -252,7 +272,12 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 		return nil, errors.New("bigquery: local engine does not support Composer")
 	}
 
-	return composer.Combine(localDS...)
+	result, combErr := composer.Combine(localDS...)
+	if combErr != nil {
+		return nil, fmt.Errorf("bigquery: %w", combErr)
+	}
+
+	return result, nil
 }
 
 // --- Filler ---
@@ -268,13 +293,23 @@ func (e *Engine) Fill(col dataset.AnyColumn, dir dataset.FillDirection) (dataset
 
 		localCol, err := ds.Column(bqCol.name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("bigquery: %w", err)
 		}
 
-		return e.localEngine().Fill(localCol, dir)
+		result, fillErr := e.localEngine().Fill(localCol, dir)
+		if fillErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", fillErr)
+		}
+
+		return result, nil
 	}
 
-	return e.localEngine().Fill(col, dir)
+	result, fillErr := e.localEngine().Fill(col, dir)
+	if fillErr != nil {
+		return nil, fmt.Errorf("bigquery: %w", fillErr)
+	}
+
+	return result, nil
 }
 
 // DropNA returns a dataset with rows filtered by IS NOT NULL.
@@ -289,7 +324,12 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 		return bq.withRestriction(strings.Join(parts, " AND ")), nil
 	}
 
-	return e.localEngine().DropNA(ds, cols...)
+	result, dropErr := e.localEngine().DropNA(ds, cols...)
+	if dropErr != nil {
+		return nil, fmt.Errorf("bigquery: %w", dropErr)
+	}
+
+	return result, nil
 }
 
 // ReplaceNA replaces null values with a default via SQL COALESCE.
@@ -308,5 +348,10 @@ func (e *Engine) ReplaceNA(col dataset.AnyColumn, defaultVal float64) (dataset.A
 		return &bqColumn{ds: ds, name: bqCol.name, dtype: bqCol.dtype}, nil
 	}
 
-	return e.localEngine().ReplaceNA(col, defaultVal)
+	result, repErr := e.localEngine().ReplaceNA(col, defaultVal)
+	if repErr != nil {
+		return nil, fmt.Errorf("bigquery: %w", repErr)
+	}
+
+	return result, nil
 }

@@ -124,7 +124,7 @@ func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string
 
 	vals, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return dataset.Dataset{}, fmt.Errorf("stat: %w", err)
 	}
 
 	// Determine number of bins: explicit opts.Bins, else use BinMethod.
@@ -200,7 +200,7 @@ func (countStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[stri
 
 	vals, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return dataset.Dataset{}, fmt.Errorf("stat: %w", err)
 	}
 
 	// Count unique values.
@@ -251,7 +251,7 @@ func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[
 
 	vals, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return dataset.Dataset{}, fmt.Errorf("stat: %w", err)
 	}
 
 	sort.Float64s(vals)
@@ -388,12 +388,12 @@ func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[s
 
 	xData, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return dataset.Dataset{}, fmt.Errorf("stat: %w", err)
 	}
 
 	yData, err := ds.Float64(yCol, dataset.Clean)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return dataset.Dataset{}, fmt.Errorf("stat: %w", err)
 	}
 
 	if len(xData) != len(yData) {
@@ -501,7 +501,7 @@ func loessFit(ctx context.Context, ds dataset.Dataset, pts []xyPair, n, nOut int
 	for i := range nOut {
 		if i%32 == 0 {
 			if err := ctx.Err(); err != nil {
-				return dataset.Dataset{}, err
+				return dataset.Dataset{}, fmt.Errorf("stat: %w", err)
 			}
 		}
 
@@ -575,12 +575,12 @@ func (summaryStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 
 	xData, err := ds.Float64(xCol, dataset.Clean)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return dataset.Dataset{}, fmt.Errorf("stat: %w", err)
 	}
 
 	yData, err := ds.Float64(yCol, dataset.Clean)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return dataset.Dataset{}, fmt.Errorf("stat: %w", err)
 	}
 
 	groups := make(map[float64][]float64)
@@ -642,7 +642,12 @@ func newFloat64Dataset(ds dataset.Dataset, cols map[string][]float64) (dataset.D
 		anyCols = append(anyCols, factory.NewFloat64Column(name, cols[name]))
 	}
 
-	return dataset.NewDataset(eng, anyCols...)
+	ds, err := dataset.NewDataset(eng, anyCols...)
+	if err != nil {
+		return dataset.Dataset{}, fmt.Errorf("stat: %w", err)
+	}
+
+	return ds, nil
 }
 
 // --- Boxplot ---
@@ -671,7 +676,7 @@ func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 	// Collect Y values, optionally grouped by X.
 	yVals, err := ds.Float64(yCol, dataset.Clean)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return dataset.Dataset{}, fmt.Errorf("stat: %w", err)
 	}
 
 	// Collect X values for grouping (if they exist).

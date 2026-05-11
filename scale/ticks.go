@@ -198,7 +198,7 @@ func containsZero(lmin, lmax, lstep float64) bool {
 }
 
 // dot4 computes the weighted dot product of 4 components.
-func dot4(a, b, c, d float64, w [4]float64) float64 {
+func dot4(a, b, c, d float64, w [4]float64) float64 { //nolint:unparam // d is the legibility score; always 1.0 in current Wilkinson simplification.
 	return a*w[0] + b*w[1] + c*w[2] + d*w[3]
 }
 

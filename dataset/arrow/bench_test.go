@@ -451,6 +451,8 @@ func BenchmarkArrowGroupBySummarize(b *testing.B) {
 // --- MathKernel Benchmarks ---
 
 func benchMathUnary(b *testing.B, _ string, fn func(*arroweng.Engine, dataset.AnyColumn) (dataset.AnyColumn, error)) {
+	b.Helper()
+
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)

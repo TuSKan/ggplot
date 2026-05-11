@@ -54,7 +54,7 @@ func getFloat64Values(t *testing.T, ds dataset.Table, name string) []float64 {
 	return c.Values()
 }
 
-func getInt64Values(t *testing.T, ds dataset.Table, name string) []int64 {
+func getInt64Values(t *testing.T, ds dataset.Table, name string) []int64 { //nolint:unparam // Test helper keeps name generic for reuse.
 	t.Helper()
 
 	col, err := ds.Column(name)

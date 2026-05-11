@@ -128,7 +128,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 
 	namesCol, err := localDistinct.Column(spec.NamesFrom)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("bigquery: %w", err)
 	}
 
 	// Extract string values
@@ -137,7 +137,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 		pivotNames = typedCol.Values()
 	} else {
 		// Fallback: convert to strings
-		for i := int64(0); i < namesCol.Len(); i++ {
+		for i := range namesCol.Len() {
 			pivotNames = append(pivotNames, fmt.Sprintf("v%d", i))
 		}
 	}

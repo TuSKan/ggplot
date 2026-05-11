@@ -87,7 +87,12 @@ func (b *bqBuilder) getOrCreate(name string, dtype dataset.DType) *bqAppender {
 // Creates a temp table, writes all rows using managedwriter, returns lazy bqDataset.
 func (b *bqBuilder) Build() (dataset.Table, error) {
 	if b.nRows == 0 {
-		return b.engine.localEngine().FromColumns(b.schema)
+		result, fErr := b.engine.localEngine().FromColumns(b.schema)
+		if fErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", fErr)
+		}
+
+		return result, nil
 	}
 
 	ctx := b.engine.ctx
