@@ -248,7 +248,7 @@ func facetStrings(ds dataset.Dataset, col string) ([]string, error) {
 			}
 		}
 	default:
-		return nil, fmt.Errorf("facet: unsupported column type %T for %q", c, col)
+		return nil, fmt.Errorf("facet: unsupported column type %T for %q: %w", c, col, ErrFacetConfig)
 	}
 
 	return out, nil

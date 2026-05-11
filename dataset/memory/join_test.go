@@ -71,6 +71,8 @@ func getInt64Values(t *testing.T, ds dataset.Table, name string) []int64 { //nol
 }
 
 func TestInnerJoin(t *testing.T) {
+	t.Parallel()
+
 	left, right := makeJoinDatasets(t)
 	eng := NewEngine(context.Background())
 
@@ -106,6 +108,8 @@ func TestInnerJoin(t *testing.T) {
 }
 
 func TestLeftJoin(t *testing.T) {
+	t.Parallel()
+
 	left, right := makeJoinDatasets(t)
 	eng := NewEngine(context.Background())
 
@@ -143,6 +147,8 @@ func TestLeftJoin(t *testing.T) {
 }
 
 func TestRightJoin(t *testing.T) {
+	t.Parallel()
+
 	left, right := makeJoinDatasets(t)
 	eng := NewEngine(context.Background())
 
@@ -177,6 +183,8 @@ func TestRightJoin(t *testing.T) {
 }
 
 func TestFullJoin(t *testing.T) {
+	t.Parallel()
+
 	left, right := makeJoinDatasets(t)
 	eng := NewEngine(context.Background())
 
@@ -217,6 +225,8 @@ func TestFullJoin(t *testing.T) {
 }
 
 func TestSemiJoin(t *testing.T) {
+	t.Parallel()
+
 	left, right := makeJoinDatasets(t)
 	eng := NewEngine(context.Background())
 
@@ -245,6 +255,8 @@ func TestSemiJoin(t *testing.T) {
 }
 
 func TestAntiJoin(t *testing.T) {
+	t.Parallel()
+
 	left, right := makeJoinDatasets(t)
 	eng := NewEngine(context.Background())
 
@@ -272,6 +284,8 @@ func TestAntiJoin(t *testing.T) {
 }
 
 func TestJoinCompositeKey(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	lSchema := dataset.NewSchema(dataset.IntCol("year"), dataset.StringCol("month"), dataset.FloatCol("x"))
@@ -314,6 +328,8 @@ func TestJoinCompositeKey(t *testing.T) {
 }
 
 func TestJoinDuplicateKeys(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	lSchema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
@@ -343,6 +359,8 @@ func TestJoinDuplicateKeys(t *testing.T) {
 }
 
 func TestJoinNoMatch(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	lSchema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
@@ -390,6 +408,8 @@ func TestJoinNoMatch(t *testing.T) {
 
 // TestJoinFrameAPI tests that the Frame fluent API correctly dispatches to the Joiner.
 func TestJoinFrameAPI(t *testing.T) {
+	t.Parallel()
+
 	left, right := makeJoinDatasets(t)
 
 	result, err := dataset.From(left).

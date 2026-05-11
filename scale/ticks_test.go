@@ -7,6 +7,8 @@ import (
 )
 
 func TestExtendedWilkinson_BasicRange(t *testing.T) {
+	t.Parallel()
+
 	ticks := extendedWilkinson(0, 100, 5)
 	if len(ticks) == 0 {
 		t.Fatal("expected non-empty ticks")
@@ -29,6 +31,8 @@ func TestExtendedWilkinson_BasicRange(t *testing.T) {
 }
 
 func TestExtendedWilkinson_IncludesZero(t *testing.T) {
+	t.Parallel()
+
 	ticks := extendedWilkinson(-50, 50, 5)
 	found := slices.Contains(ticks, 0)
 
@@ -38,6 +42,8 @@ func TestExtendedWilkinson_IncludesZero(t *testing.T) {
 }
 
 func TestExtendedWilkinson_SmallRange(t *testing.T) {
+	t.Parallel()
+
 	ticks := extendedWilkinson(0.1, 0.9, 5)
 	if len(ticks) < 2 {
 		t.Errorf("expected multiple ticks for [0.1, 0.9], got %v", ticks)
@@ -52,6 +58,8 @@ func TestExtendedWilkinson_SmallRange(t *testing.T) {
 }
 
 func TestExtendedWilkinson_LargeRange(t *testing.T) {
+	t.Parallel()
+
 	ticks := extendedWilkinson(0, 1e6, 5)
 	if len(ticks) < 2 {
 		t.Errorf("expected multiple ticks for [0, 1e6], got %v", ticks)
@@ -59,6 +67,8 @@ func TestExtendedWilkinson_LargeRange(t *testing.T) {
 }
 
 func TestExtendedWilkinson_NegativeRange(t *testing.T) {
+	t.Parallel()
+
 	ticks := extendedWilkinson(-100, -10, 5)
 	if len(ticks) < 2 {
 		t.Fatalf("expected multiple ticks, got %v", ticks)
@@ -74,6 +84,8 @@ func TestExtendedWilkinson_NegativeRange(t *testing.T) {
 }
 
 func TestExtendedWilkinson_EqualInputs(t *testing.T) {
+	t.Parallel()
+
 	ticks := extendedWilkinson(5, 5, 5)
 	if len(ticks) != 1 || ticks[0] != 5 {
 		t.Errorf("expected [5], got %v", ticks)
@@ -81,6 +93,8 @@ func TestExtendedWilkinson_EqualInputs(t *testing.T) {
 }
 
 func TestExtendedWilkinson_Inverted(t *testing.T) {
+	t.Parallel()
+
 	ticks := extendedWilkinson(100, 0, 5)
 	if len(ticks) < 2 {
 		t.Errorf("should handle inverted range, got %v", ticks)
@@ -88,6 +102,8 @@ func TestExtendedWilkinson_Inverted(t *testing.T) {
 }
 
 func TestExtendedWilkinson_NiceSteps(t *testing.T) {
+	t.Parallel()
+
 	// For range [0, 10] with 5 ticks, we should get clean step sizes.
 	ticks := extendedWilkinson(0, 10, 5)
 	t.Logf("ticks for [0,10] target 5: %v", ticks)
@@ -114,6 +130,8 @@ func TestExtendedWilkinson_NiceSteps(t *testing.T) {
 }
 
 func TestNiceSequence_UsesExtended(t *testing.T) {
+	t.Parallel()
+
 	// NiceSequence should now delegate to extendedWilkinson.
 	ticks := NiceSequence(0, 100, 5)
 	if len(ticks) < 2 {
@@ -124,6 +142,8 @@ func TestNiceSequence_UsesExtended(t *testing.T) {
 // --- Scoring function tests ---
 
 func TestSimplicity(t *testing.T) {
+	t.Parallel()
+
 	// qi=0, j=1 (best Q, no skip) with zero included should give highest simplicity.
 	s := simplicity(0, 1, -10, 10, 5)
 	if s < 1.0 {
@@ -132,6 +152,8 @@ func TestSimplicity(t *testing.T) {
 }
 
 func TestCoverage(t *testing.T) {
+	t.Parallel()
+
 	// Perfect coverage: labels span exactly the data range.
 	c := coverage(0, 100, 0, 100)
 	if c < 0.99 {
@@ -140,6 +162,8 @@ func TestCoverage(t *testing.T) {
 }
 
 func TestDensity(t *testing.T) {
+	t.Parallel()
+
 	// When k matches target and label range equals data range,
 	// r/rt = 1.0, so density = 2 - max(1, 1) = 1.0.
 	d := density(5, 5, 0, 100, 0, 100)
@@ -149,6 +173,8 @@ func TestDensity(t *testing.T) {
 }
 
 func TestContainsZero(t *testing.T) {
+	t.Parallel()
+
 	if !containsZero(-10, 10, 5) {
 		t.Error("expected containsZero(-10, 10, 5) = true")
 	}

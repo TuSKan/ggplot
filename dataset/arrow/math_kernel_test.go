@@ -33,17 +33,19 @@ func assertClose(t *testing.T, name string, got, want float64) {
 
 func getF64(col dataset.AnyColumn) float64 {
 	type valuer interface{ Values() []float64 }
-	return col.(valuer).Values()[0]
+	return col.(valuer).Values()[0] //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 }
 
 func getI64(col dataset.AnyColumn) int64 {
 	type valuer interface{ Values() []int64 }
-	return col.(valuer).Values()[0]
+	return col.(valuer).Values()[0] //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 }
 
 // --- Arithmetic ---
 
 func TestArrowAddCols(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	a := mathCol(eng, []float64{1, 2, 3})
 	b := mathCol(eng, []float64{10, 20, 30})
@@ -53,13 +55,15 @@ func TestArrowAddCols(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vals := r.(interface{ Values() []float64 }).Values()
+	vals := r.(interface{ Values() []float64 }).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if vals[0] != 11 || vals[1] != 22 || vals[2] != 33 {
 		t.Errorf("AddCols = %v", vals)
 	}
 }
 
 func TestArrowMulScalar(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{2, 4, 6})
 
@@ -68,7 +72,7 @@ func TestArrowMulScalar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vals := r.(interface{ Values() []float64 }).Values()
+	vals := r.(interface{ Values() []float64 }).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if vals[0] != 6 || vals[1] != 12 || vals[2] != 18 {
 		t.Errorf("MulScalar = %v", vals)
 	}
@@ -77,6 +81,8 @@ func TestArrowMulScalar(t *testing.T) {
 // --- Unary ---
 
 func TestArrowAbs(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{-5})
 	r, _ := eng.Abs(col)
@@ -84,6 +90,8 @@ func TestArrowAbs(t *testing.T) {
 }
 
 func TestArrowNeg(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{7})
 	r, _ := eng.Neg(col)
@@ -91,6 +99,8 @@ func TestArrowNeg(t *testing.T) {
 }
 
 func TestArrowSqrt(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{25})
 	r, _ := eng.Sqrt(col)
@@ -98,6 +108,8 @@ func TestArrowSqrt(t *testing.T) {
 }
 
 func TestArrowPow(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{3})
 	r, _ := eng.Pow(col, 4)
@@ -107,6 +119,8 @@ func TestArrowPow(t *testing.T) {
 // --- Transcendental ---
 
 func TestArrowSin(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{math.Pi / 2})
 	r, _ := eng.Sin(col)
@@ -114,6 +128,8 @@ func TestArrowSin(t *testing.T) {
 }
 
 func TestArrowCos(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{0})
 	r, _ := eng.Cos(col)
@@ -121,6 +137,8 @@ func TestArrowCos(t *testing.T) {
 }
 
 func TestArrowLn(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{math.E})
 	r, _ := eng.Ln(col)
@@ -128,6 +146,8 @@ func TestArrowLn(t *testing.T) {
 }
 
 func TestArrowExp(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{1})
 	r, _ := eng.Exp(col)
@@ -135,6 +155,8 @@ func TestArrowExp(t *testing.T) {
 }
 
 func TestArrowTanh(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{0})
 	r, _ := eng.Tanh(col)
@@ -142,6 +164,8 @@ func TestArrowTanh(t *testing.T) {
 }
 
 func TestArrowSigmoid(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{0})
 	r, _ := eng.Sigmoid(col)
@@ -151,6 +175,8 @@ func TestArrowSigmoid(t *testing.T) {
 // --- Rounding ---
 
 func TestArrowRound(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{3.7})
 	r, _ := eng.Round(col)
@@ -158,6 +184,8 @@ func TestArrowRound(t *testing.T) {
 }
 
 func TestArrowFloor(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{2.7})
 	r, _ := eng.Floor(col)
@@ -165,6 +193,8 @@ func TestArrowFloor(t *testing.T) {
 }
 
 func TestArrowCeil(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := mathCol(eng, []float64{2.1})
 	r, _ := eng.Ceil(col)
@@ -174,6 +204,8 @@ func TestArrowCeil(t *testing.T) {
 // --- Bitwise ---
 
 func TestArrowBitAnd(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	a := intCol(eng, []int64{0xFF})
 	b := intCol(eng, []int64{0x0F})
@@ -185,6 +217,8 @@ func TestArrowBitAnd(t *testing.T) {
 }
 
 func TestArrowBitShiftLeft(t *testing.T) {
+	t.Parallel()
+
 	eng := mathEngine()
 	col := intCol(eng, []int64{1})
 

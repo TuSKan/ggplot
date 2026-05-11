@@ -16,7 +16,6 @@ package arrow
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/TuSKan/ggplot/dataset"
@@ -113,7 +112,7 @@ func (e *Engine) NewTimestampColumn(name string, data []int64) dataset.AnyColumn
 // FromColumns builds a Table from pre-built Arrow columns.
 func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) (dataset.Table, error) {
 	if len(cols) == 0 {
-		return nil, errors.New("arrow: FromColumns requires at least one column")
+		return nil, fmt.Errorf("FromColumns: %w", ErrEmptyColumn)
 	}
 
 	length := cols[0].Len()
@@ -121,7 +120,7 @@ func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) 
 	columns := make(map[string]dataset.AnyColumn, len(cols))
 	for _, col := range cols {
 		if col.Len() != length {
-			return nil, fmt.Errorf("arrow: column %q has length %d, expected %d",
+			return nil, fmt.Errorf("arrow: column %q has length %d, expected %d", //nolint:err113 // error contains dynamic context values that vary per call site.
 				col.Name(), col.Len(), length)
 		}
 
@@ -140,7 +139,7 @@ func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 	b.builders = make(map[string]any, schema.NumFields())
 	for i := range schema.NumFields() {
 		f := schema.Field(i)
-		switch f.Dtype { //nolint:exhaustive // intentionally handles subset.
+		switch f.Dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case dataset.DTypeFloat64:
 			b.builders[f.Name] = &arrowFloat64Appender{b: array.NewFloat64Builder(e.alloc)}
 		case dataset.DTypeInt64, dataset.DTypeTimestamp:
@@ -149,6 +148,7 @@ func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 			b.builders[f.Name] = &arrowStringAppender{b: array.NewStringBuilder(e.alloc)}
 		case dataset.DTypeBool:
 			b.builders[f.Name] = &arrowBoolAppender{b: array.NewBooleanBuilder(e.alloc)}
+		default:
 		}
 	}
 
@@ -168,14 +168,14 @@ func (e *Engine) Sum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 		s := math.Int64.Sum(c.arr)
 		return e.NewInt64Column(c.name, []int64{s}), nil
 	default:
-		return nil, fmt.Errorf("arrow: Sum not supported for %T", col)
+		return nil, fmt.Errorf("Sum: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
 // Mean returns a single-element column containing the arithmetic mean.
 func (e *Engine) Mean(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	if col.Len() == 0 {
-		return nil, errors.New("arrow: Mean of empty column")
+		return nil, fmt.Errorf("Mean: %w", ErrEmptyColumn)
 	}
 
 	switch c := col.(type) {
@@ -186,7 +186,7 @@ func (e *Engine) Mean(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 		s := math.Int64.Sum(c.arr)
 		return e.NewFloat64Column(c.name, []float64{float64(s) / float64(c.arr.Len())}), nil
 	default:
-		return nil, fmt.Errorf("arrow: Mean not supported for %T", col)
+		return nil, fmt.Errorf("Mean: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
@@ -196,7 +196,7 @@ func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyCo
 	case *arrowFloat64Column:
 		vals := c.arr.Float64Values()
 		if len(vals) == 0 {
-			return nil, nil, errors.New("arrow: MinMax of empty column")
+			return nil, nil, fmt.Errorf("MinMax: %w", ErrEmptyColumn)
 		}
 
 		lo, hi := simd.SliceMinMax(vals)
@@ -206,7 +206,7 @@ func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyCo
 	case *arrowInt64Column:
 		vals := c.arr.Int64Values()
 		if len(vals) == 0 {
-			return nil, nil, errors.New("arrow: MinMax of empty column")
+			return nil, nil, fmt.Errorf("MinMax: %w", ErrEmptyColumn)
 		}
 
 		lo, hi := simd.SliceMinMax(vals)
@@ -220,7 +220,7 @@ func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyCo
 	case *arrowStringColumn:
 		vals := stringValues(c.arr)
 		if len(vals) == 0 {
-			return nil, nil, errors.New("arrow: MinMax of empty column")
+			return nil, nil, fmt.Errorf("MinMax: %w", ErrEmptyColumn)
 		}
 
 		lo, hi := vals[0], vals[0]
@@ -237,7 +237,7 @@ func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyCo
 		return e.NewStringColumn(c.name, []string{lo}),
 			e.NewStringColumn(c.name, []string{hi}), nil
 	default:
-		return nil, nil, fmt.Errorf("arrow: MinMax not supported for %T", col)
+		return nil, nil, fmt.Errorf("MinMax: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
@@ -265,12 +265,12 @@ func (e *Engine) Count(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) Median(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	ac, ok := col.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: Median requires float64 column, got %T", col)
+		return nil, fmt.Errorf("Median: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	n := ac.arr.Len()
 	if n == 0 {
-		return nil, errors.New("arrow: Median of empty column")
+		return nil, fmt.Errorf("Median: %w", ErrEmptyColumn)
 	}
 	// O(n) partial sort via NthElement — no full sort needed.
 	// Read-only access to Arrow buffer, copy into temp for in-place mutation.
@@ -311,7 +311,7 @@ func (e *Engine) Median(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) Variance(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	ac, ok := col.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: Variance requires float64 column, got %T", col)
+		return nil, fmt.Errorf("Variance: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	vals := ac.arr.Float64Values()
@@ -335,7 +335,7 @@ func (e *Engine) Variance(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 
 // Cast converts a column to the target DType.
 func (e *Engine) Cast(col dataset.AnyColumn, target dataset.DType) (dataset.AnyColumn, error) {
-	switch target { //nolint:exhaustive // handled by default case.
+	switch target { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case dataset.DTypeFloat64:
 		return e.castToFloat64(col)
 	case dataset.DTypeInt64:
@@ -343,7 +343,7 @@ func (e *Engine) Cast(col dataset.AnyColumn, target dataset.DType) (dataset.AnyC
 	case dataset.DTypeString:
 		return e.castToString(col)
 	default:
-		return nil, fmt.Errorf("arrow: unsupported cast to %s", target)
+		return nil, fmt.Errorf("unsupported cast to %s: %w", target, ErrUnsupportedType)
 	}
 }
 
@@ -365,7 +365,7 @@ func (e *Engine) castToFloat64(col dataset.AnyColumn) (dataset.AnyColumn, error)
 
 		return &arrowFloat64Column{name: c.name, arr: b.NewFloat64Array()}, nil
 	default:
-		return nil, fmt.Errorf("arrow: cannot cast %s to float64", col.DType())
+		return nil, fmt.Errorf("arrow: cannot cast %s to float64: %w", col.DType(), ErrUnsupportedType)
 	}
 }
 
@@ -387,7 +387,7 @@ func (e *Engine) castToInt64(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 
 		return &arrowInt64Column{name: c.name, arr: b.NewInt64Array()}, nil
 	default:
-		return nil, fmt.Errorf("arrow: cannot cast %s to int64", col.DType())
+		return nil, fmt.Errorf("arrow: cannot cast %s to int64: %w", col.DType(), ErrUnsupportedType)
 	}
 }
 
@@ -409,7 +409,7 @@ func (e *Engine) castToString(col dataset.AnyColumn) (dataset.AnyColumn, error) 
 
 		return &arrowStringColumn{name: c.name, arr: b.NewStringArray()}, nil
 	default:
-		return nil, fmt.Errorf("arrow: cannot cast %s to string", col.DType())
+		return nil, fmt.Errorf("arrow: cannot cast %s to string: %w", col.DType(), ErrUnsupportedType)
 	}
 }
 
@@ -555,35 +555,36 @@ type arrowBuilder struct {
 }
 
 func (b *arrowBuilder) Float64(col string) dataset.Float64Appender {
-	return b.builders[col].(*arrowFloat64Appender)
+	return b.builders[col].(*arrowFloat64Appender) //nolint:errcheck,forcetypeassert // Builder interface cannot return error.
 }
 func (b *arrowBuilder) Int64(col string) dataset.Int64Appender {
-	return b.builders[col].(*arrowInt64Appender)
+	return b.builders[col].(*arrowInt64Appender) //nolint:errcheck,forcetypeassert // Builder interface cannot return error.
 }
 func (b *arrowBuilder) String(col string) dataset.StringAppender {
-	return b.builders[col].(*arrowStringAppender)
+	return b.builders[col].(*arrowStringAppender) //nolint:errcheck,forcetypeassert // Builder interface cannot return error.
 }
 func (b *arrowBuilder) Bool(col string) dataset.BoolAppender {
-	return b.builders[col].(*arrowBoolAppender)
+	return b.builders[col].(*arrowBoolAppender) //nolint:errcheck,forcetypeassert // Builder interface cannot return error.
 }
 
 func (b *arrowBuilder) Build() (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, b.schema.NumFields())
 	for i := range b.schema.NumFields() {
 		f := b.schema.Field(i)
-		switch f.Dtype { //nolint:exhaustive // intentionally handles subset.
+		switch f.Dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case dataset.DTypeFloat64:
-			a := b.builders[f.Name].(*arrowFloat64Appender)
+			a := b.builders[f.Name].(*arrowFloat64Appender) //nolint:errcheck,forcetypeassert // type guaranteed by builder schema.
 			cols[i] = &arrowFloat64Column{name: f.Name, arr: a.b.NewFloat64Array()}
 		case dataset.DTypeInt64, dataset.DTypeTimestamp:
-			a := b.builders[f.Name].(*arrowInt64Appender)
+			a := b.builders[f.Name].(*arrowInt64Appender) //nolint:errcheck,forcetypeassert // type guaranteed by builder schema.
 			cols[i] = &arrowInt64Column{name: f.Name, arr: a.b.NewInt64Array(), dtype: f.Dtype}
 		case dataset.DTypeString:
-			a := b.builders[f.Name].(*arrowStringAppender)
+			a := b.builders[f.Name].(*arrowStringAppender) //nolint:errcheck,forcetypeassert // type guaranteed by builder schema.
 			cols[i] = &arrowStringColumn{name: f.Name, arr: a.b.NewStringArray()}
 		case dataset.DTypeBool:
-			a := b.builders[f.Name].(*arrowBoolAppender)
+			a := b.builders[f.Name].(*arrowBoolAppender) //nolint:errcheck,forcetypeassert // type guaranteed by builder schema.
 			cols[i] = &arrowBoolColumn{name: f.Name, arr: a.b.NewBooleanArray()}
+		default:
 		}
 	}
 
@@ -660,30 +661,30 @@ func (e *Engine) Select(col dataset.AnyColumn, indices []int) (dataset.AnyColumn
 			return nil, fmt.Errorf("arrow: TakeArray float64: %w", err)
 		}
 
-		return &arrowFloat64Column{name: c.name, arr: result.(*array.Float64)}, nil
+		return &arrowFloat64Column{name: c.name, arr: result.(*array.Float64)}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 	case *arrowInt64Column:
 		result, err := compute.TakeArray(e.Context(), c.arr, idxArr)
 		if err != nil {
 			return nil, fmt.Errorf("arrow: TakeArray int64: %w", err)
 		}
 
-		return &arrowInt64Column{name: c.name, arr: result.(*array.Int64), dtype: c.dtype}, nil
+		return &arrowInt64Column{name: c.name, arr: result.(*array.Int64), dtype: c.dtype}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 	case *arrowStringColumn:
 		result, err := compute.TakeArray(e.Context(), c.arr, idxArr)
 		if err != nil {
 			return nil, fmt.Errorf("arrow: TakeArray string: %w", err)
 		}
 
-		return &arrowStringColumn{name: c.name, arr: result.(*array.String)}, nil
+		return &arrowStringColumn{name: c.name, arr: result.(*array.String)}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 	case *arrowBoolColumn:
 		result, err := compute.TakeArray(e.Context(), c.arr, idxArr)
 		if err != nil {
 			return nil, fmt.Errorf("arrow: TakeArray bool: %w", err)
 		}
 
-		return &arrowBoolColumn{name: c.name, arr: result.(*array.Boolean)}, nil
+		return &arrowBoolColumn{name: c.name, arr: result.(*array.Boolean)}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 	default:
-		return nil, fmt.Errorf("arrow: Select not supported for %T", col)
+		return nil, fmt.Errorf("Select: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
@@ -691,19 +692,19 @@ func (e *Engine) Select(col dataset.AnyColumn, indices []int) (dataset.AnyColumn
 func (e *Engine) Slice(col dataset.AnyColumn, start, end int) (dataset.AnyColumn, error) {
 	switch c := col.(type) {
 	case *arrowFloat64Column:
-		sliced := array.NewSlice(c.arr, int64(start), int64(end)).(*array.Float64)
+		sliced := array.NewSlice(c.arr, int64(start), int64(end)).(*array.Float64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		return &arrowFloat64Column{name: c.name, arr: sliced}, nil
 	case *arrowInt64Column:
-		sliced := array.NewSlice(c.arr, int64(start), int64(end)).(*array.Int64)
+		sliced := array.NewSlice(c.arr, int64(start), int64(end)).(*array.Int64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		return &arrowInt64Column{name: c.name, arr: sliced, dtype: c.dtype}, nil
 	case *arrowStringColumn:
-		sliced := array.NewSlice(c.arr, int64(start), int64(end)).(*array.String)
+		sliced := array.NewSlice(c.arr, int64(start), int64(end)).(*array.String) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		return &arrowStringColumn{name: c.name, arr: sliced}, nil
 	case *arrowBoolColumn:
-		sliced := array.NewSlice(c.arr, int64(start), int64(end)).(*array.Boolean)
+		sliced := array.NewSlice(c.arr, int64(start), int64(end)).(*array.Boolean) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		return &arrowBoolColumn{name: c.name, arr: sliced}, nil
 	default:
-		return nil, fmt.Errorf("arrow: SliceColumn not supported for %T", col)
+		return nil, fmt.Errorf("SliceColumn: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
@@ -722,7 +723,7 @@ func (e *Engine) SortIndices(col dataset.AnyColumn) ([]int, error) {
 	case *arrowBoolColumn:
 		arr = c.arr
 	default:
-		return nil, fmt.Errorf("arrow: SortIndices not supported for %T", col)
+		return nil, fmt.Errorf("SortIndices: %T: %w", col, ErrUnsupportedType)
 	}
 
 	ctx := compute.WithAllocator(e.Context(), e.alloc)
@@ -734,7 +735,7 @@ func (e *Engine) SortIndices(col dataset.AnyColumn) ([]int, error) {
 	}
 	defer result.Release()
 
-	idxArr := result.(*array.Uint64)
+	idxArr := result.(*array.Uint64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 	n := idxArr.Len()
 
 	indices := make([]int, n)
@@ -802,30 +803,30 @@ func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, e
 				return nil, fmt.Errorf("arrow: FilterArray float64: %w", err)
 			}
 
-			cols[i] = &arrowFloat64Column{name: c.name, arr: result.(*array.Float64)}
+			cols[i] = &arrowFloat64Column{name: c.name, arr: result.(*array.Float64)} //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		case *arrowInt64Column:
 			result, err := compute.FilterArray(ctx, c.arr, filterArr, opts)
 			if err != nil {
 				return nil, fmt.Errorf("arrow: FilterArray int64: %w", err)
 			}
 
-			cols[i] = &arrowInt64Column{name: c.name, arr: result.(*array.Int64), dtype: c.dtype}
+			cols[i] = &arrowInt64Column{name: c.name, arr: result.(*array.Int64), dtype: c.dtype} //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		case *arrowStringColumn:
 			result, err := compute.FilterArray(ctx, c.arr, filterArr, opts)
 			if err != nil {
 				return nil, fmt.Errorf("arrow: FilterArray string: %w", err)
 			}
 
-			cols[i] = &arrowStringColumn{name: c.name, arr: result.(*array.String)}
+			cols[i] = &arrowStringColumn{name: c.name, arr: result.(*array.String)} //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		case *arrowBoolColumn:
 			result, err := compute.FilterArray(ctx, c.arr, filterArr, opts)
 			if err != nil {
 				return nil, fmt.Errorf("arrow: FilterArray bool: %w", err)
 			}
 
-			cols[i] = &arrowBoolColumn{name: c.name, arr: result.(*array.Boolean)}
+			cols[i] = &arrowBoolColumn{name: c.name, arr: result.(*array.Boolean)} //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		default:
-			return nil, fmt.Errorf("arrow: Filter not supported for %T", col)
+			return nil, fmt.Errorf("Filter: %T: %w", col, ErrUnsupportedType)
 		}
 	}
 
@@ -925,7 +926,7 @@ func (e *Engine) Fill(col dataset.AnyColumn, dir dataset.FillDirection) (dataset
 
 		return fillUpString(e, c, n)
 	default:
-		return nil, fmt.Errorf("arrow: Fill not supported for %T", col)
+		return nil, fmt.Errorf("Fill: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
@@ -1170,7 +1171,7 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 func (e *Engine) ReplaceNA(col dataset.AnyColumn, defaultVal float64) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: ReplaceNA requires float64 column, got %T", col)
+		return nil, fmt.Errorf("ReplaceNA: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	if c.arr.NullN() == 0 {
@@ -1200,20 +1201,20 @@ func (e *Engine) ReplaceNA(col dataset.AnyColumn, defaultVal float64) (dataset.A
 // Stack vertically concatenates datasets with identical schemas.
 func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
-		return nil, errors.New("arrow: Stack requires at least one dataset")
+		return nil, fmt.Errorf("Stack requires at least one dataset: %w", ErrUnsupportedType)
 	}
 
 	schema := datasets[0].Schema()
 	for i := 1; i < len(datasets); i++ {
 		s := datasets[i].Schema()
 		if s.NumFields() != schema.NumFields() {
-			return nil, fmt.Errorf("arrow: Stack schema mismatch: expected %d fields, dataset %d has %d",
+			return nil, fmt.Errorf("arrow: Stack schema mismatch: expected %d fields, dataset %d has %d", //nolint:err113 // error contains dynamic context values that vary per call site.
 				schema.NumFields(), i, s.NumFields())
 		}
 
 		for j := range schema.NumFields() {
 			if s.Field(j).Name != schema.Field(j).Name || s.Field(j).Dtype != schema.Field(j).Dtype {
-				return nil, fmt.Errorf("arrow: Stack schema mismatch at field %d: %q(%s) vs %q(%s)",
+				return nil, fmt.Errorf("arrow: Stack schema mismatch at field %d: %q(%s) vs %q(%s)", //nolint:err113 // error contains dynamic context values that vary per call site.
 					j, schema.Field(j).Name, schema.Field(j).Dtype, s.Field(j).Name, s.Field(j).Dtype)
 			}
 		}
@@ -1227,13 +1228,13 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, schema.NumFields())
 	for ci := range schema.NumFields() {
 		name := schema.Field(ci).Name
-		switch schema.Field(ci).Dtype { //nolint:exhaustive // intentionally handles subset.
+		switch schema.Field(ci).Dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case dataset.DTypeFloat64:
 			vals := make([]float64, 0, totalLen)
 
 			for _, ds := range datasets {
 				col, _ := ds.Column(name)
-				vals = append(vals, col.(dataset.Column[float64]).Values()...)
+				vals = append(vals, col.(dataset.Column[float64]).Values()...) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 			}
 
 			cols[ci] = e.NewFloat64Column(name, vals)
@@ -1242,7 +1243,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 
 			for _, ds := range datasets {
 				col, _ := ds.Column(name)
-				vals = append(vals, col.(dataset.Column[int64]).Values()...)
+				vals = append(vals, col.(dataset.Column[int64]).Values()...) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 			}
 
 			cols[ci] = e.NewInt64Column(name, vals)
@@ -1251,7 +1252,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 
 			for _, ds := range datasets {
 				col, _ := ds.Column(name)
-				vals = append(vals, col.(dataset.Column[string]).Values()...)
+				vals = append(vals, col.(dataset.Column[string]).Values()...) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 			}
 
 			cols[ci] = e.NewStringColumn(name, vals)
@@ -1260,7 +1261,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 
 			for _, ds := range datasets {
 				col, _ := ds.Column(name)
-				vals = append(vals, col.(dataset.Column[bool]).Values()...)
+				vals = append(vals, col.(dataset.Column[bool]).Values()...) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 			}
 
 			cols[ci] = e.NewBoolColumn(name, vals)
@@ -1269,10 +1270,11 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 
 			for _, ds := range datasets {
 				col, _ := ds.Column(name)
-				vals = append(vals, col.(dataset.Column[int64]).Values()...)
+				vals = append(vals, col.(dataset.Column[int64]).Values()...) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 			}
 
 			cols[ci] = e.NewTimestampColumn(name, vals)
+		default:
 		}
 	}
 
@@ -1282,13 +1284,13 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 // Combine horizontally concatenates datasets of equal row count.
 func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
-		return nil, errors.New("arrow: Combine requires at least one dataset")
+		return nil, fmt.Errorf("Combine requires at least one dataset: %w", ErrUnsupportedType)
 	}
 
 	n := datasets[0].NumRows()
 	for i := 1; i < len(datasets); i++ {
 		if datasets[i].NumRows() != n {
-			return nil, fmt.Errorf("arrow: Combine length mismatch: expected %d, dataset %d has %d",
+			return nil, fmt.Errorf("arrow: Combine length mismatch: expected %d, dataset %d has %d", //nolint:err113 // error contains dynamic context values that vary per call site.
 				n, i, datasets[i].NumRows())
 		}
 	}
@@ -1349,7 +1351,7 @@ func (e *Engine) Lag(col dataset.AnyColumn, offset int) (dataset.AnyColumn, erro
 
 		return &arrowInt64Column{name: c.name, arr: arr, dtype: c.dtype}, nil
 	default:
-		return nil, fmt.Errorf("arrow: Lag not supported for %T", col)
+		return nil, fmt.Errorf("Lag: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
@@ -1390,7 +1392,7 @@ func (e *Engine) Lead(col dataset.AnyColumn, offset int) (dataset.AnyColumn, err
 
 		return &arrowInt64Column{name: c.name, arr: arr, dtype: c.dtype}, nil
 	default:
-		return nil, fmt.Errorf("arrow: Lead not supported for %T", col)
+		return nil, fmt.Errorf("Lead: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
@@ -1427,7 +1429,7 @@ func (e *Engine) CumSum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 
 		return &arrowInt64Column{name: c.name, arr: arr, dtype: c.dtype}, nil
 	default:
-		return nil, fmt.Errorf("arrow: CumSum not supported for %T", col)
+		return nil, fmt.Errorf("CumSum: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
@@ -1480,7 +1482,7 @@ func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) { //no
 
 		return &arrowInt64Column{name: c.name, arr: arr, dtype: c.dtype}, nil
 	default:
-		return nil, fmt.Errorf("arrow: CumMax not supported for %T", col)
+		return nil, fmt.Errorf("CumMax: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
@@ -1533,7 +1535,7 @@ func (e *Engine) CumMin(col dataset.AnyColumn) (dataset.AnyColumn, error) { //no
 
 		return &arrowInt64Column{name: c.name, arr: arr, dtype: c.dtype}, nil
 	default:
-		return nil, fmt.Errorf("arrow: CumMin not supported for %T", col)
+		return nil, fmt.Errorf("CumMin: %T: %w", col, ErrUnsupportedType)
 	}
 }
 
@@ -1576,7 +1578,7 @@ func (e *Engine) Rank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 			}
 		}
 	default:
-		return nil, fmt.Errorf("arrow: Rank not supported for %T", col)
+		return nil, fmt.Errorf("Rank: %T: %w", col, ErrUnsupportedType)
 	}
 
 	b := array.NewInt64Builder(e.alloc)
@@ -1627,7 +1629,7 @@ func (e *Engine) DenseRank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 			ranks[idx] = denseRank
 		}
 	default:
-		return nil, fmt.Errorf("arrow: DenseRank not supported for %T", col)
+		return nil, fmt.Errorf("DenseRank: %T: %w", col, ErrUnsupportedType)
 	}
 
 	b := array.NewInt64Builder(e.alloc)
@@ -1646,7 +1648,11 @@ func (e *Engine) PercentRank(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 		return nil, err
 	}
 
-	rc := rankCol.(*arrowInt64Column)
+	rc, ok := rankCol.(*arrowInt64Column)
+	if !ok {
+		return nil, fmt.Errorf("expected *arrowInt64Column, got %T: %w", rankCol, ErrTakeTypeMismatch)
+	}
+
 	n := rc.arr.Len()
 	b := array.NewFloat64Builder(e.alloc)
 	b.Reserve(n)

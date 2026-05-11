@@ -10,6 +10,8 @@ import (
 )
 
 func TestPivotLonger(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	// Wide format: id, Q1, Q2, Q3
@@ -79,6 +81,8 @@ func TestPivotLonger(t *testing.T) {
 }
 
 func TestPivotWider(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	// Long format: id, quarter, revenue
@@ -138,6 +142,8 @@ func TestPivotWider(t *testing.T) {
 }
 
 func TestPivotRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	schema := dataset.NewSchema(
@@ -188,6 +194,8 @@ func TestPivotRoundTrip(t *testing.T) {
 }
 
 func TestSeparate(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	schema := dataset.NewSchema(dataset.StringCol("date"), dataset.FloatCol("x"))
@@ -224,6 +232,8 @@ func TestSeparate(t *testing.T) {
 }
 
 func TestConcatenate(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	schema := dataset.NewSchema(
@@ -256,6 +266,8 @@ func TestConcatenate(t *testing.T) {
 }
 
 func TestSeparateConcatenateRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	schema := dataset.NewSchema(dataset.StringCol("date"))
@@ -273,6 +285,8 @@ func TestSeparateConcatenateRoundTrip(t *testing.T) {
 }
 
 func TestComplete(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	// Missing combination: (A, 2025) is not present.
@@ -299,6 +313,8 @@ func TestComplete(t *testing.T) {
 }
 
 func TestCompleteWithMissing(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	// Missing combination: (B, 2025) is absent.
@@ -333,6 +349,8 @@ func TestCompleteWithMissing(t *testing.T) {
 }
 
 func TestPivotLongerFrameAPI(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background())
 
 	schema := dataset.NewSchema(

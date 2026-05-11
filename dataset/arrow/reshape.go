@@ -1,7 +1,6 @@
 package arrow
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -15,7 +14,7 @@ import (
 // PivotLonger reshapes a wide dataset to long format.
 func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (dataset.Table, error) {
 	if len(spec.Cols) == 0 {
-		return nil, errors.New("arrow: PivotLonger requires at least one column to pivot")
+		return nil, fmt.Errorf("PivotLonger requires at least one column to pivot: %w", ErrUnsupportedType)
 	}
 
 	if spec.NamesTo == "" {
@@ -35,7 +34,7 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 
 	for _, name := range spec.Cols {
 		if !schema.HasField(name) {
-			return nil, fmt.Errorf("arrow: PivotLonger: column %q not found", name)
+			return nil, fmt.Errorf("arrow: PivotLonger: column %q not found: %w", name, ErrUnsupportedType)
 		}
 
 		pivotSet[name] = true
@@ -49,7 +48,7 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 		if i == 0 {
 			pivotDType = f.Dtype
 		} else if f.Dtype != pivotDType {
-			return nil, fmt.Errorf("arrow: PivotLonger: column %q has type %s, expected %s",
+			return nil, fmt.Errorf("arrow: PivotLonger: column %q has type %s, expected %s", //nolint:err113 // error contains dynamic context values that vary per call site.
 				name, f.Dtype, pivotDType)
 		}
 	}
@@ -159,7 +158,7 @@ func (e *Engine) arrowRepeatColumn(col dataset.AnyColumn, times, outLen int, nam
 
 func (e *Engine) arrowGatherPivotValues(ds dataset.Table, cols []string, dtype dataset.DType,
 	nRows, _ /* nPivot */, outLen int, name string) dataset.AnyColumn {
-	switch dtype { //nolint:exhaustive // handled by default case.
+	switch dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case dataset.DTypeFloat64:
 		b := array.NewFloat64Builder(e.alloc)
 		defer b.Release()
@@ -169,7 +168,7 @@ func (e *Engine) arrowGatherPivotValues(ds dataset.Table, cols []string, dtype d
 		pivotCols := make([]*arrowFloat64Column, len(cols))
 		for i, cn := range cols {
 			c, _ := ds.Column(cn)
-			pivotCols[i] = c.(*arrowFloat64Column)
+			pivotCols[i] = c.(*arrowFloat64Column) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		}
 
 		for row := range nRows {
@@ -188,7 +187,7 @@ func (e *Engine) arrowGatherPivotValues(ds dataset.Table, cols []string, dtype d
 		pivotCols := make([]*arrowInt64Column, len(cols))
 		for i, cn := range cols {
 			c, _ := ds.Column(cn)
-			pivotCols[i] = c.(*arrowInt64Column)
+			pivotCols[i] = c.(*arrowInt64Column) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		}
 
 		for row := range nRows {
@@ -207,7 +206,7 @@ func (e *Engine) arrowGatherPivotValues(ds dataset.Table, cols []string, dtype d
 		pivotCols := make([]*arrowStringColumn, len(cols))
 		for i, cn := range cols {
 			c, _ := ds.Column(cn)
-			pivotCols[i] = c.(*arrowStringColumn)
+			pivotCols[i] = c.(*arrowStringColumn) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		}
 
 		for row := range nRows {
@@ -225,7 +224,7 @@ func (e *Engine) arrowGatherPivotValues(ds dataset.Table, cols []string, dtype d
 // PivotWider reshapes a long dataset to wide format.
 func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (dataset.Table, error) { //nolint:gocognit // PivotWider is a complex pipeline — splitting reduces clarity.
 	if spec.NamesFrom == "" || spec.ValuesFrom == "" {
-		return nil, errors.New("arrow: PivotWider requires NamesFrom and ValuesFrom")
+		return nil, fmt.Errorf("PivotWider requires NamesFrom and ValuesFrom: %w", ErrUnsupportedType)
 	}
 
 	schema := ds.Schema()
@@ -243,7 +242,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 
 	nameStr, ok := nameCol.(*arrowStringColumn)
 	if !ok {
-		return nil, fmt.Errorf("arrow: PivotWider: NamesFrom %q must be string column", spec.NamesFrom)
+		return nil, fmt.Errorf("arrow: PivotWider: NamesFrom %q must be string column: %w", spec.NamesFrom, ErrUnsupportedType)
 	}
 
 	// Find unique pivot names.
@@ -427,7 +426,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 			b.Release()
 		}
 	default:
-		return nil, fmt.Errorf("arrow: PivotWider: unsupported value type %s", valDType)
+		return nil, fmt.Errorf("arrow: PivotWider: unsupported value type %s: %w", valDType, ErrUnsupportedType)
 	}
 
 	return e.FromColumns(outSchema, outCols...)
@@ -464,7 +463,7 @@ func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep strin
 
 	sc, ok := srcCol.(*arrowStringColumn)
 	if !ok {
-		return nil, fmt.Errorf("arrow: Separate: column %q must be string", col)
+		return nil, fmt.Errorf("arrow: Separate: column %q must be string: %w", col, ErrUnsupportedType)
 	}
 
 	n := int(ds.NumRows())
@@ -524,7 +523,7 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 
 		sc, ok := c.(*arrowStringColumn)
 		if !ok {
-			return nil, fmt.Errorf("arrow: Concatenate: column %q must be string", name)
+			return nil, fmt.Errorf("arrow: Concatenate: column %q must be string: %w", name, ErrUnsupportedType)
 		}
 
 		srcCols[i] = sc

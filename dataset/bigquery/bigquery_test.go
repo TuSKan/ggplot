@@ -10,6 +10,8 @@ import (
 // --- Predicate Expr() ---
 
 func TestCompPredExpr(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		pred interface{ Expr() string }
@@ -32,6 +34,8 @@ func TestCompPredExpr(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := tt.pred.Expr()
 			if got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
@@ -43,6 +47,8 @@ func TestCompPredExpr(t *testing.T) {
 // --- DType SQL mapping ---
 
 func TestDtypeToBQSQL(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		dt   dataset.DType
 		want string

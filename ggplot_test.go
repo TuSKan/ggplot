@@ -38,6 +38,8 @@ func testDataset(t *testing.T) dataset.Dataset {
 // --- Builder API tests ---
 
 func TestNew_ReturnsNonNil(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"))
@@ -47,6 +49,8 @@ func TestNew_ReturnsNonNil(t *testing.T) {
 }
 
 func TestPlot_Layer_Immutable(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	base := ggplot.New(ds, aes.X("x"), aes.Y("y"))
 	withPoint := base.Layer(geom.Point())
@@ -58,6 +62,8 @@ func TestPlot_Layer_Immutable(t *testing.T) {
 }
 
 func TestPlot_Aes_DoesNotMutateParent(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	base := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point())
@@ -90,6 +96,8 @@ func TestPlot_Aes_DoesNotMutateParent(t *testing.T) {
 }
 
 func TestPlot_Clone_Independence(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	base := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -115,6 +123,8 @@ func TestPlot_Clone_Independence(t *testing.T) {
 }
 
 func TestPlot_NoLayers_Error(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"))
 
@@ -125,6 +135,8 @@ func TestPlot_NoLayers_Error(t *testing.T) {
 }
 
 func TestPlot_NilDataset_Error(t *testing.T) {
+	t.Parallel()
+
 	p := ggplot.New(dataset.Dataset{}, aes.X("x")).
 		Layer(geom.Point())
 
@@ -137,6 +149,8 @@ func TestPlot_NilDataset_Error(t *testing.T) {
 // --- Rendering tests (all geom types) ---
 
 func TestRender_Point(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(4), geom.WithColor("#FF0000")))
@@ -152,6 +166,8 @@ func TestRender_Point(t *testing.T) {
 }
 
 func TestRender_Line(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#0000FF"), geom.WithLineWidth(3)))
@@ -163,6 +179,8 @@ func TestRender_Line(t *testing.T) {
 }
 
 func TestRender_Bar(t *testing.T) {
+	t.Parallel()
+
 	eng2 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng2,
 		eng2.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
@@ -178,6 +196,8 @@ func TestRender_Bar(t *testing.T) {
 }
 
 func TestRender_Histogram(t *testing.T) {
+	t.Parallel()
+
 	xs := make([]float64, 500)
 	for i := range xs {
 		xs[i] = rand.NormFloat64()*5 + 10
@@ -196,6 +216,8 @@ func TestRender_Histogram(t *testing.T) {
 }
 
 func TestRender_Histogram_StatTransform(t *testing.T) {
+	t.Parallel()
+
 	// Verify the stat transform actually runs: histogram should produce
 	// binned data, not raw data.
 	xs := make([]float64, 100)
@@ -216,6 +238,8 @@ func TestRender_Histogram_StatTransform(t *testing.T) {
 }
 
 func TestRender_Area(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Area(geom.WithFill("#2ecc71"), geom.WithAlpha(0.6)))
@@ -227,6 +251,8 @@ func TestRender_Area(t *testing.T) {
 }
 
 func TestRender_Smooth(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Smooth(geom.WithMethod("lm"), geom.WithColor("#E74C3C")))
@@ -238,6 +264,8 @@ func TestRender_Smooth(t *testing.T) {
 }
 
 func TestRender_Density(t *testing.T) {
+	t.Parallel()
+
 	xs := make([]float64, 200)
 	for i := range xs {
 		xs[i] = rand.NormFloat64()
@@ -256,6 +284,8 @@ func TestRender_Density(t *testing.T) {
 }
 
 func TestRender_Step(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Step(geom.WithColor("#1abc9c")))
@@ -269,6 +299,8 @@ func TestRender_Step(t *testing.T) {
 // --- Multi-layer tests ---
 
 func TestRender_MultiLayer_PointAndLine(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("#FF0000"))).
@@ -281,6 +313,8 @@ func TestRender_MultiLayer_PointAndLine(t *testing.T) {
 }
 
 func TestRender_MultiLayer_PointAndSmooth(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(3))).
@@ -293,6 +327,8 @@ func TestRender_MultiLayer_PointAndSmooth(t *testing.T) {
 }
 
 func TestRender_MultiLayer_ThreeLayers(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("#FF0000"))).
@@ -308,6 +344,8 @@ func TestRender_MultiLayer_ThreeLayers(t *testing.T) {
 // --- Labels ---
 
 func TestRender_Labels(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -328,6 +366,8 @@ func TestRender_Labels(t *testing.T) {
 // --- Coord ---
 
 func TestRender_CoordFlip(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -342,6 +382,8 @@ func TestRender_CoordFlip(t *testing.T) {
 // --- Save ---
 
 func TestPlot_Save_PNG(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -363,6 +405,8 @@ func TestPlot_Save_PNG(t *testing.T) {
 }
 
 func TestPlot_Save_Histogram(t *testing.T) {
+	t.Parallel()
+
 	xs := make([]float64, 100)
 	for i := range xs {
 		xs[i] = rand.NormFloat64()
@@ -391,6 +435,8 @@ func TestPlot_Save_Histogram(t *testing.T) {
 }
 
 func TestPlot_Save_AllGeomTypes(t *testing.T) {
+	t.Parallel()
+
 	// End-to-end: build and save a plot for each geom type.
 	xs := make([]float64, 50)
 	ys := make([]float64, 50)
@@ -419,6 +465,8 @@ func TestPlot_Save_AllGeomTypes(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			var p *ggplot.Plot
 			if tc.needY {
 				p = ggplot.New(ds, aes.X("x"), aes.Y("y")).Layer(tc.layer)
@@ -444,6 +492,8 @@ func TestPlot_Save_AllGeomTypes(t *testing.T) {
 // --- Facet ---
 
 func TestFacetNone(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 
 	panels, err := facet.None().Split(context.Background(), ds)
@@ -459,6 +509,8 @@ func TestFacetNone(t *testing.T) {
 // --- Coord ---
 
 func TestCartesianTransform(t *testing.T) {
+	t.Parallel()
+
 	c := coord.Cartesian()
 
 	px, py := c.Transform(0.5, 0.5, 100, 100)
@@ -470,6 +522,8 @@ func TestCartesianTransform(t *testing.T) {
 // --- Edge cases ---
 
 func TestRender_SingleDataPoint(t *testing.T) {
+	t.Parallel()
+
 	eng8 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng8,
 		eng8.NewFloat64Column("x", []float64{5}),
@@ -485,6 +539,8 @@ func TestRender_SingleDataPoint(t *testing.T) {
 }
 
 func TestRender_TwoDataPoints(t *testing.T) {
+	t.Parallel()
+
 	eng9 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng9,
 		eng9.NewFloat64Column("x", []float64{0, 100}),
@@ -500,6 +556,8 @@ func TestRender_TwoDataPoints(t *testing.T) {
 }
 
 func TestRender_LargeDataset(t *testing.T) {
+	t.Parallel()
+
 	n := 10000
 	xs := make([]float64, n)
 	ys := make([]float64, n)
@@ -522,6 +580,8 @@ func TestRender_LargeDataset(t *testing.T) {
 }
 
 func TestRender_NegativeValues(t *testing.T) {
+	t.Parallel()
+
 	eng11 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng11,
 		eng11.NewFloat64Column("x", []float64{-5, -3, -1, 1, 3, 5}),
@@ -538,6 +598,8 @@ func TestRender_NegativeValues(t *testing.T) {
 }
 
 func TestRender_ConstantY(t *testing.T) {
+	t.Parallel()
+
 	eng12 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng12,
 		eng12.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
@@ -572,6 +634,8 @@ func groupedDataset(t *testing.T) dataset.Dataset {
 }
 
 func TestRender_ColorMapping_Point(t *testing.T) {
+	t.Parallel()
+
 	ds := groupedDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Point(geom.WithSize(5)))
@@ -587,6 +651,8 @@ func TestRender_ColorMapping_Point(t *testing.T) {
 }
 
 func TestRender_ColorMapping_Line(t *testing.T) {
+	t.Parallel()
+
 	ds := groupedDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Line())
@@ -598,6 +664,8 @@ func TestRender_ColorMapping_Line(t *testing.T) {
 }
 
 func TestRender_ColorMapping_WithLegend(t *testing.T) {
+	t.Parallel()
+
 	ds := groupedDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Point()).
@@ -610,6 +678,8 @@ func TestRender_ColorMapping_WithLegend(t *testing.T) {
 }
 
 func TestRender_ColorMapping_ManyGroups(t *testing.T) {
+	t.Parallel()
+
 	// 10 groups to exercise palette wrap-around.
 	n := 100
 	xs := make([]float64, n)
@@ -641,6 +711,8 @@ func TestRender_ColorMapping_ManyGroups(t *testing.T) {
 // --- XLim / YLim tests ---
 
 func TestRender_XLim(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -653,6 +725,8 @@ func TestRender_XLim(t *testing.T) {
 }
 
 func TestRender_YLim(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -665,6 +739,8 @@ func TestRender_YLim(t *testing.T) {
 }
 
 func TestRender_XLim_YLim_Combined(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line()).
@@ -678,6 +754,8 @@ func TestRender_XLim_YLim_Combined(t *testing.T) {
 }
 
 func TestRender_XLim_NaN_PartialOverride(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	// Only override min, let max auto-detect.
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -693,6 +771,8 @@ func TestRender_XLim_NaN_PartialOverride(t *testing.T) {
 // --- CoordFlip / Orientation tests ---
 
 func TestRender_CoordFlip_Point(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -705,6 +785,8 @@ func TestRender_CoordFlip_Point(t *testing.T) {
 }
 
 func TestRender_CoordFlip_Bar(t *testing.T) {
+	t.Parallel()
+
 	eng15 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng15,
 		eng15.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
@@ -721,6 +803,8 @@ func TestRender_CoordFlip_Bar(t *testing.T) {
 }
 
 func TestOrientation_HorizontalBar(t *testing.T) {
+	t.Parallel()
+
 	eng16 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng16,
 		eng16.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
@@ -737,6 +821,8 @@ func TestOrientation_HorizontalBar(t *testing.T) {
 }
 
 func TestOrientation_HorizontalBoxplot(t *testing.T) {
+	t.Parallel()
+
 	groups := make([]string, 0, 30)
 	vals := make([]float64, 0, 30)
 
@@ -762,6 +848,8 @@ func TestOrientation_HorizontalBoxplot(t *testing.T) {
 // --- Step geom tests ---
 
 func TestRender_StepGeom(t *testing.T) {
+	t.Parallel()
+
 	eng18 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng18,
 		eng18.NewFloat64Column("x", []float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}),
@@ -777,6 +865,8 @@ func TestRender_StepGeom(t *testing.T) {
 }
 
 func TestRender_Step_ColorMapping(t *testing.T) {
+	t.Parallel()
+
 	ds := groupedDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Step())
@@ -790,6 +880,8 @@ func TestRender_Step_ColorMapping(t *testing.T) {
 // --- Rug geom tests ---
 
 func TestRender_Rug(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -804,6 +896,8 @@ func TestRender_Rug(t *testing.T) {
 // --- Combined feature tests ---
 
 func TestRender_AllNewFeatures(t *testing.T) {
+	t.Parallel()
+
 	// Exercise color mapping + legend + xlim + step + rug all together.
 	ds := groupedDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
@@ -827,6 +921,8 @@ func TestRender_AllNewFeatures(t *testing.T) {
 // --- Save integration tests (write actual PNGs for visual inspection) ---
 
 func TestSave_ColorMapping(t *testing.T) {
+	t.Parallel()
+
 	ds := groupedDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Point(geom.WithSize(6))).
@@ -846,6 +942,8 @@ func TestSave_ColorMapping(t *testing.T) {
 }
 
 func TestSave_XLimYLim(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -867,6 +965,8 @@ func TestSave_XLimYLim(t *testing.T) {
 }
 
 func TestSave_StepWithLegend(t *testing.T) {
+	t.Parallel()
+
 	ds := groupedDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Step(geom.WithLineWidth(2))).
@@ -888,6 +988,8 @@ func TestSave_StepWithLegend(t *testing.T) {
 // --- HLine / VLine tests ---
 
 func TestRender_HLine(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line()).
@@ -900,6 +1002,8 @@ func TestRender_HLine(t *testing.T) {
 }
 
 func TestRender_VLine(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
@@ -912,6 +1016,8 @@ func TestRender_VLine(t *testing.T) {
 }
 
 func TestRender_HLine_VLine_Combined(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line()).
@@ -925,6 +1031,8 @@ func TestRender_HLine_VLine_Combined(t *testing.T) {
 }
 
 func TestRender_HLine_OutOfRange(t *testing.T) {
+	t.Parallel()
+
 	ds := testDataset(t)
 	// Intercept way outside the Y range — should not crash.
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -940,6 +1048,8 @@ func TestRender_HLine_OutOfRange(t *testing.T) {
 // --- Text tests ---
 
 func TestRender_Text(t *testing.T) {
+	t.Parallel()
+
 	eng19 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng19,
 		eng19.NewFloat64Column("x", []float64{1, 2, 3}),
@@ -957,6 +1067,8 @@ func TestRender_Text(t *testing.T) {
 }
 
 func TestRender_Text_NoLabelColumn(t *testing.T) {
+	t.Parallel()
+
 	// No "label" column — should fall back to Y values.
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
@@ -971,6 +1083,8 @@ func TestRender_Text_NoLabelColumn(t *testing.T) {
 // --- geom.Col tests ---
 
 func TestRender_Col(t *testing.T) {
+	t.Parallel()
+
 	eng20 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng20,
 		eng20.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
@@ -988,6 +1102,8 @@ func TestRender_Col(t *testing.T) {
 // --- WithLabel legend test ---
 
 func TestRender_WithLabel_Legend(t *testing.T) {
+	t.Parallel()
+
 	eng21 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng21,
 		eng21.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
@@ -1008,6 +1124,8 @@ func TestRender_WithLabel_Legend(t *testing.T) {
 // --- Discrete Scale (Categorical X) tests ---
 
 func TestRender_CategoricalBars(t *testing.T) {
+	t.Parallel()
+
 	eng22 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng22,
 		eng22.NewStringColumn("city", []string{"A", "B", "C"}),
@@ -1023,6 +1141,8 @@ func TestRender_CategoricalBars(t *testing.T) {
 }
 
 func TestRender_CategoricalBars_ManyCategories(t *testing.T) {
+	t.Parallel()
+
 	cities := []string{"London", "Paris", "Berlin", "Madrid", "Rome", "Vienna", "Prague"}
 
 	values := make([]float64, len(cities))
@@ -1047,6 +1167,8 @@ func TestRender_CategoricalBars_ManyCategories(t *testing.T) {
 // --- Boxplot tests ---
 
 func TestRender_Boxplot(t *testing.T) {
+	t.Parallel()
+
 	// 3 groups, each with 10 values.
 	x := make([]float64, 30)
 	y := make([]float64, 30)
@@ -1068,6 +1190,8 @@ func TestRender_Boxplot(t *testing.T) {
 }
 
 func TestRender_Boxplot_SingleGroup(t *testing.T) {
+	t.Parallel()
+
 	y := []float64{10, 20, 30, 40, 50, 25, 35}
 
 	x := make([]float64, len(y))
@@ -1089,6 +1213,8 @@ func TestRender_Boxplot_SingleGroup(t *testing.T) {
 // --- SVG/PDF output tests ---
 
 func TestSave_SVG(t *testing.T) { //nolint:dupl // type-specialized code path.
+	t.Parallel()
+
 	ds, _ := dataset.NewDataset(
 		memory.NewEngine(context.Background()),
 		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4}),
@@ -1122,6 +1248,8 @@ func TestSave_SVG(t *testing.T) { //nolint:dupl // type-specialized code path.
 }
 
 func TestSave_PDF(t *testing.T) { //nolint:dupl // type-specialized code path.
+	t.Parallel()
+
 	ds, _ := dataset.NewDataset(
 		memory.NewEngine(context.Background()),
 		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4}),
@@ -1155,6 +1283,8 @@ func TestSave_PDF(t *testing.T) { //nolint:dupl // type-specialized code path.
 }
 
 func TestWriteTo_SVG(t *testing.T) { //nolint:dupl // type-specialized code path.
+	t.Parallel()
+
 	ds, _ := dataset.NewDataset(
 		memory.NewEngine(context.Background()),
 		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3}),
@@ -1180,6 +1310,8 @@ func TestWriteTo_SVG(t *testing.T) { //nolint:dupl // type-specialized code path
 }
 
 func TestWriteTo_PDF(t *testing.T) { //nolint:dupl // type-specialized code path.
+	t.Parallel()
+
 	ds, _ := dataset.NewDataset(
 		memory.NewEngine(context.Background()),
 		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3}),

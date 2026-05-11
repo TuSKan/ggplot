@@ -1,7 +1,6 @@
 package bigquery
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -29,7 +28,7 @@ func (e *Engine) execToTempTable(sql string) (tableRef, *bigquery.TableMetadata,
 				"mb", fmt.Sprintf("%.2f", float64(total)/(1<<20)))
 		}
 
-		return tableRef{}, nil, errors.New("bigquery: dry-run mode — query not executed")
+		return tableRef{}, nil, fmt.Errorf("dry-run mode — query not executed: %w", ErrUnsupportedType)
 	}
 
 	// MaxQueryBytes guard
@@ -46,7 +45,7 @@ func (e *Engine) execToTempTable(sql string) (tableRef, *bigquery.TableMetadata,
 		if status.Statistics != nil {
 			total := status.Statistics.TotalBytesProcessed
 			if total > e.quota.MaxQueryBytes {
-				return tableRef{}, nil, fmt.Errorf(
+				return tableRef{}, nil, fmt.Errorf( //nolint:err113 // error contains dynamic context values that vary per call site.
 					"bigquery: query would process %d bytes (limit: %d bytes)",
 					total, e.quota.MaxQueryBytes)
 			}

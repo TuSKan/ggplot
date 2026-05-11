@@ -2,7 +2,6 @@ package dataset
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"hash"
 	"hash/fnv"
@@ -42,7 +41,7 @@ func From(ds Table) Dataset {
 func NewDataset(eng Engine, cols ...AnyColumn) (Dataset, error) {
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
-		return Dataset{}, fmt.Errorf("engine %q does not support ColumnFactory", eng.Name())
+		return Dataset{}, fmt.Errorf("engine %q: %s: %w", eng.Name(), "ColumnFactory", ErrUnsupportedEngine)
 	}
 
 	fields := make([]Field, len(cols))
@@ -82,7 +81,7 @@ func (f Dataset) Table() Table {
 // Column retrieves a named column. Requires a collected Dataset.
 func (f Dataset) Column(name string) (AnyColumn, error) {
 	if f.tbl == nil {
-		return nil, errors.New("dataset: Column() on uncollected Dataset — call Collect(ctx) first")
+		return nil, ErrUncollected
 	}
 
 	col, colErr := f.tbl.Column(name)
@@ -143,7 +142,7 @@ func (f Dataset) requireEngine() (Engine, Dataset) {
 	}
 
 	if eng == nil {
-		return nil, f.withError(errors.New("dataset: Dataset requires an engine"))
+		return nil, f.withError(ErrNoEngine)
 	}
 
 	return eng, f
@@ -153,12 +152,12 @@ func (f Dataset) requireEngine() (Engine, Dataset) {
 func (f Dataset) requireSelector(eng Engine) (Selector, ColumnFactory, error) {
 	sel, ok := eng.(Selector)
 	if !ok {
-		return nil, nil, fmt.Errorf("engine %q does not support Selector", eng.Name())
+		return nil, nil, fmt.Errorf("engine %q: %s: %w", eng.Name(), "Selector", ErrUnsupportedEngine)
 	}
 
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
-		return nil, nil, fmt.Errorf("engine %q does not support ColumnFactory", eng.Name())
+		return nil, nil, fmt.Errorf("engine %q: %s: %w", eng.Name(), "ColumnFactory", ErrUnsupportedEngine)
 	}
 
 	return sel, factory, nil
@@ -184,7 +183,7 @@ func (f Dataset) execSelect(cols []string) Dataset {
 
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: ColumnFactory: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	fields := make([]Field, 0, len(cols))
@@ -224,7 +223,7 @@ func (f Dataset) execRename(oldName, newName string) Dataset {
 
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: ColumnFactory: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	schema := f.tbl.Schema()
@@ -307,7 +306,7 @@ func (f Dataset) execFilter(mask Masker) Dataset {
 // The Dataset must be materialised (collected). Use on collected datasets only.
 func (f Dataset) SelectRows(indices []int) (Dataset, error) {
 	if f.tbl == nil {
-		return f, errors.New("dataset: SelectRows requires a materialised dataset (call Collect first)")
+		return f, ErrUncollected
 	}
 
 	eng := f.eng
@@ -317,12 +316,12 @@ func (f Dataset) SelectRows(indices []int) (Dataset, error) {
 
 	sel, ok := eng.(Selector)
 	if !ok {
-		return f, fmt.Errorf("engine %q does not support Selector", eng.Name())
+		return f, fmt.Errorf("engine %q: %s: %w", eng.Name(), "Selector", ErrUnsupportedEngine)
 	}
 
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
-		return f, fmt.Errorf("engine %q does not support ColumnFactory", eng.Name())
+		return f, fmt.Errorf("engine %q: %s: %w", eng.Name(), "ColumnFactory", ErrUnsupportedEngine)
 	}
 
 	ds, err := applySelect(sel, factory, f.tbl, indices)
@@ -435,7 +434,7 @@ func (f Dataset) execSlice(start, end int) Dataset {
 	}
 
 	if start >= end {
-		return f.withError(fmt.Errorf("dataset: Slice start (%d) >= end (%d)", start, end))
+		return f.withError(fmt.Errorf("start %d >= end %d: %w", start, end, ErrInvalidSlice))
 	}
 
 	ds, err := applySlice(sel, factory, f.tbl, start, end)
@@ -531,7 +530,7 @@ func (f Dataset) execJoin(other Table, spec JoinSpec) Dataset {
 
 	joiner, ok := eng.(Joiner)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support Joiner", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: Joiner: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	ds, err := joiner.Join(f.tbl, other, spec)
@@ -567,7 +566,7 @@ func (f Dataset) execPivotLonger(spec PivotLongerSpec) Dataset {
 
 	reshaper, ok := eng.(Reshaper)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support Reshaper", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: Reshaper: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	ds, err := reshaper.PivotLonger(f.tbl, spec)
@@ -586,7 +585,7 @@ func (f Dataset) execPivotWider(spec PivotWiderSpec) Dataset {
 
 	reshaper, ok := eng.(Reshaper)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support Reshaper", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: Reshaper: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	ds, err := reshaper.PivotWider(f.tbl, spec)
@@ -605,7 +604,7 @@ func (f Dataset) execSeparate(col string, into []string, sep string) Dataset {
 
 	reshaper, ok := eng.(Reshaper)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support Reshaper", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: Reshaper: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	ds, err := reshaper.Separate(f.tbl, col, into, sep)
@@ -636,12 +635,12 @@ func (f Dataset) execFill(col string, dir FillDirection) Dataset {
 
 	filler, ok := eng.(Filler)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support Filler", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: Filler: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	factory, ok2 := eng.(ColumnFactory)
 	if !ok2 {
-		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: ColumnFactory: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	c, err := f.tbl.Column(col)
@@ -665,7 +664,7 @@ func (f Dataset) execDropNA(cols []string) Dataset {
 
 	filler, ok := eng.(Filler)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support Filler", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: Filler: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	ds, err := filler.DropNA(f.tbl, cols...)
@@ -696,7 +695,7 @@ func (f Dataset) execStack(others []Table) Dataset {
 
 	composer, ok := eng.(Composer)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support Composer", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: Composer: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	all := append([]Table{f.tbl}, others...)
@@ -717,7 +716,7 @@ func (f Dataset) execCombine(others []Table) Dataset {
 
 	composer, ok := eng.(Composer)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support Composer", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: Composer: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	all := append([]Table{f.tbl}, others...)
@@ -879,7 +878,7 @@ func dispatchAgg(agg Aggregator, fn AggFunc, col AnyColumn) (AnyColumn, error) {
 
 		return result, nil
 	default:
-		return nil, fmt.Errorf("dataset: unknown AggFunc %d", fn)
+		return nil, fmt.Errorf("AggFunc %d: %w", fn, ErrUnsupportedAggFunc)
 	}
 }
 
@@ -907,41 +906,65 @@ func resolveAggDType(fn AggFunc, ds Table, colName string) DType {
 // mergeAggResults combines N single-element AnyColumns into one N-element column.
 func mergeAggResults(factory ColumnFactory, name string, results []AnyColumn) (AnyColumn, error) {
 	if len(results) == 0 {
-		return nil, errors.New("dataset: no agg results to merge")
+		return nil, ErrNoAggResults
 	}
 
 	n := len(results)
-	switch results[0].DType() { //nolint:exhaustive // handled by default case.
+	switch results[0].DType() { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case DTypeFloat64:
 		vals := make([]float64, n)
+
 		for i, r := range results {
-			vals[i] = r.(Column[float64]).Values()[0]
+			c, ok := r.(Column[float64])
+			if !ok {
+				return nil, fmt.Errorf("agg result %d: expected Column[float64], got %T: %w", i, r, ErrTypeMismatch)
+			}
+
+			vals[i] = c.Values()[0]
 		}
 
 		return factory.NewFloat64Column(name, vals), nil
 	case DTypeInt64:
 		vals := make([]int64, n)
+
 		for i, r := range results {
-			vals[i] = r.(Column[int64]).Values()[0]
+			c, ok := r.(Column[int64])
+			if !ok {
+				return nil, fmt.Errorf("agg result %d: expected Column[int64], got %T: %w", i, r, ErrTypeMismatch)
+			}
+
+			vals[i] = c.Values()[0]
 		}
 
 		return factory.NewInt64Column(name, vals), nil
 	case DTypeString:
 		vals := make([]string, n)
+
 		for i, r := range results {
-			vals[i] = r.(Column[string]).Values()[0]
+			c, ok := r.(Column[string])
+			if !ok {
+				return nil, fmt.Errorf("agg result %d: expected Column[string], got %T: %w", i, r, ErrTypeMismatch)
+			}
+
+			vals[i] = c.Values()[0]
 		}
 
 		return factory.NewStringColumn(name, vals), nil
 	case DTypeTimestamp:
 		vals := make([]int64, n)
+
 		for i, r := range results {
-			vals[i] = r.(Column[int64]).Values()[0]
+			c, ok := r.(Column[int64])
+			if !ok {
+				return nil, fmt.Errorf("agg result %d: expected Column[int64], got %T: %w", i, r, ErrTypeMismatch)
+			}
+
+			vals[i] = c.Values()[0]
 		}
 
 		return factory.NewTimestampColumn(name, vals), nil
 	default:
-		return nil, fmt.Errorf("dataset: unsupported agg result DType %s", results[0].DType())
+		return nil, fmt.Errorf("agg result DType %s: %w", results[0].DType(), ErrUnsupportedDType)
 	}
 }
 
@@ -1084,7 +1107,7 @@ func (rh *rowHasher) hash(row int) uint64 {
 			continue
 		}
 
-		switch rh.dtypes[i] { //nolint:exhaustive // handled by default case.
+		switch rh.dtypes[i] { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case DTypeFloat64:
 			binary.LittleEndian.PutUint64(rh.buf[:], math.Float64bits(rh.float[i][row]))
 			_, _ = rh.h.Write(rh.buf[:])
@@ -1133,7 +1156,7 @@ func (f Dataset) execGroupBy(groupCols []string, specs []AggSpec) Dataset {
 
 	agg, ok := eng.(Aggregator)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support Aggregator", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: Aggregator: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	sel, factory, err := f.requireSelector(eng)
@@ -1248,7 +1271,7 @@ func (f Dataset) execMutate(name string, fn MutateFunc) Dataset {
 
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: ColumnFactory: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	newCol, err := fn.Apply(f.tbl)
@@ -1295,7 +1318,7 @@ func (f Dataset) execReplaceCol(colName string, values []float64) Dataset {
 
 	factory, ok := eng.(ColumnFactory)
 	if !ok {
-		return f.withError(fmt.Errorf("engine %q does not support ColumnFactory", eng.Name()))
+		return f.withError(fmt.Errorf("engine %q: ColumnFactory: %w", eng.Name(), ErrUnsupportedEngine))
 	}
 
 	newCol := factory.NewFloat64Column(colName, values)

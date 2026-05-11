@@ -31,7 +31,6 @@ package ggplot
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -434,7 +433,7 @@ func (p *Plot) saveVector(ctx context.Context, filename, ext string, width, heig
 	if err != nil {
 		return fmt.Errorf("ggplot: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	switch ext {
 	case ".svg":
@@ -490,7 +489,7 @@ func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, h
 
 		return cw.n, nil
 	default:
-		return 0, fmt.Errorf("ggplot: unsupported format %q (supported: png, svg, pdf)", format)
+		return 0, fmt.Errorf("ggplot: unsupported format %q (supported: png, svg, pdf): %w", format, ErrRenderFailed)
 	}
 }
 
@@ -518,7 +517,7 @@ func (p *Plot) writeVector(ctx context.Context, w io.Writer, format string, widt
 
 		return n, nil
 	default:
-		return 0, fmt.Errorf("ggplot: unsupported vector format %q", format)
+		return 0, fmt.Errorf("ggplot: unsupported vector format %q: %w", format, ErrRenderFailed)
 	}
 }
 
@@ -548,7 +547,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 	}
 
 	if len(p.spec.Layers) == 0 {
-		return errors.New("ggplot: plot has no layers")
+		return fmt.Errorf("plot has no layers: %w", ErrRenderFailed)
 	}
 	// Materialise any lazy Dataset chain before rendering.
 	collectedDS, collectErr := p.spec.Dataset.Collect(ctx)
@@ -559,7 +558,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 	p.spec.Dataset = collectedDS
 
 	if p.spec.Dataset.Table() == nil {
-		return errors.New("ggplot: plot has no dataset")
+		return fmt.Errorf("plot has no dataset: %w", ErrRenderFailed)
 	}
 
 	th, err := theme.Resolve(p.spec.ThemeName)
@@ -687,7 +686,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 						}
 
 						if transformed.Table() == nil {
-							return fmt.Errorf("ggplot: stat %q produced nil table for group %q",
+							return fmt.Errorf("ggplot: stat %q produced nil table for group %q", //nolint:err113 // error contains dynamic context values that vary per call site.
 								statName, grpLabel)
 						}
 
@@ -744,7 +743,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 					}
 
 					if transformed.Table() == nil {
-						return fmt.Errorf("ggplot: stat %q produced nil table", statName)
+						return fmt.Errorf("ggplot: stat %q produced nil table: %w", statName, ErrRenderFailed)
 					}
 
 					ds = transformed
@@ -896,7 +895,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 
 		// Ensure Y starts at 0 for bar/histogram/area/density/boxplot.
 		for _, rl := range resolved {
-			switch rl.geom.Geom { //nolint:exhaustive // intentionally handles subset.
+			switch rl.geom.Geom { //nolint:exhaustive // intentional subset; default case handles the rest.
 			case geom.TypeBar, geom.TypeHistogram, geom.TypeArea, geom.TypeDensity:
 				yMin, yMax := yScale.Bounds()
 				if yMin > 0 {
@@ -904,6 +903,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 						bs.SetBounds(0, yMax)
 					}
 				}
+			default:
 			}
 		}
 
@@ -948,9 +948,10 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				hasBars := false
 
 				for _, rl := range resolved {
-					switch rl.geom.Geom { //nolint:exhaustive // intentionally handles subset.
+					switch rl.geom.Geom { //nolint:exhaustive // intentional subset; default case handles the rest.
 					case geom.TypeBar, geom.TypeHistogram, geom.TypeBoxPlot:
 						hasBars = true
+					default:
 					}
 				}
 
@@ -1409,7 +1410,7 @@ func groupByColumn(_ context.Context, ds dataset.Dataset, colName string) ([]str
 			vals[i] = strconv.FormatInt(v, 10)
 		}
 	default:
-		return nil, nil, fmt.Errorf("unsupported column type %T for %q", col, colName)
+		return nil, nil, fmt.Errorf("unsupported column type %T for %q: %w", col, colName, ErrRenderFailed)
 	}
 
 	// Build index groups: map[label] → []rowIndex.

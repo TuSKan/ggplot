@@ -9,7 +9,6 @@ package dataset
 
 import (
 	"context"
-	"errors"
 	"fmt"
 )
 
@@ -147,7 +146,7 @@ func (f Dataset) Collect(ctx context.Context) (Dataset, error) {
 	// Find root table.
 	root := f.root()
 	if root.tbl == nil {
-		return f, errors.New("dataset: no root table in lazy chain")
+		return f, fmt.Errorf("no root table in lazy chain: %w", ErrUnsupportedDType)
 	}
 
 	// Flatten verb chain.
@@ -180,7 +179,7 @@ func executeOps(ctx context.Context, eng Engine, tbl Table, ops []op) (Table, er
 			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
-		switch o.kind { //nolint:exhaustive // intentionally handles subset.
+		switch o.kind { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case opSelect:
 			cur = cur.execSelect(o.cols)
 		case opRename:
@@ -219,6 +218,7 @@ func executeOps(ctx context.Context, eng Engine, tbl Table, ops []op) (Table, er
 			cur = cur.execMutate(o.mutName, o.mutFn)
 		case opReplaceCol:
 			cur = cur.execReplaceCol(o.replaceCol, o.replaceVals)
+		default:
 		}
 
 		if cur.err != nil {

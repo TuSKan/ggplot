@@ -1,7 +1,6 @@
 package bigquery
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -18,7 +17,7 @@ import (
 func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (dataset.Table, error) {
 	bq, ok := ds.(*bqDataset)
 	if !ok {
-		return nil, errors.New("bigquery: PivotLonger requires a BigQuery dataset")
+		return nil, fmt.Errorf("PivotLonger requires a BigQuery dataset: %w", ErrUnsupportedType)
 	}
 
 	if len(spec.Cols) == 0 {
@@ -91,7 +90,7 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (dataset.Table, error) {
 	bq, ok := ds.(*bqDataset)
 	if !ok {
-		return nil, errors.New("bigquery: PivotWider requires a BigQuery dataset")
+		return nil, fmt.Errorf("PivotWider requires a BigQuery dataset: %w", ErrUnsupportedType)
 	}
 
 	// PivotWider needs to know the distinct values of NamesFrom.
@@ -207,7 +206,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep string) (dataset.Table, error) {
 	bq, ok := ds.(*bqDataset)
 	if !ok {
-		return nil, errors.New("bigquery: Separate requires a BigQuery dataset")
+		return nil, fmt.Errorf("Separate requires a BigQuery dataset: %w", ErrUnsupportedType)
 	}
 
 	// Build SELECT with SPLIT
@@ -249,7 +248,7 @@ func (e *Engine) Separate(ds dataset.Table, col string, into []string, sep strin
 func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep string) (dataset.Table, error) {
 	bq, ok := ds.(*bqDataset)
 	if !ok {
-		return nil, errors.New("bigquery: Concatenate requires a BigQuery dataset")
+		return nil, fmt.Errorf("Concatenate requires a BigQuery dataset: %w", ErrUnsupportedType)
 	}
 
 	fromSet := make(map[string]bool, len(from))
@@ -300,7 +299,7 @@ func (e *Engine) Concatenate(ds dataset.Table, col string, from []string, sep st
 func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, error) {
 	bq, ok := ds.(*bqDataset)
 	if !ok {
-		return nil, errors.New("bigquery: Complete requires a BigQuery dataset")
+		return nil, fmt.Errorf("Complete requires a BigQuery dataset: %w", ErrUnsupportedType)
 	}
 
 	if len(cols) == 0 {

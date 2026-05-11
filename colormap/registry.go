@@ -1,7 +1,6 @@
 package colormap
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -62,12 +61,12 @@ var (
 // Names are looked up case-insensitively; the canonical form is lowercase.
 func Register(c Cmap) error {
 	if c == nil {
-		return errors.New("colormap: cannot register nil Cmap")
+		return fmt.Errorf("cannot register nil Cmap: %w", ErrParseColor)
 	}
 
 	name := normalizeName(c.Name())
 	if name == "" {
-		return errors.New("colormap: cannot register Cmap with empty name")
+		return fmt.Errorf("cannot register Cmap with empty name: %w", ErrParseColor)
 	}
 
 	registryMu.Lock()
@@ -78,7 +77,7 @@ func Register(c Cmap) error {
 			return nil
 		}
 
-		return fmt.Errorf("colormap: name %q already registered", name)
+		return fmt.Errorf("colormap: name %q already registered: %w", name, ErrParseColor)
 	}
 
 	registry[name] = c
@@ -99,7 +98,7 @@ func MustRegister(c Cmap) {
 func Resolve(name string) (Cmap, error) {
 	key := normalizeName(name)
 	if key == "" {
-		return nil, errors.New("colormap: empty cmap name")
+		return nil, fmt.Errorf("empty cmap name: %w", ErrParseColor)
 	}
 
 	reversed := false
@@ -115,7 +114,7 @@ func Resolve(name string) (Cmap, error) {
 	registryMu.RUnlock()
 
 	if !ok {
-		return nil, fmt.Errorf("colormap: unknown cmap %q", name)
+		return nil, fmt.Errorf("colormap: unknown cmap %q: %w", name, ErrParseColor)
 	}
 
 	if reversed {

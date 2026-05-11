@@ -3,6 +3,8 @@ package dataset
 import "testing"
 
 func TestSqlVal_StringEscaping(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name  string
 		input any
@@ -23,6 +25,8 @@ func TestSqlVal_StringEscaping(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := sqlVal(tt.input)
 			if got != tt.want {
 				t.Errorf("sqlVal(%v) = %q, want %q", tt.input, got, tt.want)
@@ -32,6 +36,8 @@ func TestSqlVal_StringEscaping(t *testing.T) {
 }
 
 func TestValidateColName(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input string
 		want  string
@@ -47,6 +53,8 @@ func TestValidateColName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+
 			got := validateColName(tt.input)
 			if got != tt.want {
 				t.Errorf("validateColName(%q) = %q, want %q", tt.input, got, tt.want)
@@ -56,6 +64,8 @@ func TestValidateColName(t *testing.T) {
 }
 
 func TestCompPred_Expr_Escaping(t *testing.T) {
+	t.Parallel()
+
 	// Normal usage
 	expr := Eq("name", "test").Expr()
 
@@ -82,6 +92,8 @@ func TestCompPred_Expr_Escaping(t *testing.T) {
 }
 
 func TestBetweenPred_Expr_Escaping(t *testing.T) {
+	t.Parallel()
+
 	expr := Between("age", "10' OR 1=1 --", 20).Expr()
 	if expr != "`age` BETWEEN '10'' OR 1=1 --' AND 20" {
 		t.Errorf("Between escaping failed: %q", expr)
@@ -89,6 +101,8 @@ func TestBetweenPred_Expr_Escaping(t *testing.T) {
 }
 
 func TestInPred_Expr_Escaping(t *testing.T) {
+	t.Parallel()
+
 	expr := In("name", "Alice", "O'Brien", "x'; DROP--").Expr()
 
 	want := "`name` IN ('Alice', 'O''Brien', 'x''; DROP--')"

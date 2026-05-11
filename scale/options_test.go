@@ -11,7 +11,7 @@ import (
 // trainLinear creates a trained linear scale with the given bounds.
 func trainLinear(mn, mx float64) Scale {
 	s := NewLinear()
-	s.(*LinearScale).SetBounds(mn, mx)
+	s.(*LinearScale).SetBounds(mn, mx) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 
 	return s
 }
@@ -19,6 +19,8 @@ func trainLinear(mn, mx float64) Scale {
 // --- WithBreaks ---
 
 func TestConfiguredScale_Breaks(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100)
 	cs := Configure(inner, WithBreaks([]float64{10, 30, 50, 70, 90}))
 
@@ -37,6 +39,8 @@ func TestConfiguredScale_Breaks(t *testing.T) {
 }
 
 func TestConfiguredScale_Breaks_NoMutation(t *testing.T) {
+	t.Parallel()
+
 	input := []float64{1, 2, 3}
 	inner := trainLinear(0, 10)
 	cs := Configure(inner, WithBreaks(input))
@@ -53,6 +57,8 @@ func TestConfiguredScale_Breaks_NoMutation(t *testing.T) {
 // --- WithLabels ---
 
 func TestConfiguredScale_Labels(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100)
 	cs := Configure(inner,
 		WithBreaks([]float64{0, 25, 50, 75, 100}),
@@ -78,6 +84,8 @@ func TestConfiguredScale_Labels(t *testing.T) {
 }
 
 func TestConfiguredScale_Labels_Fallback(t *testing.T) {
+	t.Parallel()
+
 	// Labels shorter than breaks → excess ticks use inner.Format.
 	inner := trainLinear(0, 100)
 	cs := Configure(inner,
@@ -91,6 +99,8 @@ func TestConfiguredScale_Labels_Fallback(t *testing.T) {
 }
 
 func TestConfiguredScale_Labels_NoBreaks(t *testing.T) {
+	t.Parallel()
+
 	// Labels without explicit breaks → match against auto-generated ticks.
 	inner := trainLinear(0, 10)
 	cs := Configure(inner,
@@ -109,6 +119,8 @@ func TestConfiguredScale_Labels_NoBreaks(t *testing.T) {
 // --- WithFormatter ---
 
 func TestConfiguredScale_Formatter(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 1000)
 	cs := Configure(inner,
 		WithFormatter(func(v float64) string {
@@ -123,6 +135,8 @@ func TestConfiguredScale_Formatter(t *testing.T) {
 }
 
 func TestConfiguredScale_Formatter_LabelsPriority(t *testing.T) {
+	t.Parallel()
+
 	// When both labels and formatter are set, labels win for matching ticks.
 	inner := trainLinear(0, 100)
 	cs := Configure(inner,
@@ -146,6 +160,8 @@ func TestConfiguredScale_Formatter_LabelsPriority(t *testing.T) {
 // --- WithExpand ---
 
 func TestConfiguredScale_Expand(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100) // range = 100
 	cs := Configure(inner, WithExpand(0.05, 0))
 
@@ -161,6 +177,8 @@ func TestConfiguredScale_Expand(t *testing.T) {
 }
 
 func TestConfiguredScale_Expand_Additive(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(10, 20) // range = 10
 	cs := Configure(inner, WithExpand(0, 2))
 
@@ -176,6 +194,8 @@ func TestConfiguredScale_Expand_Additive(t *testing.T) {
 }
 
 func TestConfiguredScale_Expand_Combined(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100) // range = 100
 	cs := Configure(inner, WithExpand(0.1, 5))
 
@@ -191,6 +211,8 @@ func TestConfiguredScale_Expand_Combined(t *testing.T) {
 }
 
 func TestConfiguredScale_Expand_HasExpand(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100)
 
 	// Without WithExpand → HasExpand false.
@@ -209,6 +231,8 @@ func TestConfiguredScale_Expand_HasExpand(t *testing.T) {
 // --- WithMinorBreaks ---
 
 func TestConfiguredScale_MinorBreaks_Explicit(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100)
 	cs := Configure(inner, WithMinorBreaks([]float64{5, 15, 25, 35}))
 
@@ -232,11 +256,13 @@ func TestConfiguredScale_MinorBreaks_Explicit(t *testing.T) {
 }
 
 func TestConfiguredScale_MinorBreaks_Auto(t *testing.T) {
+	t.Parallel()
+
 	// Without WithMinorBreaks, auto-generate midpoints.
 	inner := trainLinear(0, 100)
 	cs := Configure(inner, WithBreaks([]float64{0, 20, 40, 60, 80, 100}))
 
-	mt := cs.(MinorTicker)
+	mt := cs.(MinorTicker) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	minor := mt.MinorTicks()
 	// Midpoints: 10, 30, 50, 70, 90
 	want := []float64{10, 30, 50, 70, 90}
@@ -254,6 +280,8 @@ func TestConfiguredScale_MinorBreaks_Auto(t *testing.T) {
 // --- WithClipBounds ---
 
 func TestConfiguredScale_ClipBounds(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100) // data domain [0, 100]
 	cs := Configure(inner, WithClipBounds(20, 80))
 
@@ -269,6 +297,8 @@ func TestConfiguredScale_ClipBounds(t *testing.T) {
 }
 
 func TestConfiguredScale_ClipBounds_PartialNaN(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100)
 	cs := Configure(inner, WithClipBounds(math.NaN(), 50))
 
@@ -283,6 +313,8 @@ func TestConfiguredScale_ClipBounds_PartialNaN(t *testing.T) {
 }
 
 func TestConfiguredScale_ClipBounds_OverridesExpand(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100)
 	cs := Configure(inner,
 		WithExpand(0.1, 0),     // would make [-10, 110]
@@ -298,6 +330,8 @@ func TestConfiguredScale_ClipBounds_OverridesExpand(t *testing.T) {
 // --- Composition ---
 
 func TestConfiguredScale_Compose(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100)
 	cs := Configure(inner,
 		WithBreaks([]float64{0, 25, 50, 75, 100}),
@@ -324,7 +358,7 @@ func TestConfiguredScale_Compose(t *testing.T) {
 	}
 
 	// Minor ticks should be the explicit ones.
-	mt := cs.(MinorTicker)
+	mt := cs.(MinorTicker) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if len(mt.MinorTicks()) != 4 {
 		t.Errorf("expected 4 minor ticks, got %d", len(mt.MinorTicks()))
 	}
@@ -333,6 +367,8 @@ func TestConfiguredScale_Compose(t *testing.T) {
 // --- BoundsSetter delegation ---
 
 func TestConfiguredScale_BoundsSetter(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100)
 	cs := Configure(inner, WithExpand(0.05, 0))
 
@@ -358,6 +394,8 @@ func TestConfiguredScale_BoundsSetter(t *testing.T) {
 // --- Configure with no opts ---
 
 func TestConfigure_NoOpts(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100)
 	got := Configure(inner)
 	// Should return the exact same scale, not a wrapper.
@@ -369,6 +407,8 @@ func TestConfigure_NoOpts(t *testing.T) {
 // --- Map/Inverse consistency ---
 
 func TestConfiguredScale_MapInverse_Roundtrip(t *testing.T) {
+	t.Parallel()
+
 	inner := trainLinear(0, 100)
 	cs := Configure(inner, WithExpand(0.1, 5))
 

@@ -76,7 +76,7 @@ func (e *Engine) lazyWindowFn(fn string, col dataset.AnyColumn, n int) (dataset.
 		case "LEAD":
 			result, wErr = e.localEngine().Lead(col, n)
 		default:
-			return nil, fmt.Errorf("bigquery: unknown window function %q", fn)
+			return nil, fmt.Errorf("bigquery: unknown window function %q: %w", fn, ErrUnsupportedType)
 		}
 
 		if wErr != nil {
@@ -121,7 +121,7 @@ func (e *Engine) lazyCumulativeWindowFn(fn string, col dataset.AnyColumn) (datas
 		case "MIN":
 			result, cErr = e.localEngine().CumMin(col)
 		default:
-			return nil, fmt.Errorf("bigquery: unknown cumulative function %q", fn)
+			return nil, fmt.Errorf("bigquery: unknown cumulative function %q: %w", fn, ErrUnsupportedType)
 		}
 
 		if cErr != nil {
@@ -165,7 +165,7 @@ func (e *Engine) lazyRankWindowFn(fn string, col dataset.AnyColumn) (dataset.Any
 		case "PERCENT_RANK":
 			result, rErr = e.localEngine().PercentRank(col)
 		default:
-			return nil, fmt.Errorf("bigquery: unknown rank function %q", fn)
+			return nil, fmt.Errorf("bigquery: unknown rank function %q: %w", fn, ErrUnsupportedType)
 		}
 
 		if rErr != nil {
@@ -228,7 +228,7 @@ func (e *Engine) Cast(col dataset.AnyColumn, target dataset.DType) (dataset.AnyC
 
 // DtypeToBQSQL maps dataset.DType to BigQuery SQL type names.
 func DtypeToBQSQL(dt dataset.DType) string {
-	switch dt { //nolint:exhaustive // handled by default case.
+	switch dt { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case dataset.DTypeFloat64:
 		return "FLOAT64"
 	case dataset.DTypeInt64:

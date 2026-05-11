@@ -50,7 +50,7 @@ func buildConfig(opts []Option) dataset.ParquetConfig {
 func Read(ctx context.Context, r io.ReaderAt, size int64, eng dataset.Engine, opts ...Option) (dataset.Dataset, error) {
 	reader, ok := eng.(dataset.ParquetReader)
 	if !ok {
-		return dataset.Dataset{}, fmt.Errorf("parquet: engine %q does not implement ParquetReader", eng.Name())
+		return dataset.Dataset{}, fmt.Errorf("parquet: engine %q does not implement ParquetReader: %w", eng.Name(), ErrUnsupportedType)
 	}
 
 	tbl, err := reader.ReadParquet(ctx, r, size, buildConfig(opts))
@@ -66,7 +66,7 @@ func Read(ctx context.Context, r io.ReaderAt, size int64, eng dataset.Engine, op
 func Write(ctx context.Context, w io.Writer, ds dataset.Dataset, eng dataset.Engine, opts ...Option) error {
 	writer, ok := eng.(dataset.ParquetWriter)
 	if !ok {
-		return fmt.Errorf("parquet: engine %q does not implement ParquetWriter", eng.Name())
+		return fmt.Errorf("parquet: engine %q does not implement ParquetWriter: %w", eng.Name(), ErrUnsupportedType)
 	}
 
 	if err := writer.WriteParquet(ctx, w, ds.Table(), buildConfig(opts)); err != nil {

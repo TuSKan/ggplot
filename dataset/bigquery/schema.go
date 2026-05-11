@@ -2,7 +2,6 @@ package bigquery
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 
 	"cloud.google.com/go/bigquery"
@@ -34,7 +33,7 @@ func bqFieldToDataset(fs *bigquery.FieldSchema) dataset.Field {
 		Nullable: !fs.Required,
 	}
 
-	switch fs.Type { //nolint:exhaustive // handled by default case.
+	switch fs.Type { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case bigquery.FloatFieldType:
 		f.Dtype = dataset.DTypeFloat64
 	case bigquery.IntegerFieldType:
@@ -74,7 +73,7 @@ func datasetFieldToBQ(f dataset.Field) *bigquery.FieldSchema {
 		Required: !f.Nullable,
 	}
 
-	switch f.Dtype { //nolint:exhaustive // handled by default case.
+	switch f.Dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case dataset.DTypeFloat64:
 		fs.Type = bigquery.FloatFieldType
 	case dataset.DTypeInt64:
@@ -131,7 +130,7 @@ func arrowRecordToDataset(eng *arrowEngine.Engine, rec arrow.RecordBatch) (datas
 
 // arrowTypeToDType maps Arrow types to dataset DType.
 func arrowTypeToDType(dt arrow.DataType) dataset.DType {
-	switch dt.ID() { //nolint:exhaustive // handled by default case.
+	switch dt.ID() { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case arrow.FLOAT64, arrow.FLOAT32, arrow.FLOAT16:
 		return dataset.DTypeFloat64
 	case arrow.INT64, arrow.INT32, arrow.INT16, arrow.INT8,
@@ -150,7 +149,7 @@ func arrowTypeToDType(dt arrow.DataType) dataset.DType {
 
 // arrowArrayToColumn wraps an Arrow array into a dataset.AnyColumn.
 func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, dtype dataset.DType) (dataset.AnyColumn, error) {
-	switch dtype { //nolint:exhaustive // handled by default case.
+	switch dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case dataset.DTypeFloat64:
 		vals := make([]float64, arr.Len())
 		switch a := arr.(type) {
@@ -171,7 +170,7 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 				vals[i] = float64(a.Value(i))
 			}
 		default:
-			return nil, fmt.Errorf("unsupported arrow type %T for float64", arr)
+			return nil, fmt.Errorf("unsupported arrow type %T for float64: %w", arr, ErrUnsupportedType)
 		}
 
 		return eng.NewFloat64Column(name, vals), nil
@@ -188,7 +187,7 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 				vals[i] = int64(a.Value(i))
 			}
 		default:
-			return nil, fmt.Errorf("unsupported arrow type %T for int64", arr)
+			return nil, fmt.Errorf("unsupported arrow type %T for int64: %w", arr, ErrUnsupportedType)
 		}
 
 		return eng.NewInt64Column(name, vals), nil
@@ -205,7 +204,7 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 				vals[i] = string(a.Value(i))
 			}
 		default:
-			return nil, fmt.Errorf("unsupported arrow type %T for string", arr)
+			return nil, fmt.Errorf("unsupported arrow type %T for string: %w", arr, ErrUnsupportedType)
 		}
 
 		return eng.NewStringColumn(name, vals), nil
@@ -243,7 +242,7 @@ func decodeArrowBatch(eng *arrowEngine.Engine, schemaBytes, batchBytes []byte) (
 	defer reader.Release()
 
 	if !reader.Next() {
-		return nil, errors.New("no record batches in IPC stream")
+		return nil, fmt.Errorf("no record batches in IPC stream: %w", ErrUnsupportedType)
 	}
 
 	rec := reader.RecordBatch()

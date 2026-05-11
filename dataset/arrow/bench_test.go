@@ -83,7 +83,12 @@ func BenchmarkArrowSum(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -100,7 +105,12 @@ func BenchmarkArrowMean(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -117,7 +127,12 @@ func BenchmarkArrowMinMax(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -134,7 +149,12 @@ func BenchmarkArrowMedian(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -151,7 +171,12 @@ func BenchmarkArrowVariance(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -170,7 +195,12 @@ func BenchmarkArrowSlice(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -187,7 +217,12 @@ func BenchmarkArrowTake(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			rng := rand.New(rand.NewSource(99))
@@ -212,7 +247,12 @@ func BenchmarkArrowSortIndices(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -297,7 +337,12 @@ func BenchmarkArrowLag(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -314,7 +359,12 @@ func BenchmarkArrowLead(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -331,7 +381,12 @@ func BenchmarkArrowCumSum(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -348,7 +403,12 @@ func BenchmarkArrowCumMax(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -365,7 +425,12 @@ func BenchmarkArrowCumMin(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -382,7 +447,12 @@ func BenchmarkArrowRank(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -399,7 +469,12 @@ func BenchmarkArrowDenseRank(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -456,7 +531,12 @@ func benchMathUnary(b *testing.B, _ string, fn func(*arroweng.Engine, dataset.An
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -515,7 +595,12 @@ func BenchmarkArrowAddCols(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -532,7 +617,12 @@ func BenchmarkArrowMulScalar(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -549,7 +639,12 @@ func BenchmarkArrowBitShiftLeft(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*arroweng.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*arroweng.Engine)
+			if !ok {
+				b.Fatalf("expected *arroweng.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("id")
 
 			b.ResetTimer()

@@ -10,6 +10,8 @@ import (
 )
 
 func TestArrowPivotLonger(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
@@ -68,6 +70,8 @@ func TestArrowPivotLonger(t *testing.T) {
 }
 
 func TestArrowPivotWider(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
@@ -114,6 +118,8 @@ func TestArrowPivotWider(t *testing.T) {
 }
 
 func TestArrowPivotRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
@@ -162,6 +168,8 @@ func TestArrowPivotRoundTrip(t *testing.T) {
 }
 
 func TestArrowSeparate(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(dataset.StringCol("date"), dataset.FloatCol("x"))
@@ -197,6 +205,8 @@ func TestArrowSeparate(t *testing.T) {
 }
 
 func TestArrowConcatenate(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
@@ -228,6 +238,8 @@ func TestArrowConcatenate(t *testing.T) {
 }
 
 func TestArrowSeparateConcatenateRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(dataset.StringCol("date"))
@@ -245,6 +257,8 @@ func TestArrowSeparateConcatenateRoundTrip(t *testing.T) {
 }
 
 func TestArrowComplete(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
@@ -269,6 +283,8 @@ func TestArrowComplete(t *testing.T) {
 }
 
 func TestArrowCompleteWithMissing(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(
@@ -308,6 +324,8 @@ func TestArrowCompleteWithMissing(t *testing.T) {
 }
 
 func TestArrowPivotLongerFrameAPI(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	schema := dataset.NewSchema(

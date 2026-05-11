@@ -22,7 +22,7 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, _ d
 	if err != nil {
 		return nil, fmt.Errorf("arrow: parquet open: %w", err)
 	}
-	defer pf.Close()
+	defer func() { _ = pf.Close() }()
 
 	arrowRdr, err := pqarrow.NewFileReader(pf, pqarrow.ArrowReadProperties{}, e.alloc)
 	if err != nil {
@@ -58,12 +58,12 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 		chunked := tbl.Column(i)
 		name := f.Name
 
-		switch f.Type.ID() { //nolint:exhaustive // handled by default case.
+		switch f.Type.ID() { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case arrow.FLOAT64:
 			data := make([]float64, 0, nRows)
 
 			for _, chunk := range chunked.Data().Chunks() {
-				arr := chunk.(*arrowarray.Float64)
+				arr := chunk.(*arrowarray.Float64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				start := len(data)
 
 				data = append(data, arr.Float64Values()...)
@@ -81,7 +81,7 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 			data := make([]int64, 0, nRows)
 
 			for _, chunk := range chunked.Data().Chunks() {
-				arr := chunk.(*arrowarray.Int64)
+				arr := chunk.(*arrowarray.Int64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				data = append(data, arr.Int64Values()...)
 			}
 
@@ -92,7 +92,7 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 			data := make([]bool, 0, nRows)
 
 			for _, chunk := range chunked.Data().Chunks() {
-				arr := chunk.(*arrowarray.Boolean)
+				arr := chunk.(*arrowarray.Boolean) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				for j := range arr.Len() {
 					data = append(data, arr.Value(j))
 				}
@@ -105,7 +105,7 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 			data := make([]string, 0, nRows)
 
 			for _, chunk := range chunked.Data().Chunks() {
-				arr := chunk.(*arrowarray.String)
+				arr := chunk.(*arrowarray.String) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				for j := range arr.Len() {
 					data = append(data, arr.Value(j))
 				}
@@ -165,7 +165,7 @@ func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, 
 }
 
 func dtypeToArrowType(dt dataset.DType) arrow.DataType {
-	switch dt { //nolint:exhaustive // handled by default case.
+	switch dt { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case dataset.DTypeFloat64:
 		return arrow.PrimitiveTypes.Float64
 	case dataset.DTypeInt64:
@@ -180,7 +180,7 @@ func dtypeToArrowType(dt dataset.DType) arrow.DataType {
 func appendToBuilder(bldr arrowarray.Builder, col dataset.AnyColumn, _ int) {
 	switch c := col.(type) {
 	case dataset.Column[float64]:
-		fb := bldr.(*arrowarray.Float64Builder)
+		fb := bldr.(*arrowarray.Float64Builder) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 
 		vals := c.Values()
 		for _, v := range vals {
@@ -191,15 +191,15 @@ func appendToBuilder(bldr arrowarray.Builder, col dataset.AnyColumn, _ int) {
 			}
 		}
 	case dataset.Column[int64]:
-		ib := bldr.(*arrowarray.Int64Builder)
+		ib := bldr.(*arrowarray.Int64Builder) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		ib.AppendValues(c.Values(), nil)
 	case dataset.Column[bool]:
-		bb := bldr.(*arrowarray.BooleanBuilder)
+		bb := bldr.(*arrowarray.BooleanBuilder) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		for _, v := range c.Values() {
 			bb.Append(v)
 		}
 	case dataset.Column[string]:
-		sb := bldr.(*arrowarray.StringBuilder)
+		sb := bldr.(*arrowarray.StringBuilder) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 		for _, v := range c.Values() {
 			sb.Append(v)
 		}

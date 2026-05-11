@@ -9,6 +9,8 @@ import (
 )
 
 func TestColumnFactory(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.FloatCol("x"),
@@ -63,6 +65,8 @@ func TestColumnFactory(t *testing.T) {
 }
 
 func TestAggregator(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	agg := eng
 	f := eng
@@ -131,6 +135,8 @@ func TestAggregator(t *testing.T) {
 }
 
 func TestBuilder(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.FloatCol("x"),
@@ -190,6 +196,8 @@ func makeGroupDS(tb testing.TB) dataset.Table {
 }
 
 func TestGroupBySummarize(t *testing.T) {
+	t.Parallel()
+
 	ds := makeGroupDS(t)
 
 	result, err := dataset.From(ds).
@@ -256,7 +264,7 @@ type doubleX struct{}
 
 func (doubleX) Apply(ds dataset.Table) (dataset.AnyColumn, error) {
 	eng := dataset.GetEngine(ds)
-	factory := eng.(dataset.ColumnFactory)
+	factory := eng.(dataset.ColumnFactory) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 
 	col, err := dataset.GetColumn[float64](ds, "x")
 	if err != nil {
@@ -274,6 +282,8 @@ func (doubleX) Apply(ds dataset.Table) (dataset.AnyColumn, error) {
 }
 
 func TestMutateAppend(t *testing.T) {
+	t.Parallel()
+
 	ds := makeGroupDS(t)
 
 	result, err := dataset.From(ds).
@@ -296,6 +306,8 @@ func TestMutateAppend(t *testing.T) {
 }
 
 func TestFullPipeline(t *testing.T) {
+	t.Parallel()
+
 	ds := makeGroupDS(t)
 
 	result, err := dataset.From(ds).
@@ -341,6 +353,8 @@ func makeTestDS(t *testing.T) dataset.Table {
 }
 
 func TestFrameSelect(t *testing.T) {
+	t.Parallel()
+
 	ds := makeTestDS(t)
 
 	result, err := dataset.From(ds).Select("x", "label").Collect(context.Background())
@@ -362,6 +376,8 @@ func TestFrameSelect(t *testing.T) {
 }
 
 func TestFrameHead(t *testing.T) {
+	t.Parallel()
+
 	ds := makeTestDS(t)
 
 	result, err := dataset.From(ds).Head(3).Collect(context.Background())
@@ -382,6 +398,8 @@ func TestFrameHead(t *testing.T) {
 }
 
 func TestFrameTail(t *testing.T) {
+	t.Parallel()
+
 	ds := makeTestDS(t)
 
 	result, err := dataset.From(ds).Tail(2).Collect(context.Background())
@@ -402,6 +420,8 @@ func TestFrameTail(t *testing.T) {
 }
 
 func TestFrameArrange(t *testing.T) {
+	t.Parallel()
+
 	ds := makeTestDS(t)
 
 	result, err := dataset.From(ds).Arrange("x").Collect(context.Background())
@@ -420,6 +440,8 @@ func TestFrameArrange(t *testing.T) {
 }
 
 func TestFrameDistinct(t *testing.T) {
+	t.Parallel()
+
 	ds := makeTestDS(t)
 
 	result, err := dataset.From(ds).Distinct("label").Collect(context.Background())
@@ -433,6 +455,8 @@ func TestFrameDistinct(t *testing.T) {
 }
 
 func TestFrameChain(t *testing.T) {
+	t.Parallel()
+
 	ds := makeTestDS(t)
 
 	result, err := dataset.From(ds).
@@ -459,6 +483,8 @@ func TestFrameChain(t *testing.T) {
 // --- Filter tests using Predicate ---
 
 func TestFilter(t *testing.T) {
+	t.Parallel()
+
 	ds := makeTestDS(t)
 	// x = [3, 1, 4, 1, 5], filter x > 3 → [4, 5]
 	result, err := dataset.From(ds).
@@ -486,6 +512,8 @@ func TestFilter(t *testing.T) {
 }
 
 func TestFilterEmpty(t *testing.T) {
+	t.Parallel()
+
 	ds := makeTestDS(t)
 	// x = [3, 1, 4, 1, 5], filter x > 100 → empty
 	result, err := dataset.From(ds).
@@ -505,6 +533,8 @@ func TestFilterEmpty(t *testing.T) {
 }
 
 func TestDropNA(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.FloatCol("x"),
@@ -552,6 +582,8 @@ func TestDropNA(t *testing.T) {
 }
 
 func TestFillDown(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(dataset.FloatCol("x"))
 	b := eng.NewBuilder(schema)
@@ -581,6 +613,8 @@ func TestFillDown(t *testing.T) {
 }
 
 func TestReplaceNA(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(dataset.FloatCol("x"))
 	b := eng.NewBuilder(schema)
@@ -591,7 +625,7 @@ func TestReplaceNA(t *testing.T) {
 
 	ds, _ := b.Build()
 
-	filler := dataset.Engine(eng).(dataset.Filler)
+	filler := dataset.Engine(eng).(dataset.Filler) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	col, _ := ds.Column("x")
 
 	replaced, err := filler.ReplaceNA(col, -999)
@@ -599,7 +633,7 @@ func TestReplaceNA(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rCol := replaced.(dataset.Column[float64])
+	rCol := replaced.(dataset.Column[float64]) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 
 	vals := rCol.Values()
 	if vals[0] != 1 || vals[1] != -999 || vals[2] != 3 {
@@ -608,6 +642,8 @@ func TestReplaceNA(t *testing.T) {
 }
 
 func TestStack(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	schema := dataset.NewSchema(
 		dataset.FloatCol("x"),
@@ -648,6 +684,8 @@ func TestStack(t *testing.T) {
 }
 
 func TestCombine(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	ds1, _ := eng.FromColumns(
 		dataset.NewSchema(dataset.FloatCol("x")),
@@ -682,6 +720,8 @@ func TestCombine(t *testing.T) {
 // --- Windower ---
 
 func TestLagLead(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{10, 20, 30, 40, 50})
 
@@ -690,7 +730,7 @@ func TestLagLead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lv := lag.(dataset.Column[float64]).Values()
+	lv := lag.(dataset.Column[float64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	// [0, 0, 10, 20, 30]
 	if lv[0] != 0 || lv[1] != 0 || lv[2] != 10 || lv[3] != 20 || lv[4] != 30 {
 		t.Fatalf("Lag(2) unexpected: %v", lv)
@@ -701,7 +741,7 @@ func TestLagLead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dv := lead.(dataset.Column[float64]).Values()
+	dv := lead.(dataset.Column[float64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	// [20, 30, 40, 50, 0]
 	if dv[0] != 20 || dv[3] != 50 || dv[4] != 0 {
 		t.Fatalf("Lead(1) unexpected: %v", dv)
@@ -709,6 +749,8 @@ func TestLagLead(t *testing.T) {
 }
 
 func TestCumSum(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5})
 
@@ -717,7 +759,7 @@ func TestCumSum(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vals := cs.(dataset.Column[float64]).Values()
+	vals := cs.(dataset.Column[float64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	// [1, 3, 6, 10, 15]
 	expected := []float64{1, 3, 6, 10, 15}
 	for i, v := range vals {
@@ -728,18 +770,20 @@ func TestCumSum(t *testing.T) {
 }
 
 func TestCumMaxMin(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{3, 1, 4, 1, 5})
 
 	mx, _ := eng.CumMax(col)
-	mxv := mx.(dataset.Column[float64]).Values()
+	mxv := mx.(dataset.Column[float64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	// [3, 3, 4, 4, 5]
 	if mxv[0] != 3 || mxv[1] != 3 || mxv[2] != 4 || mxv[3] != 4 || mxv[4] != 5 {
 		t.Fatalf("CumMax unexpected: %v", mxv)
 	}
 
 	mn, _ := eng.CumMin(col)
-	mnv := mn.(dataset.Column[float64]).Values()
+	mnv := mn.(dataset.Column[float64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	// [3, 1, 1, 1, 1]
 	if mnv[0] != 3 || mnv[1] != 1 || mnv[2] != 1 || mnv[4] != 1 {
 		t.Fatalf("CumMin unexpected: %v", mnv)
@@ -747,6 +791,8 @@ func TestCumMaxMin(t *testing.T) {
 }
 
 func TestRankDenseRank(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	// Values with ties: [10, 30, 20, 20, 40]
 	col := eng.NewFloat64Column("x", []float64{10, 30, 20, 20, 40})
@@ -759,7 +805,7 @@ func TestRankDenseRank(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rv := r.(dataset.Column[int64]).Values()
+	rv := r.(dataset.Column[int64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if rv[0] != 1 || rv[1] != 4 || rv[2] != 2 || rv[3] != 2 || rv[4] != 5 {
 		t.Fatalf("Rank unexpected: %v", rv)
 	}
@@ -771,13 +817,15 @@ func TestRankDenseRank(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	drv := dr.(dataset.Column[int64]).Values()
+	drv := dr.(dataset.Column[int64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if drv[0] != 1 || drv[1] != 3 || drv[2] != 2 || drv[3] != 2 || drv[4] != 4 {
 		t.Fatalf("DenseRank unexpected: %v", drv)
 	}
 }
 
 func TestRowNumber(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 
 	rn, err := eng.RowNumber(5)
@@ -785,7 +833,7 @@ func TestRowNumber(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vals := rn.(dataset.Column[int64]).Values()
+	vals := rn.(dataset.Column[int64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	for i, v := range vals {
 		if v != int64(i+1) {
 			t.Fatalf("RowNumber[%d]: expected %d, got %d", i, i+1, v)

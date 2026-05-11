@@ -1,7 +1,6 @@
 package bigquery
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -127,7 +126,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 
 	messageDescriptor, ok := descriptor.(protoreflect.MessageDescriptor)
 	if !ok {
-		return nil, errors.New("bigquery: descriptor is not a MessageDescriptor")
+		return nil, fmt.Errorf("descriptor is not a MessageDescriptor: %w", ErrUnsupportedType)
 	}
 
 	// Convert to DescriptorProto for WithSchemaDescriptor
@@ -138,7 +137,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bigquery: failed to create write client: %w", err)
 	}
-	defer writeClient.Close()
+	defer func() { _ = writeClient.Close() }()
 
 	// Table path for the writer
 	tablePath := fmt.Sprintf(
@@ -155,7 +154,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bigquery: failed to create managed stream: %w", err)
 	}
-	defer ms.Close()
+	defer func() { _ = ms.Close() }()
 
 	// Serialize all rows as protobuf messages
 	serializedRows := make([][]byte, b.nRows)
@@ -186,7 +185,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 				continue // skip — proto default value
 			}
 
-			switch field.Dtype { //nolint:exhaustive // intentionally handles subset.
+			switch field.Dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 			case dataset.DTypeFloat64:
 				if i < len(a.floats) && !math.IsNaN(a.floats[i]) {
 					msg.Set(fd, protoreflect.ValueOfFloat64(a.floats[i]))
@@ -203,6 +202,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 				if i < len(a.bools) {
 					msg.Set(fd, protoreflect.ValueOfBool(a.bools[i]))
 				}
+			default:
 			}
 		}
 

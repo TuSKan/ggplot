@@ -18,7 +18,7 @@ import (
 func (e *Engine) applyUnaryCompute(col dataset.AnyColumn, fn func(ctx context.Context, opts compute.ArithmeticOptions, arg compute.Datum) (compute.Datum, error)) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: MathKernel requires float64 column, got %T", col)
+		return nil, fmt.Errorf("MathKernel: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	ctx := compute.WithAllocator(e.Context(), e.alloc)
@@ -29,14 +29,14 @@ func (e *Engine) applyUnaryCompute(col dataset.AnyColumn, fn func(ctx context.Co
 	}
 	defer result.Release()
 
-	return &arrowFloat64Column{name: c.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil
+	return &arrowFloat64Column{name: c.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
 
 // applyUnaryComputeNoOpts applies an Arrow compute unary function (no opts variant).
 func (e *Engine) applyUnaryComputeNoOpts(col dataset.AnyColumn, fn func(ctx context.Context, arg compute.Datum) (compute.Datum, error)) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: MathKernel requires float64 column, got %T", col)
+		return nil, fmt.Errorf("MathKernel: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	ctx := compute.WithAllocator(e.Context(), e.alloc)
@@ -47,23 +47,23 @@ func (e *Engine) applyUnaryComputeNoOpts(col dataset.AnyColumn, fn func(ctx cont
 	}
 	defer result.Release()
 
-	return &arrowFloat64Column{name: c.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil
+	return &arrowFloat64Column{name: c.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
 
 // applyBinaryCompute applies an Arrow compute binary function to two float64 columns.
 func (e *Engine) applyBinaryCompute(a, b dataset.AnyColumn, fn func(ctx context.Context, opts compute.ArithmeticOptions, left, right compute.Datum) (compute.Datum, error)) (dataset.AnyColumn, error) {
 	ca, ok := a.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: MathKernel requires float64 column, got %T", a)
+		return nil, fmt.Errorf("MathKernel: got %T: %w", a, ErrRequiresFloat64)
 	}
 
 	cb, ok := b.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: MathKernel requires float64 column, got %T", b)
+		return nil, fmt.Errorf("MathKernel: got %T: %w", b, ErrRequiresFloat64)
 	}
 
 	if ca.arr.Len() != cb.arr.Len() {
-		return nil, fmt.Errorf("arrow: column length mismatch: %d vs %d", ca.arr.Len(), cb.arr.Len())
+		return nil, fmt.Errorf("arrow: column length mismatch: %d vs %d: %w", ca.arr.Len(), cb.arr.Len(), ErrLengthMismatch)
 	}
 
 	ctx := compute.WithAllocator(e.Context(), e.alloc)
@@ -74,7 +74,7 @@ func (e *Engine) applyBinaryCompute(a, b dataset.AnyColumn, fn func(ctx context.
 	}
 	defer result.Release()
 
-	return &arrowFloat64Column{name: ca.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil
+	return &arrowFloat64Column{name: ca.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
 
 // applySliceTransform applies a highway (dst, src) transform, returning a new column.
@@ -82,7 +82,7 @@ func (e *Engine) applyBinaryCompute(a, b dataset.AnyColumn, fn func(ctx context.
 func (e *Engine) applySliceTransform(col dataset.AnyColumn, fn func(dst, src []float64)) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: MathKernel requires float64 column, got %T", col)
+		return nil, fmt.Errorf("MathKernel: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	src := c.arr.Float64Values()
@@ -108,7 +108,7 @@ func (e *Engine) applySliceTransform(col dataset.AnyColumn, fn func(dst, src []f
 func (e *Engine) applyScalarFunc(col dataset.AnyColumn, fn func(float64) float64) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: MathKernel requires float64 column, got %T", col)
+		return nil, fmt.Errorf("MathKernel: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	vals := c.arr.Float64Values()
@@ -149,7 +149,7 @@ func (e *Engine) DivCols(a, b dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) AddScalar(col dataset.AnyColumn, val float64) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: AddScalar requires float64 column, got %T", col)
+		return nil, fmt.Errorf("AddScalar: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	ctx := compute.WithAllocator(e.Context(), e.alloc)
@@ -160,14 +160,14 @@ func (e *Engine) AddScalar(col dataset.AnyColumn, val float64) (dataset.AnyColum
 	}
 	defer result.Release()
 
-	return &arrowFloat64Column{name: c.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil
+	return &arrowFloat64Column{name: c.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
 
 // MulScalar multiplies every element of a float64 column by a scalar.
 func (e *Engine) MulScalar(col dataset.AnyColumn, val float64) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: MulScalar requires float64 column, got %T", col)
+		return nil, fmt.Errorf("MulScalar: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	ctx := compute.WithAllocator(e.Context(), e.alloc)
@@ -178,7 +178,7 @@ func (e *Engine) MulScalar(col dataset.AnyColumn, val float64) (dataset.AnyColum
 	}
 	defer result.Release()
 
-	return &arrowFloat64Column{name: c.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil
+	return &arrowFloat64Column{name: c.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
 
 // --- Unary numeric ---
@@ -207,7 +207,7 @@ func (e *Engine) Sqrt(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) Pow(col dataset.AnyColumn, exp float64) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: Pow requires float64 column, got %T", col)
+		return nil, fmt.Errorf("Pow: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	ctx := compute.WithAllocator(e.Context(), e.alloc)
@@ -218,7 +218,7 @@ func (e *Engine) Pow(col dataset.AnyColumn, exp float64) (dataset.AnyColumn, err
 	}
 	defer result.Release()
 
-	return &arrowFloat64Column{name: c.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil
+	return &arrowFloat64Column{name: c.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
 
 // --- Transcendental: logarithmic ---
@@ -279,12 +279,12 @@ func (e *Engine) Atan(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) Atan2(y, x dataset.AnyColumn) (dataset.AnyColumn, error) {
 	cy, ok := y.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: Atan2 requires float64 columns, got %T", y)
+		return nil, fmt.Errorf("Atan2: got %T: %w", y, ErrRequiresFloat64)
 	}
 
 	cx, ok := x.(*arrowFloat64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: Atan2 requires float64 columns, got %T", x)
+		return nil, fmt.Errorf("Atan2: got %T: %w", x, ErrRequiresFloat64)
 	}
 
 	ctx := compute.WithAllocator(e.Context(), e.alloc)
@@ -295,7 +295,7 @@ func (e *Engine) Atan2(y, x dataset.AnyColumn) (dataset.AnyColumn, error) {
 	}
 	defer result.Release()
 
-	return &arrowFloat64Column{name: cy.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil
+	return &arrowFloat64Column{name: cy.name, arr: result.(*compute.ArrayDatum).MakeArray().(*array.Float64)}, nil //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
 
 // --- Transcendental: hyperbolic/special (highway — Arrow lacks these) ---
@@ -353,7 +353,7 @@ func (e *Engine) BitXor(a, b dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) BitNot(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowInt64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: BitNot requires int64 column, got %T", col)
+		return nil, fmt.Errorf("BitNot: got %T: %w", col, ErrRequiresInt64)
 	}
 
 	vals := c.arr.Int64Values()
@@ -370,7 +370,7 @@ func (e *Engine) BitNot(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) BitShiftLeft(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowInt64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: BitShiftLeft requires int64 column, got %T", col)
+		return nil, fmt.Errorf("BitShiftLeft: got %T: %w", col, ErrRequiresInt64)
 	}
 
 	vals := c.arr.Int64Values()
@@ -387,7 +387,7 @@ func (e *Engine) BitShiftLeft(col dataset.AnyColumn, n int) (dataset.AnyColumn, 
 func (e *Engine) BitShiftRight(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	c, ok := col.(*arrowInt64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: BitShiftRight requires int64 column, got %T", col)
+		return nil, fmt.Errorf("BitShiftRight: got %T: %w", col, ErrRequiresInt64)
 	}
 
 	vals := c.arr.Int64Values()
@@ -404,17 +404,17 @@ func (e *Engine) BitShiftRight(col dataset.AnyColumn, n int) (dataset.AnyColumn,
 func (e *Engine) applyBinaryInt64(a, b dataset.AnyColumn, fn func(int64, int64) int64) (dataset.AnyColumn, error) {
 	ca, ok := a.(*arrowInt64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: bitwise op requires int64 column, got %T", a)
+		return nil, fmt.Errorf("arrow: bitwise op requires int64 column, got %T: %w", a, ErrUnsupportedType)
 	}
 
 	cb, ok := b.(*arrowInt64Column)
 	if !ok {
-		return nil, fmt.Errorf("arrow: bitwise op requires int64 column, got %T", b)
+		return nil, fmt.Errorf("arrow: bitwise op requires int64 column, got %T: %w", b, ErrUnsupportedType)
 	}
 
 	va, vb := ca.arr.Int64Values(), cb.arr.Int64Values()
 	if len(va) != len(vb) {
-		return nil, fmt.Errorf("arrow: column length mismatch: %d vs %d", len(va), len(vb))
+		return nil, fmt.Errorf("arrow: column length mismatch: %d vs %d: %w", ca.arr.Len(), cb.arr.Len(), ErrLengthMismatch)
 	}
 
 	out := make([]int64, len(va))

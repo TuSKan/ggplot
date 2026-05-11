@@ -1,7 +1,6 @@
 package bigquery
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/TuSKan/ggplot/dataset"
@@ -12,7 +11,7 @@ import (
 // SortIndices is not supported on remote data.
 // Use Frame.Arrange which should generate ORDER BY SQL.
 func (e *Engine) SortIndices(_ dataset.AnyColumn) ([]int, error) {
-	return nil, errors.New("bigquery: SortIndices not supported on remote data; use Frame.Arrange")
+	return nil, fmt.Errorf("SortIndices not supported on remote data; use Frame.Arrange: %w", ErrUnsupportedType)
 }
 
 // FilterIndices evaluates a boolean mask to indices (local only).
@@ -83,5 +82,5 @@ func (e *Engine) Slice(col dataset.AnyColumn, start, end int) (dataset.AnyColumn
 
 // errNotBQDataset returns a typed error for wrong dataset type.
 func errNotBQDataset(op string) error {
-	return fmt.Errorf("bigquery: %s requires a BigQuery dataset", op)
+	return fmt.Errorf("bigquery: %s requires a BigQuery dataset: %w", op, ErrUnsupportedType)
 }

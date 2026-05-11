@@ -23,6 +23,8 @@ func colorsEqual(a, b gg.RGBA) bool {
 // --- Cmap ---
 
 func TestLinearSegmented_AtBounds(t *testing.T) {
+	t.Parallel()
+
 	c := Viridis
 	low := c.At(0)
 
@@ -41,6 +43,8 @@ func TestLinearSegmented_AtBounds(t *testing.T) {
 }
 
 func TestLinearSegmented_NaN_DefaultBad(t *testing.T) {
+	t.Parallel()
+
 	got := Viridis.At(math.NaN())
 	if got.A != 0 {
 		t.Errorf("default bad should be transparent; got A=%v", got.A)
@@ -48,6 +52,8 @@ func TestLinearSegmented_NaN_DefaultBad(t *testing.T) {
 }
 
 func TestCmap_Reversed(t *testing.T) {
+	t.Parallel()
+
 	c := Plasma
 
 	r := c.Reversed()
@@ -65,6 +71,8 @@ func TestCmap_Reversed(t *testing.T) {
 }
 
 func TestCmap_Resampled(t *testing.T) {
+	t.Parallel()
+
 	r := Viridis.Resampled(4)
 	if r.N() != 4 {
 		t.Errorf("Resampled N() = %d, want 4", r.N())
@@ -83,6 +91,8 @@ func TestCmap_Resampled(t *testing.T) {
 }
 
 func TestCmap_WithExtremes(t *testing.T) {
+	t.Parallel()
+
 	red := gg.RGBA{R: 1, G: 0, B: 0, A: 1}
 	blue := gg.RGBA{R: 0, G: 0, B: 1, A: 1}
 	gray := gg.RGBA{R: 0.5, G: 0.5, B: 0.5, A: 1}
@@ -106,7 +116,13 @@ func TestCmap_WithExtremes(t *testing.T) {
 }
 
 func TestListedCmap_Cycle(t *testing.T) {
-	tab := Tab10.(*ListedCmap)
+	t.Parallel()
+
+	tab, ok := Tab10.(*ListedCmap)
+	if !ok {
+		t.Fatalf("expected *ListedCmap, got %T", Tab10)
+	}
+
 	c0 := tab.Color(0)
 
 	c10 := tab.Color(10)
@@ -118,6 +134,8 @@ func TestListedCmap_Cycle(t *testing.T) {
 // --- Norm ---
 
 func TestLinearNorm_RoundTrip(t *testing.T) {
+	t.Parallel()
+
 	n := &LinearNorm{Vmin: 0, Vmax: 100}
 	for _, v := range []float64{0, 25, 50, 75, 100} {
 		t0 := n.Norm(v)
@@ -130,6 +148,8 @@ func TestLinearNorm_RoundTrip(t *testing.T) {
 }
 
 func TestLogNorm_PositiveOnly(t *testing.T) {
+	t.Parallel()
+
 	n := &LogNorm{Vmin: 1, Vmax: 1000}
 	if !math.IsNaN(n.Norm(0)) {
 		t.Errorf("LogNorm.Norm(0) should be NaN")
@@ -145,6 +165,8 @@ func TestLogNorm_PositiveOnly(t *testing.T) {
 }
 
 func TestPowerNorm_Gamma(t *testing.T) {
+	t.Parallel()
+
 	n := &PowerNorm{Gamma: 2, Vmin: 0, Vmax: 1}
 	if got := n.Norm(0.5); !approxEq(got, 0.25) {
 		t.Errorf("PowerNorm gamma=2: Norm(0.5) = %v, want 0.25", got)
@@ -152,6 +174,8 @@ func TestPowerNorm_Gamma(t *testing.T) {
 }
 
 func TestTwoSlopeNorm_Asymmetry(t *testing.T) {
+	t.Parallel()
+
 	n := &TwoSlopeNorm{Vcenter: 0, Vmin: -1, Vmax: 9}
 	if got := n.Norm(0); !approxEq(got, 0.5) {
 		t.Errorf("TwoSlopeNorm at center: %v, want 0.5", got)
@@ -167,6 +191,8 @@ func TestTwoSlopeNorm_Asymmetry(t *testing.T) {
 }
 
 func TestBoundaryNorm_Quantize(t *testing.T) {
+	t.Parallel()
+
 	n := &BoundaryNorm{Boundaries: []float64{0, 1, 2, 3}, Ncolors: 3, Clip: true}
 	if got := n.Norm(0.5); !approxEq(got, 0) {
 		t.Errorf("BoundaryNorm bin 0: %v, want 0", got)
@@ -180,6 +206,8 @@ func TestBoundaryNorm_Quantize(t *testing.T) {
 // --- Scale ---
 
 func TestScale_Continuous_Train(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("z", []float64{0, 5, 10})
 
@@ -202,6 +230,8 @@ func TestScale_Continuous_Train(t *testing.T) {
 }
 
 func TestScale_Discrete_Train(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewStringColumn("g", []string{"a", "b", "a", "c", "b"})
 
@@ -225,6 +255,8 @@ func TestScale_Discrete_Train(t *testing.T) {
 }
 
 func TestScale_Manual(t *testing.T) {
+	t.Parallel()
+
 	red := gg.RGBA{R: 1, A: 1}
 
 	s := NewManual(map[string]Color{"x": red})
@@ -236,6 +268,8 @@ func TestScale_Manual(t *testing.T) {
 // --- Registry ---
 
 func TestRegistry_Resolve(t *testing.T) {
+	t.Parallel()
+
 	c, err := Resolve("viridis")
 	if err != nil {
 		t.Fatal(err)
@@ -260,12 +294,16 @@ func TestRegistry_Resolve(t *testing.T) {
 }
 
 func TestRegistry_UnknownName(t *testing.T) {
+	t.Parallel()
+
 	if _, err := Resolve("does_not_exist"); err == nil {
 		t.Errorf("Resolve should error on unknown name")
 	}
 }
 
 func TestRegistry_NamesByCategory(t *testing.T) {
+	t.Parallel()
+
 	pu := NamesByCategory(PerceptuallyUniform)
 
 	want := []string{"cividis", "inferno", "magma", "plasma", "viridis"}
@@ -283,6 +321,8 @@ func TestRegistry_NamesByCategory(t *testing.T) {
 // --- Parse ---
 
 func TestParse_Hex(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]gg.RGBA{
 		"#ff0000": {R: 1, G: 0, B: 0, A: 1},
 		"00ff00":  {R: 0, G: 1, B: 0, A: 1},
@@ -302,6 +342,8 @@ func TestParse_Hex(t *testing.T) {
 }
 
 func TestParse_Named(t *testing.T) {
+	t.Parallel()
+
 	cases := []string{"red", "Red", "REBECCAPURPLE", "coral", "transparent"}
 	for _, in := range cases {
 		if _, err := Parse(in); err != nil {
@@ -311,18 +353,22 @@ func TestParse_Named(t *testing.T) {
 }
 
 func TestParse_TabAlias(t *testing.T) {
+	t.Parallel()
+
 	c, err := Parse("tab:blue")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	want := Tab10.(*ListedCmap).Color(0)
+	want := Tab10.(*ListedCmap).Color(0) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if !approxEq(c.R, want.R) || !approxEq(c.G, want.G) || !approxEq(c.B, want.B) {
 		t.Errorf("tab:blue = %+v, want tab10[0] = %+v", c, want)
 	}
 }
 
 func TestParse_RGBFunc(t *testing.T) {
+	t.Parallel()
+
 	c, err := Parse("rgb(255, 0, 0)")
 	if err != nil {
 		t.Fatal(err)
@@ -343,6 +389,8 @@ func TestParse_RGBFunc(t *testing.T) {
 }
 
 func TestParse_HSLFunc(t *testing.T) {
+	t.Parallel()
+
 	// hsl(120, 100%, 50%) is pure green.
 	c, err := Parse("hsl(120, 100%, 50%)")
 	if err != nil {
@@ -355,6 +403,8 @@ func TestParse_HSLFunc(t *testing.T) {
 }
 
 func TestParse_Invalid(t *testing.T) {
+	t.Parallel()
+
 	for _, in := range []string{"", "not a color", "rgb(", "tab:nope"} {
 		if _, err := Parse(in); err == nil {
 			t.Errorf("Parse(%q) should error", in)
@@ -365,6 +415,8 @@ func TestParse_Invalid(t *testing.T) {
 // --- LUT correctness (smoke check the perceptual stops are present) ---
 
 func TestPerceptualLUT_StopAlignment(t *testing.T) {
+	t.Parallel()
+
 	// At t=0, viridis should be the dark purple stop ≈ (68,1,84).
 	c := Viridis.At(0)
 	r := uint8(c.R*255 + 0.5)

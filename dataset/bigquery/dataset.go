@@ -296,7 +296,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 	}
 
 	if src.engine.quota.MaxDownloadRows > 0 && src.numRows > src.engine.quota.MaxDownloadRows {
-		return nil, fmt.Errorf("bigquery: download exceeds quota (%d rows > limit %d)",
+		return nil, fmt.Errorf("bigquery: download exceeds quota (%d rows > limit %d)", //nolint:err113 // error contains dynamic context values that vary per call site.
 			src.numRows, src.engine.quota.MaxDownloadRows)
 	}
 
@@ -351,7 +351,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 
 		arrowSchema := session.GetArrowSchema()
 		if arrowSchema == nil {
-			return nil, errors.New("bigquery: session has no Arrow schema")
+			return nil, fmt.Errorf("session has no Arrow schema: %w", ErrUnsupportedType)
 		}
 
 		batchTbl, err := decodeArrowBatch(eng, arrowSchema.GetSerializedSchema(), arrowRows.GetSerializedRecordBatch())
@@ -366,7 +366,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 
 			composer, ok := engIface.(dataset.Composer)
 			if !ok {
-				return nil, errors.New("bigquery: arrow engine does not support Composer")
+				return nil, fmt.Errorf("arrow engine does not support Composer: %w", ErrUnsupportedType)
 			}
 
 			resultDS, err = composer.Stack(resultDS, batchTbl)
@@ -388,7 +388,7 @@ func buildEmptyDataset(eng *arrowEngine.Engine, schema *dataset.Schema) (dataset
 	cols := make([]dataset.AnyColumn, schema.NumFields())
 	for i := range schema.NumFields() {
 		f := schema.Field(i)
-		switch f.Dtype { //nolint:exhaustive // handled by default case.
+		switch f.Dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case dataset.DTypeFloat64:
 			cols[i] = eng.NewFloat64Column(f.Name, nil)
 		case dataset.DTypeInt64:

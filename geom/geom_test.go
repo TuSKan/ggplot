@@ -8,6 +8,8 @@ import (
 )
 
 func TestValidate_PointWithBins_Warning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Point(geom.WithBins(30))
 
 	warnings := layer.Validate()
@@ -29,6 +31,8 @@ func TestValidate_PointWithBins_Warning(t *testing.T) {
 }
 
 func TestValidate_PointWithMethod_Warning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Point(geom.WithMethod("lm"))
 
 	warnings := layer.Validate()
@@ -38,6 +42,8 @@ func TestValidate_PointWithMethod_Warning(t *testing.T) {
 }
 
 func TestValidate_LineWithBins_Warning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Line(geom.WithBins(10))
 
 	warnings := layer.Validate()
@@ -47,6 +53,8 @@ func TestValidate_LineWithBins_Warning(t *testing.T) {
 }
 
 func TestValidate_BarWithMethod_Warning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Bar(geom.WithMethod("lm"))
 
 	warnings := layer.Validate()
@@ -56,6 +64,8 @@ func TestValidate_BarWithMethod_Warning(t *testing.T) {
 }
 
 func TestValidate_TextWithBins_Warning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Text(geom.WithBins(10), geom.WithWidth(0.5))
 
 	warnings := layer.Validate()
@@ -65,6 +75,8 @@ func TestValidate_TextWithBins_Warning(t *testing.T) {
 }
 
 func TestValidate_SmoothWithBins_Warning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Smooth(geom.WithBins(30))
 
 	warnings := layer.Validate()
@@ -74,6 +86,8 @@ func TestValidate_SmoothWithBins_Warning(t *testing.T) {
 }
 
 func TestValidate_HistogramWithMethod_Warning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Histogram(geom.WithMethod("lm"))
 
 	warnings := layer.Validate()
@@ -85,6 +99,8 @@ func TestValidate_HistogramWithMethod_Warning(t *testing.T) {
 // --- No warning tests (valid combinations) ---
 
 func TestValidate_PointWithSize_NoWarning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Point(geom.WithSize(5), geom.WithColor("#FF0000"))
 
 	warnings := layer.Validate()
@@ -94,6 +110,8 @@ func TestValidate_PointWithSize_NoWarning(t *testing.T) {
 }
 
 func TestValidate_LineWithColor_NoWarning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Line(geom.WithColor("#00FF00"), geom.WithLineWidth(3))
 
 	warnings := layer.Validate()
@@ -103,6 +121,8 @@ func TestValidate_LineWithColor_NoWarning(t *testing.T) {
 }
 
 func TestValidate_BarWithWidth_NoWarning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Bar(geom.WithWidth(0.6), geom.WithFill("#336699"))
 
 	warnings := layer.Validate()
@@ -112,6 +132,8 @@ func TestValidate_BarWithWidth_NoWarning(t *testing.T) {
 }
 
 func TestValidate_HistogramWithBins_NoWarning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Histogram(geom.WithBins(50), geom.WithAlpha(0.7))
 
 	warnings := layer.Validate()
@@ -121,6 +143,8 @@ func TestValidate_HistogramWithBins_NoWarning(t *testing.T) {
 }
 
 func TestValidate_SmoothWithMethod_NoWarning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Smooth(geom.WithMethod("loess"), geom.WithPoints(100))
 
 	warnings := layer.Validate()
@@ -130,6 +154,8 @@ func TestValidate_SmoothWithMethod_NoWarning(t *testing.T) {
 }
 
 func TestValidate_TextWithFontSize_NoWarning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Text(geom.WithFontSize(14), geom.WithAngle(45))
 
 	warnings := layer.Validate()
@@ -139,6 +165,8 @@ func TestValidate_TextWithFontSize_NoWarning(t *testing.T) {
 }
 
 func TestValidate_NoExplicitOpts_NoWarning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Point()
 
 	warnings := layer.Validate()
@@ -148,6 +176,8 @@ func TestValidate_NoExplicitOpts_NoWarning(t *testing.T) {
 }
 
 func TestValidate_DensityWithPoints_NoWarning(t *testing.T) {
+	t.Parallel()
+
 	layer := geom.Density(geom.WithPoints(1024), geom.WithFill("#993366"))
 
 	warnings := layer.Validate()
@@ -159,6 +189,8 @@ func TestValidate_DensityWithPoints_NoWarning(t *testing.T) {
 // --- WithSize portability test ---
 
 func TestValidate_LineWithSize_NoWarning(t *testing.T) {
+	t.Parallel()
+
 	// WithSize sets both Size and LineWidth, and Size is relevant for Line
 	layer := geom.Line(geom.WithSize(3))
 

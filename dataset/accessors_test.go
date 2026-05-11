@@ -31,6 +31,8 @@ func newTestDataset(t *testing.T, cols ...dataset.AnyColumn) dataset.Dataset {
 }
 
 func TestAccessors_ZeroCopy(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{1, 2, 3})
 	ds := newTestDataset(t, col)
@@ -44,13 +46,15 @@ func TestAccessors_ZeroCopy(t *testing.T) {
 	vals[0] = 99
 
 	// Check if original column mutated (aliasing)
-	origVals := col.(dataset.Column[float64]).Values()
+	origVals := col.(dataset.Column[float64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if origVals[0] != 99 {
 		t.Errorf("expected zero-copy alias, original column not mutated")
 	}
 }
 
 func TestAccessors_OptClones(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{1, 2, 3})
 	ds := newTestDataset(t, col)
@@ -67,13 +71,15 @@ func TestAccessors_OptClones(t *testing.T) {
 	vals[0] = 99
 
 	// Check if original column mutated
-	origVals := col.(dataset.Column[float64]).Values()
+	origVals := col.(dataset.Column[float64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if origVals[0] == 99 {
 		t.Errorf("expected fresh slice with opts, but original column was mutated")
 	}
 }
 
 func TestAccessors_Float64_Clean(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{1, math.NaN(), math.Inf(1), math.Inf(-1), 2})
 	ds := newTestDataset(t, col)
@@ -90,6 +96,8 @@ func TestAccessors_Float64_Clean(t *testing.T) {
 }
 
 func TestAccessors_Float64_FillNaN(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{1, math.NaN(), 2, math.Inf(1)})
 	ds := newTestDataset(t, col)
@@ -106,6 +114,8 @@ func TestAccessors_Float64_FillNaN(t *testing.T) {
 }
 
 func TestAccessors_Float64_Abs(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{-1.5, 2.0, -3.1})
 	ds := newTestDataset(t, col)
@@ -122,6 +132,8 @@ func TestAccessors_Float64_Abs(t *testing.T) {
 }
 
 func TestAccessors_Float64_Clamp(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{-2.0, 0.5, 2.0})
 	ds := newTestDataset(t, col)
@@ -138,6 +150,8 @@ func TestAccessors_Float64_Clamp(t *testing.T) {
 }
 
 func TestAccessors_Float64_Sorted(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{3.0, 1.0, 2.0})
 	ds := newTestDataset(t, col)
@@ -154,11 +168,15 @@ func TestAccessors_Float64_Sorted(t *testing.T) {
 }
 
 func TestAccessors_Chaining(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{2, math.NaN(), 1, math.Inf(1)})
 	ds := newTestDataset(t, col)
 
 	t.Run("Clean then Sorted", func(t *testing.T) {
+		t.Parallel()
+
 		vals, err := ds.Float64("x", dataset.Clean, dataset.Sorted)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -171,6 +189,8 @@ func TestAccessors_Chaining(t *testing.T) {
 	})
 
 	t.Run("FillNaN then Abs", func(t *testing.T) {
+		t.Parallel()
+
 		col2 := eng.NewFloat64Column("y", []float64{-2, math.NaN(), -1})
 		ds2 := newTestDataset(t, col2)
 
@@ -187,12 +207,16 @@ func TestAccessors_Chaining(t *testing.T) {
 }
 
 func TestAccessors_Errors(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewFloat64Column("x", []float64{1, 2, 3})
 	strCol := eng.NewStringColumn("lbl", []string{"a", "b", "c"})
 	ds := newTestDataset(t, col, strCol)
 
 	t.Run("Missing column", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := ds.Float64("missing")
 		if err == nil {
 			t.Errorf("expected error for missing column")
@@ -200,6 +224,8 @@ func TestAccessors_Errors(t *testing.T) {
 	})
 
 	t.Run("Wrong type", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := ds.Float64("lbl")
 		if err == nil {
 			t.Errorf("expected error for wrong typed column")
@@ -207,6 +233,8 @@ func TestAccessors_Errors(t *testing.T) {
 	})
 
 	t.Run("Pre-existing Dataset err", func(t *testing.T) {
+		t.Parallel()
+
 		dsErr := ds.Select("non_existent_column")
 		// We'll simulate a pre-existing error using a bad column lookup
 		_, err := dsErr.Float64("x")
@@ -217,11 +245,15 @@ func TestAccessors_Errors(t *testing.T) {
 }
 
 func TestAccessors_Int64(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewInt64Column("x", []int64{3, 1, 2, -10, 10})
 	ds := newTestDataset(t, col)
 
 	t.Run("Sorted inference", func(t *testing.T) {
+		t.Parallel()
+
 		vals, err := ds.Int64("x", dataset.Sorted)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -234,6 +266,8 @@ func TestAccessors_Int64(t *testing.T) {
 	})
 
 	t.Run("Clamp explicit", func(t *testing.T) {
+		t.Parallel()
+
 		vals, err := ds.Int64("x", dataset.Clamp[int64](-5, 5))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -247,6 +281,8 @@ func TestAccessors_Int64(t *testing.T) {
 }
 
 func TestAccessors_Strings(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewStringColumn("x", []string{"c", "a", "b"})
 	ds := newTestDataset(t, col)
@@ -263,6 +299,8 @@ func TestAccessors_Strings(t *testing.T) {
 }
 
 func TestAccessors_Bools(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 	col := eng.NewBoolColumn("x", []bool{true, false, true})
 	ds := newTestDataset(t, col)

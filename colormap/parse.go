@@ -1,7 +1,6 @@
 package colormap
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -25,7 +24,7 @@ import (
 func Parse(s string) (gg.RGBA, error) {
 	raw := strings.TrimSpace(s)
 	if raw == "" {
-		return gg.RGBA{}, errors.New("colormap: empty color string")
+		return gg.RGBA{}, fmt.Errorf("empty color string: %w", ErrParseColor)
 	}
 
 	// Hex first — covers "#abc" / "abc123" / "#aabbccdd" without scanning
@@ -54,7 +53,7 @@ func Parse(s string) (gg.RGBA, error) {
 			return c, nil
 		}
 
-		return gg.RGBA{}, fmt.Errorf("colormap: unknown tab alias %q", raw)
+		return gg.RGBA{}, fmt.Errorf("colormap: unknown tab alias %q: %w", raw, ErrParseColor)
 	}
 
 	// CSS / X11 named colors.
@@ -62,7 +61,7 @@ func Parse(s string) (gg.RGBA, error) {
 		return c, nil
 	}
 
-	return gg.RGBA{}, fmt.Errorf("colormap: cannot parse color %q", raw)
+	return gg.RGBA{}, fmt.Errorf("colormap: cannot parse color %q: %w", raw, ErrParseColor)
 }
 
 // MustParse is like Parse but panics on error.
@@ -126,14 +125,14 @@ func parseRGBFunc(s string) (gg.RGBA, error) {
 
 	end := strings.IndexByte(s, ')')
 	if open < 0 || end < 0 || end <= open {
-		return gg.RGBA{}, fmt.Errorf("colormap: malformed rgb literal %q", s)
+		return gg.RGBA{}, fmt.Errorf("colormap: malformed rgb literal %q: %w", s, ErrParseColor)
 	}
 
 	body := s[open+1 : end]
 
 	parts := splitArgs(body)
 	if len(parts) != 3 && len(parts) != 4 {
-		return gg.RGBA{}, fmt.Errorf("colormap: rgb requires 3 or 4 components, got %d in %q", len(parts), s)
+		return gg.RGBA{}, fmt.Errorf("colormap: rgb requires 3 or 4 components, got %d in %q: %w", len(parts), s, ErrParseColor)
 	}
 
 	r, err := parseChannelByte(parts[0])
@@ -168,14 +167,14 @@ func parseHSLFunc(s string) (gg.RGBA, error) {
 
 	end := strings.IndexByte(s, ')')
 	if open < 0 || end < 0 || end <= open {
-		return gg.RGBA{}, fmt.Errorf("colormap: malformed hsl literal %q", s)
+		return gg.RGBA{}, fmt.Errorf("colormap: malformed hsl literal %q: %w", s, ErrParseColor)
 	}
 
 	body := s[open+1 : end]
 
 	parts := splitArgs(body)
 	if len(parts) != 3 {
-		return gg.RGBA{}, fmt.Errorf("colormap: hsl requires 3 components, got %d in %q", len(parts), s)
+		return gg.RGBA{}, fmt.Errorf("colormap: hsl requires 3 components, got %d in %q: %w", len(parts), s, ErrParseColor)
 	}
 
 	hRaw := strings.TrimSuffix(parts[0], "deg")

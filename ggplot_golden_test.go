@@ -120,6 +120,8 @@ func renderPNG(t *testing.T, p *ggplot.Plot, w, h int) []byte {
 //   go test -run TestGolden -update-goldens     # regenerate goldens
 
 func TestGolden_ScatterPlot(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -143,6 +145,8 @@ func TestGolden_ScatterPlot(t *testing.T) {
 }
 
 func TestGolden_BarChart(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -166,6 +170,8 @@ func TestGolden_BarChart(t *testing.T) {
 }
 
 func TestGolden_MultiLayer(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -190,6 +196,8 @@ func TestGolden_MultiLayer(t *testing.T) {
 }
 
 func TestGolden_GroupedColor(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -210,6 +218,8 @@ func TestGolden_GroupedColor(t *testing.T) {
 }
 
 func TestGolden_Histogram(t *testing.T) {
+	t.Parallel()
+
 	// Deterministic histogram data (not random).
 	xs := make([]float64, 200)
 	for i := range xs {
@@ -233,6 +243,8 @@ func TestGolden_Histogram(t *testing.T) {
 }
 
 func TestGolden_LabelsAndTheme(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -263,6 +275,8 @@ func TestGolden_LabelsAndTheme(t *testing.T) {
 
 // TestGolden_Summary prints the golden directory and file count for CI visibility.
 func TestGolden_Summary(t *testing.T) {
+	t.Parallel()
+
 	dir := goldenDir()
 
 	entries, err := os.ReadDir(dir)

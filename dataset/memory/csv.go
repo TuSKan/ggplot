@@ -88,7 +88,7 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 
 	for i, name := range headers {
 		dtype := inferType(rawCols[i], nullSet)
-		switch dtype { //nolint:exhaustive // handled by default case.
+		switch dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case dataset.DTypeFloat64:
 			data := make([]float64, nRows)
 

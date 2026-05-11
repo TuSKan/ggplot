@@ -93,7 +93,7 @@ func (e *Engine) localBinaryOp(op string, a, b dataset.AnyColumn) (dataset.AnyCo
 
 		return result, nil
 	default:
-		return nil, fmt.Errorf("bigquery: unknown binary op %q", op)
+		return nil, fmt.Errorf("bigquery: unknown binary op %q: %w", op, ErrUnsupportedType)
 	}
 }
 
@@ -129,7 +129,7 @@ func (e *Engine) scalarOp(op string, val float64, col dataset.AnyColumn) (datase
 			return result, nil
 		}
 
-		return nil, fmt.Errorf("bigquery: unknown scalar op %q", op)
+		return nil, fmt.Errorf("bigquery: unknown scalar op %q: %w", op, ErrUnsupportedType)
 	}
 
 	sql := fmt.Sprintf( //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
@@ -500,7 +500,7 @@ func (e *Engine) localUnaryMath(fn string, col dataset.AnyColumn) (dataset.AnyCo
 	case "bitnot":
 		result, err = mk.BitNot(col)
 	default:
-		return nil, fmt.Errorf("bigquery: unsupported unary math %q", fn)
+		return nil, fmt.Errorf("bigquery: unsupported unary math %q: %w", fn, ErrUnsupportedType)
 	}
 
 	if err != nil {

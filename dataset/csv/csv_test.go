@@ -23,6 +23,8 @@ Charlie,35,NA,true
 // --- Memory engine tests ---
 
 func TestReadMemory(t *testing.T) {
+	t.Parallel()
+
 	eng := memEngine.NewEngine(context.Background())
 
 	ds, err := Read(context.Background(), strings.NewReader(testCSV), eng)
@@ -41,7 +43,7 @@ func TestReadMemory(t *testing.T) {
 	// name: string
 	nameCol, _ := ds.Column("name")
 
-	names := nameCol.(dataset.Column[string]).Values()
+	names := nameCol.(dataset.Column[string]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if names[0] != "Alice" || names[1] != "Bob" || names[2] != "Charlie" {
 		t.Errorf("names = %v", names)
 	}
@@ -49,7 +51,7 @@ func TestReadMemory(t *testing.T) {
 	// age: int64
 	ageCol, _ := ds.Column("age")
 
-	ages := ageCol.(dataset.Column[int64]).Values()
+	ages := ageCol.(dataset.Column[int64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if ages[0] != 30 || ages[1] != 25 || ages[2] != 35 {
 		t.Errorf("ages = %v", ages)
 	}
@@ -57,7 +59,7 @@ func TestReadMemory(t *testing.T) {
 	// score: float64 (has "NA" → NaN)
 	scoreCol, _ := ds.Column("score")
 
-	scores := scoreCol.(dataset.Column[float64]).Values()
+	scores := scoreCol.(dataset.Column[float64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if scores[0] != 95.5 || scores[1] != 87.3 {
 		t.Errorf("scores = %v", scores)
 	}
@@ -69,13 +71,15 @@ func TestReadMemory(t *testing.T) {
 	// active: bool
 	activeCol, _ := ds.Column("active")
 
-	actives := activeCol.(dataset.Column[bool]).Values()
+	actives := activeCol.(dataset.Column[bool]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if !actives[0] || actives[1] || !actives[2] {
 		t.Errorf("actives = %v", actives)
 	}
 }
 
 func TestReadMemoryNoHeader(t *testing.T) {
+	t.Parallel()
+
 	csv := "Alice,30\nBob,25\n"
 	eng := memEngine.NewEngine(context.Background())
 
@@ -94,6 +98,8 @@ func TestReadMemoryNoHeader(t *testing.T) {
 }
 
 func TestReadMemoryTSV(t *testing.T) {
+	t.Parallel()
+
 	csv := "name\tage\nAlice\t30\nBob\t25\n"
 	eng := memEngine.NewEngine(context.Background())
 
@@ -108,13 +114,15 @@ func TestReadMemoryTSV(t *testing.T) {
 
 	nameCol, _ := ds.Column("name")
 
-	names := nameCol.(dataset.Column[string]).Values()
+	names := nameCol.(dataset.Column[string]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if names[0] != "Alice" {
 		t.Errorf("name[0] = %q", names[0])
 	}
 }
 
 func TestWriteMemory(t *testing.T) {
+	t.Parallel()
+
 	eng := memEngine.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("name", []string{"Alice", "Bob"}),
@@ -144,6 +152,8 @@ func TestWriteMemory(t *testing.T) {
 }
 
 func TestRoundTripMemory(t *testing.T) {
+	t.Parallel()
+
 	eng := memEngine.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("city", []string{"SP", "RJ", "BH"}),
@@ -167,14 +177,14 @@ func TestRoundTripMemory(t *testing.T) {
 
 	cityCol, _ := ds2.Column("city")
 
-	cities := cityCol.(dataset.Column[string]).Values()
+	cities := cityCol.(dataset.Column[string]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if cities[0] != "SP" || cities[1] != "RJ" || cities[2] != "BH" {
 		t.Errorf("cities = %v", cities)
 	}
 
 	popCol, _ := ds2.Column("pop")
 
-	pops := popCol.(dataset.Column[int64]).Values()
+	pops := popCol.(dataset.Column[int64]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if pops[0] != 12000000 {
 		t.Errorf("pop[0] = %d, want 12000000", pops[0])
 	}
@@ -183,6 +193,8 @@ func TestRoundTripMemory(t *testing.T) {
 // --- Arrow engine tests ---
 
 func TestReadArrow(t *testing.T) {
+	t.Parallel()
+
 	eng := arrowEngine.NewEngine(context.Background(), memory.DefaultAllocator)
 
 	ds, err := Read(context.Background(), strings.NewReader(testCSV), eng)
@@ -196,13 +208,15 @@ func TestReadArrow(t *testing.T) {
 
 	nameCol, _ := ds.Column("name")
 
-	names := nameCol.(dataset.Column[string]).Values()
+	names := nameCol.(dataset.Column[string]).Values() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if names[0] != "Alice" {
 		t.Errorf("name[0] = %q", names[0])
 	}
 }
 
 func TestWriteArrow(t *testing.T) {
+	t.Parallel()
+
 	eng := arrowEngine.NewEngine(context.Background(), memory.DefaultAllocator)
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("x", []string{"a", "b"}),
@@ -227,6 +241,8 @@ func TestWriteArrow(t *testing.T) {
 }
 
 func TestRoundTripArrow(t *testing.T) {
+	t.Parallel()
+
 	eng := arrowEngine.NewEngine(context.Background(), memory.DefaultAllocator)
 	ds, _ := dataset.NewDataset(eng,
 		eng.NewStringColumn("city", []string{"SP", "RJ"}),
@@ -249,6 +265,8 @@ func TestRoundTripArrow(t *testing.T) {
 }
 
 func TestHeaderOnlyCSV(t *testing.T) {
+	t.Parallel()
+
 	eng := memEngine.NewEngine(context.Background())
 
 	ds, err := Read(context.Background(), strings.NewReader("name,age\n"), eng)

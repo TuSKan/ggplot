@@ -211,7 +211,7 @@ func (e *Engine) Close() error {
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("bigquery: close errors: %v", errs)
+		return fmt.Errorf("bigquery: close errors: %v: %w", errs, ErrUnsupportedType)
 	}
 
 	return nil

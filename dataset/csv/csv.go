@@ -72,7 +72,7 @@ func buildConfig(opts []Option) dataset.CSVConfig {
 func Read(ctx context.Context, r io.Reader, eng dataset.Engine, opts ...Option) (dataset.Dataset, error) {
 	reader, ok := eng.(dataset.CSVReader)
 	if !ok {
-		return dataset.Dataset{}, fmt.Errorf("csv: engine %q does not implement CSVReader", eng.Name())
+		return dataset.Dataset{}, fmt.Errorf("csv: engine %q does not implement CSVReader: %w", eng.Name(), ErrUnsupportedType)
 	}
 
 	tbl, err := reader.ReadCSV(ctx, r, buildConfig(opts))
@@ -88,7 +88,7 @@ func Read(ctx context.Context, r io.Reader, eng dataset.Engine, opts ...Option) 
 func Write(ctx context.Context, w io.Writer, ds dataset.Dataset, eng dataset.Engine, opts ...Option) error {
 	writer, ok := eng.(dataset.CSVWriter)
 	if !ok {
-		return fmt.Errorf("csv: engine %q does not implement CSVWriter", eng.Name())
+		return fmt.Errorf("csv: engine %q does not implement CSVWriter: %w", eng.Name(), ErrUnsupportedType)
 	}
 
 	if err := writer.WriteCSV(ctx, w, ds.Table(), buildConfig(opts)); err != nil {

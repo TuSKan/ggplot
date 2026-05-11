@@ -181,7 +181,7 @@ func (s *Scale) trainDiscrete(col dataset.AnyColumn) error {
 			}
 		}
 	default:
-		return fmt.Errorf("colormap: discrete Scale cannot train on column %q (%s)", col.Name(), col.DType())
+		return fmt.Errorf("colormap: discrete Scale cannot train on column %q (%s): %w", col.Name(), col.DType(), ErrParseColor)
 	}
 
 	return nil

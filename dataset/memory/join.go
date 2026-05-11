@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -14,24 +13,24 @@ import (
 // It supports Inner, Left, Right, Full, Semi, and Anti joins.
 func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset.Table, error) {
 	if len(spec.LeftCols) == 0 || len(spec.RightCols) == 0 {
-		return nil, errors.New("memory: Join requires at least one key column")
+		return nil, fmt.Errorf("Join: %w", ErrJoinKeyMismatch)
 	}
 
 	if len(spec.LeftCols) != len(spec.RightCols) {
-		return nil, fmt.Errorf("memory: Join key column count mismatch: left=%d, right=%d",
+		return nil, fmt.Errorf("memory: Join key column count mismatch: left=%d, right=%d", //nolint:err113 // error contains dynamic context values that vary per call site.
 			len(spec.LeftCols), len(spec.RightCols))
 	}
 
 	// Validate key columns exist.
 	for _, name := range spec.LeftCols {
 		if !left.Schema().HasField(name) {
-			return nil, fmt.Errorf("memory: left dataset has no column %q", name)
+			return nil, fmt.Errorf("left dataset has no column %q: %w", name, ErrJoinKeyMismatch)
 		}
 	}
 
 	for _, name := range spec.RightCols {
 		if !right.Schema().HasField(name) {
-			return nil, fmt.Errorf("memory: right dataset has no column %q", name)
+			return nil, fmt.Errorf("right dataset has no column %q: %w", name, ErrJoinKeyMismatch)
 		}
 	}
 
@@ -219,7 +218,7 @@ func probeJoin(left, right dataset.Table, spec dataset.JoinSpec, //nolint:gocogn
 		}
 
 	default:
-		return nil, nil, fmt.Errorf("memory: unsupported join type %d", spec.Type)
+		return nil, nil, fmt.Errorf("unsupported join type %d: %w", spec.Type, ErrUnsupportedType)
 	}
 
 	return leftIdx, rightIdx, nil

@@ -131,7 +131,7 @@ func (d *domain) train(col dataset.AnyColumn) error {
 		return d.update(mn, mx)
 
 	default:
-		return fmt.Errorf("scale: column %q (%s) is not numeric", col.Name(), col.DType())
+		return fmt.Errorf("scale: column %q (%s) is not numeric: %w", col.Name(), col.DType(), ErrUnsupportedScale)
 	}
 }
 
@@ -399,7 +399,7 @@ func Resolve(t Type) (Scale, error) {
 	case Reverse:
 		return NewReverse(), nil
 	default:
-		return nil, fmt.Errorf("scale: unknown type %q", t)
+		return nil, fmt.Errorf("scale: unknown type %q: %w", t, ErrUnsupportedScale)
 	}
 }
 

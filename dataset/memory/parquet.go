@@ -41,7 +41,7 @@ func (e *Engine) ReadParquet(_ context.Context, r io.ReaderAt, size int64, _ dat
 
 		node, ok := schema.Lookup(path...)
 		if !ok {
-			return nil, fmt.Errorf("memory: parquet column not found: %v", path)
+			return nil, fmt.Errorf("memory: parquet column not found: %v: %w", path, ErrUnsupportedType)
 		}
 
 		cols[i] = colInfo{
@@ -53,7 +53,7 @@ func (e *Engine) ReadParquet(_ context.Context, r io.ReaderAt, size int64, _ dat
 
 	// Read all rows using the Row-based API.
 	reader := pq.NewReader(f)
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	rows := make([]pq.Row, 0, nRows)
 
@@ -78,7 +78,7 @@ func (e *Engine) ReadParquet(_ context.Context, r io.ReaderAt, size int64, _ dat
 	)
 
 	for colIdx, ci := range cols {
-		switch ci.dtype { //nolint:exhaustive // handled by default case.
+		switch ci.dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case dataset.DTypeFloat64:
 			data := make([]float64, len(rows))
 			for i, row := range rows {
@@ -156,7 +156,7 @@ func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, 
 
 		leaf, ok := pqSchema.Lookup(f.Name)
 		if !ok {
-			return fmt.Errorf("memory: parquet schema missing column %q", f.Name)
+			return fmt.Errorf("memory: parquet schema missing column %q: %w", f.Name, ErrUnsupportedType)
 		}
 
 		colIndices[i] = leaf.ColumnIndex
@@ -198,7 +198,7 @@ func parquetNodeToDType(node pq.Node) dataset.DType {
 	}
 
 	kind := node.Type().Kind()
-	switch kind { //nolint:exhaustive // handled by default case.
+	switch kind { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case pq.Double, pq.Float:
 		return dataset.DTypeFloat64
 	case pq.Int64, pq.Int32:
@@ -211,7 +211,7 @@ func parquetNodeToDType(node pq.Node) dataset.DType {
 }
 
 func dtypeToParquetNode(dt dataset.DType) pq.Node {
-	switch dt { //nolint:exhaustive // handled by default case.
+	switch dt { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case dataset.DTypeFloat64:
 		return pq.Optional(pq.Leaf(pq.DoubleType))
 	case dataset.DTypeInt64:

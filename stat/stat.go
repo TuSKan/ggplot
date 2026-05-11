@@ -8,7 +8,6 @@ package stat
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"runtime"
@@ -83,7 +82,7 @@ func Lookup(name Name) (Stat, error) {
 		return s, nil
 	}
 
-	return nil, fmt.Errorf("stat: unknown stat %q", name)
+	return nil, fmt.Errorf("stat: unknown stat %q: %w", name, ErrUnsupportedType)
 }
 
 func init() {
@@ -119,7 +118,7 @@ func (binStat) OutputMapping() map[string]string { return map[string]string{"x":
 func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
-		return dataset.Dataset{}, errors.New("stat_bin: missing 'x' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_bin: missing 'x' aesthetic: %w", ErrUnsupportedType)
 	}
 
 	vals, err := ds.Float64(xCol, dataset.Clean)
@@ -195,7 +194,7 @@ func (countStat) OutputMapping() map[string]string { return map[string]string{"x
 func (countStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, _ Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
-		return dataset.Dataset{}, errors.New("stat_count: missing 'x' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_count: missing 'x' aesthetic: %w", ErrUnsupportedType)
 	}
 
 	vals, err := ds.Float64(xCol, dataset.Clean)
@@ -246,7 +245,7 @@ func (densityStat) OutputMapping() map[string]string {
 func (densityStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	xCol := mapping["x"]
 	if xCol == "" {
-		return dataset.Dataset{}, errors.New("stat_density: missing 'x' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_density: missing 'x' aesthetic: %w", ErrUnsupportedType)
 	}
 
 	vals, err := ds.Float64(xCol, dataset.Clean)
@@ -383,7 +382,7 @@ func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[s
 
 	yCol := mapping["y"]
 	if xCol == "" || yCol == "" {
-		return dataset.Dataset{}, errors.New("stat_smooth: missing 'x' or 'y' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_smooth: missing 'x' or 'y' aesthetic: %w", ErrUnsupportedType)
 	}
 
 	xData, err := ds.Float64(xCol, dataset.Clean)
@@ -397,7 +396,7 @@ func (smoothStat) Compute(ctx context.Context, ds dataset.Dataset, mapping map[s
 	}
 
 	if len(xData) != len(yData) {
-		return dataset.Dataset{}, errors.New("stat_smooth: x and y columns have different lengths")
+		return dataset.Dataset{}, fmt.Errorf("stat_smooth: x and y columns have different lengths: %w", ErrUnsupportedType)
 	}
 
 	n := len(xData)
@@ -570,7 +569,7 @@ func (summaryStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 
 	yCol := mapping["y"]
 	if xCol == "" || yCol == "" {
-		return dataset.Dataset{}, errors.New("stat_summary: missing 'x' or 'y' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_summary: missing 'x' or 'y' aesthetic: %w", ErrUnsupportedType)
 	}
 
 	xData, err := ds.Float64(xCol, dataset.Clean)
@@ -621,12 +620,12 @@ func (summaryStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[st
 func newFloat64Dataset(ds dataset.Dataset, cols map[string][]float64) (dataset.Dataset, error) {
 	eng := dataset.GetEngine(ds.Table())
 	if eng == nil {
-		return dataset.Dataset{}, errors.New("stat: source dataset has no engine")
+		return dataset.Dataset{}, fmt.Errorf("source dataset has no engine: %w", ErrUnsupportedType)
 	}
 
 	factory, ok := eng.(dataset.ColumnFactory)
 	if !ok {
-		return dataset.Dataset{}, fmt.Errorf("stat: engine %q does not support ColumnFactory", eng.Name())
+		return dataset.Dataset{}, fmt.Errorf("stat: engine %q does not support ColumnFactory: %w", eng.Name(), ErrUnsupportedType)
 	}
 
 	var anyCols []dataset.AnyColumn
@@ -670,7 +669,7 @@ func (boxplotStat) OutputMapping() map[string]string {
 func (boxplotStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string]string, opts Options) (dataset.Dataset, error) {
 	yCol := mapping["y"]
 	if yCol == "" {
-		return dataset.Dataset{}, errors.New("stat_boxplot: missing 'y' aesthetic")
+		return dataset.Dataset{}, fmt.Errorf("stat_boxplot: missing 'y' aesthetic: %w", ErrUnsupportedType)
 	}
 
 	// Collect Y values, optionally grouped by X.

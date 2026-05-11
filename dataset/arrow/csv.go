@@ -75,9 +75,9 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 			col := rec.Column(i)
 			a := &accums[i]
 
-			switch a.typeID { //nolint:exhaustive // handled by default case.
+			switch a.typeID { //nolint:exhaustive // intentional subset; default case handles the rest.
 			case arrow.FLOAT64:
-				arr := col.(*array.Float64)
+				arr := col.(*array.Float64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				start := len(a.floats)
 
 				a.floats = append(a.floats, arr.Float64Values()...)
@@ -88,17 +88,17 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 				}
 
 			case arrow.INT64:
-				arr := col.(*array.Int64)
+				arr := col.(*array.Int64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				a.ints = append(a.ints, arr.Int64Values()...)
 
 			case arrow.BOOL:
-				arr := col.(*array.Boolean)
+				arr := col.(*array.Boolean) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				for j := range nRows {
 					a.bools = append(a.bools, arr.Value(j))
 				}
 
 			default: // string
-				arr := col.(*array.String)
+				arr := col.(*array.String) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				for j := range nRows {
 					a.strings = append(a.strings, arr.Value(j))
 				}
@@ -118,7 +118,7 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 	var dsCols []dataset.AnyColumn
 
 	for _, a := range accums {
-		switch a.typeID { //nolint:exhaustive // handled by default case.
+		switch a.typeID { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case arrow.FLOAT64:
 			fields = append(fields, dataset.FloatCol(a.name))
 			dsCols = append(dsCols, e.NewFloat64Column(a.name, a.floats))

@@ -80,10 +80,12 @@ func joinIsNull(t *testing.T, ds dataset.Table, name string) []bool {
 		t.Fatalf("column %q: %v", name, err)
 	}
 
-	return col.(interface{ IsNull() []bool }).IsNull()
+	return col.(interface{ IsNull() []bool }).IsNull() //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 }
 
 func TestArrowInnerJoin(t *testing.T) {
+	t.Parallel()
+
 	eng, left, right := makeJoinDatasets(t)
 
 	spec := dataset.On("id")
@@ -116,6 +118,8 @@ func TestArrowInnerJoin(t *testing.T) {
 }
 
 func TestArrowLeftJoin(t *testing.T) {
+	t.Parallel()
+
 	eng, left, right := makeJoinDatasets(t)
 
 	spec := dataset.On("id")
@@ -156,6 +160,8 @@ func TestArrowLeftJoin(t *testing.T) {
 }
 
 func TestArrowRightJoin(t *testing.T) {
+	t.Parallel()
+
 	eng, left, right := makeJoinDatasets(t)
 
 	spec := dataset.On("id")
@@ -185,6 +191,8 @@ func TestArrowRightJoin(t *testing.T) {
 }
 
 func TestArrowFullJoin(t *testing.T) {
+	t.Parallel()
+
 	eng, left, right := makeJoinDatasets(t)
 
 	spec := dataset.On("id")
@@ -214,6 +222,8 @@ func TestArrowFullJoin(t *testing.T) {
 }
 
 func TestArrowSemiJoin(t *testing.T) {
+	t.Parallel()
+
 	eng, left, right := makeJoinDatasets(t)
 
 	spec := dataset.On("id")
@@ -239,6 +249,8 @@ func TestArrowSemiJoin(t *testing.T) {
 }
 
 func TestArrowAntiJoin(t *testing.T) {
+	t.Parallel()
+
 	eng, left, right := makeJoinDatasets(t)
 
 	spec := dataset.On("id")
@@ -264,6 +276,8 @@ func TestArrowAntiJoin(t *testing.T) {
 }
 
 func TestArrowJoinCompositeKey(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	lSchema := dataset.NewSchema(dataset.IntCol("year"), dataset.StringCol("month"), dataset.FloatCol("x"))
@@ -305,6 +319,8 @@ func TestArrowJoinCompositeKey(t *testing.T) {
 }
 
 func TestArrowJoinDuplicateKeys(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	lSchema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
@@ -334,6 +350,8 @@ func TestArrowJoinDuplicateKeys(t *testing.T) {
 }
 
 func TestArrowJoinNoMatch(t *testing.T) {
+	t.Parallel()
+
 	eng := NewEngine(context.Background(), memory.DefaultAllocator)
 
 	lSchema := dataset.NewSchema(dataset.IntCol("id"), dataset.FloatCol("x"))
@@ -381,6 +399,8 @@ func TestArrowJoinNoMatch(t *testing.T) {
 
 // TestArrowJoinFrameAPI tests the Frame fluent API dispatches to the Arrow Joiner.
 func TestArrowJoinFrameAPI(t *testing.T) {
+	t.Parallel()
+
 	_, left, right := makeJoinDatasets(t)
 
 	result, err := dataset.From(left).

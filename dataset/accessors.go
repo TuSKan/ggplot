@@ -2,7 +2,7 @@ package dataset
 
 import (
 	"cmp"
-	"errors"
+	"fmt"
 	"math"
 	"slices"
 
@@ -24,7 +24,7 @@ type StringOpt = func([]string) []string
 // before the chain runs, so callers may freely mutate the result.
 func (d Dataset) Float64(name string, opts ...Float64Opt) ([]float64, error) {
 	if d.tbl == nil {
-		return nil, errors.New("dataset: Float64() on uncollected Dataset — call Collect(ctx) first")
+		return nil, fmt.Errorf("Float64() on uncollected Dataset — call Collect(ctx) first: %w", ErrUnsupportedDType)
 	}
 
 	if d.err != nil {
@@ -50,7 +50,7 @@ func (d Dataset) Float64(name string, opts ...Float64Opt) ([]float64, error) {
 // Int64 returns the int64 values of the named column, optionally transformed.
 func (d Dataset) Int64(name string, opts ...Int64Opt) ([]int64, error) {
 	if d.tbl == nil {
-		return nil, errors.New("dataset: Int64() on uncollected Dataset — call Collect(ctx) first")
+		return nil, fmt.Errorf("Int64() on uncollected Dataset — call Collect(ctx) first: %w", ErrUnsupportedDType)
 	}
 
 	if d.err != nil {
@@ -76,7 +76,7 @@ func (d Dataset) Int64(name string, opts ...Int64Opt) ([]int64, error) {
 // Strings returns the string values of the named column, optionally transformed.
 func (d Dataset) Strings(name string, opts ...StringOpt) ([]string, error) {
 	if d.tbl == nil {
-		return nil, errors.New("dataset: Strings() on uncollected Dataset — call Collect(ctx) first")
+		return nil, fmt.Errorf("Strings() on uncollected Dataset — call Collect(ctx) first: %w", ErrUnsupportedDType)
 	}
 
 	if d.err != nil {
@@ -102,7 +102,7 @@ func (d Dataset) Strings(name string, opts ...StringOpt) ([]string, error) {
 // Bools returns the bool values of the named column.
 func (d Dataset) Bools(name string) ([]bool, error) {
 	if d.tbl == nil {
-		return nil, errors.New("dataset: Bools() on uncollected Dataset — call Collect(ctx) first")
+		return nil, fmt.Errorf("Bools() on uncollected Dataset — call Collect(ctx) first: %w", ErrUnsupportedDType)
 	}
 
 	if d.err != nil {
@@ -130,7 +130,7 @@ func Clamp[T cmp.Ordered](lo, hi T) func([]T) []T {
 		// Fast paths using SIMD compute for primitive types
 		switch v := any(s).(type) {
 		case []float64:
-			minF, maxF := any(lo).(float64), any(hi).(float64)
+			minF, maxF := any(lo).(float64), any(hi).(float64) //nolint:errcheck,forcetypeassert // type guaranteed by generic constraint.
 			n := len(v)
 			lanes := compute.NumLanes[float64]()
 			minVec := compute.Set(minF)
@@ -153,7 +153,7 @@ func Clamp[T cmp.Ordered](lo, hi T) func([]T) []T {
 
 			return s
 		case []int64:
-			minI, maxI := any(lo).(int64), any(hi).(int64)
+			minI, maxI := any(lo).(int64), any(hi).(int64) //nolint:errcheck,forcetypeassert // type guaranteed by generic constraint.
 			n := len(v)
 			lanes := compute.NumLanes[int64]()
 			minVec := compute.Set(minI)

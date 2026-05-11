@@ -146,7 +146,7 @@ func (p CompPred) Mask(ds Table) ([]bool, error) {
 			mask[i] = cmpString(x, v, p.Op)
 		}
 	default:
-		return nil, fmt.Errorf("dataset: CompPred unsupported column type %T", col)
+		return nil, fmt.Errorf("dataset: CompPred unsupported column type %T: %w", col, ErrUnsupportedDType)
 	}
 
 	return mask, nil
@@ -197,7 +197,7 @@ func (p BetweenPred) Mask(ds Table) ([]bool, error) {
 			mask[i] = x >= lo && x <= hi
 		}
 	default:
-		return nil, fmt.Errorf("dataset: BetweenPred unsupported column type %T", col)
+		return nil, fmt.Errorf("dataset: BetweenPred unsupported column type %T: %w", col, ErrUnsupportedDType)
 	}
 
 	return mask, nil
@@ -265,7 +265,7 @@ func (p InPred) Mask(ds Table) ([]bool, error) {
 			mask[i] = set[x]
 		}
 	default:
-		return nil, fmt.Errorf("dataset: InPred unsupported column type %T", col)
+		return nil, fmt.Errorf("dataset: InPred unsupported column type %T: %w", col, ErrUnsupportedDType)
 	}
 
 	return mask, nil
@@ -539,7 +539,7 @@ func toInt64(v any) int64 {
 }
 
 func cmpFloat64(a, b float64, op Op) bool {
-	switch op { //nolint:exhaustive // handled by default case.
+	switch op { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case OpGt:
 		return a > b
 	case OpLt:
@@ -558,7 +558,7 @@ func cmpFloat64(a, b float64, op Op) bool {
 }
 
 func cmpInt64(a, b int64, op Op) bool {
-	switch op { //nolint:exhaustive // handled by default case.
+	switch op { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case OpGt:
 		return a > b
 	case OpLt:
@@ -577,7 +577,7 @@ func cmpInt64(a, b int64, op Op) bool {
 }
 
 func cmpString(a, b string, op Op) bool {
-	switch op { //nolint:exhaustive // handled by default case.
+	switch op { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case OpGt:
 		return a > b
 	case OpLt:

@@ -1,7 +1,6 @@
 package bigquery
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -106,7 +105,7 @@ func (e *Engine) lazyAgg(fn string, col dataset.AnyColumn) (dataset.AnyColumn, e
 		case "VARIANCE":
 			result, aggErr = e.localEngine().Variance(col)
 		default:
-			return nil, fmt.Errorf("bigquery: unknown agg function %q", fn)
+			return nil, fmt.Errorf("bigquery: unknown agg function %q: %w", fn, ErrUnsupportedType)
 		}
 
 		if aggErr != nil {
@@ -146,26 +145,28 @@ func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset
 	rightBQ, rightOK := right.(*bqDataset)
 
 	if !leftOK || !rightOK {
-		return nil, errors.New("bigquery: Join requires both datasets to be BigQuery datasets")
+		return nil, fmt.Errorf("Join requires both datasets to be BigQuery datasets: %w", ErrUnsupportedType)
 	}
 
 	// Map JoinType â†’ SQL
-	switch spec.Type { //nolint:exhaustive // intentionally handles subset.
+	switch spec.Type { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case dataset.JoinSemi:
 		return e.lazySemiAntiJoin(leftBQ, rightBQ, spec, true)
 	case dataset.JoinAnti:
 		return e.lazySemiAntiJoin(leftBQ, rightBQ, spec, false)
+	default:
 	}
 
 	joinSQL := "INNER JOIN"
 
-	switch spec.Type { //nolint:exhaustive // intentionally handles subset.
+	switch spec.Type { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case dataset.JoinLeft:
 		joinSQL = "LEFT JOIN"
 	case dataset.JoinRight:
 		joinSQL = "RIGHT JOIN"
 	case dataset.JoinFull:
 		joinSQL = "FULL OUTER JOIN"
+	default:
 	}
 
 	// Build ON clause
@@ -219,21 +220,25 @@ func (e *Engine) lazySemiAntiJoin(left, right *bqDataset, spec dataset.JoinSpec,
 // Stack vertically concatenates BigQuery datasets via UNION ALL.
 func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
-		return nil, errors.New("bigquery: Stack requires at least one dataset")
+		return nil, fmt.Errorf("Stack requires at least one dataset: %w", ErrUnsupportedType)
 	}
 
 	parts := make([]string, len(datasets))
 	for i, ds := range datasets {
 		bq, ok := ds.(*bqDataset)
 		if !ok {
-			return nil, errors.New("bigquery: Stack requires all BigQuery datasets")
+			return nil, fmt.Errorf("Stack requires all BigQuery datasets: %w", ErrUnsupportedType)
 		}
 
 		parts[i] = "SELECT * FROM " + bq.sourceRef() //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
 	}
 
 	sql := strings.Join(parts, " UNION ALL ")
-	first := datasets[0].(*bqDataset)
+
+	first, ok := datasets[0].(*bqDataset)
+	if !ok {
+		return nil, fmt.Errorf("expected *bqDataset, got %T: %w", datasets[0], ErrUnsupportedType)
+	}
 
 	var totalRows int64
 	for _, ds := range datasets {
@@ -246,7 +251,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 // Combine horizontally concatenates datasets (downloads then delegates).
 func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 	if len(datasets) == 0 {
-		return nil, errors.New("bigquery: Combine requires at least one dataset")
+		return nil, fmt.Errorf("Combine requires at least one dataset: %w", ErrUnsupportedType)
 	}
 
 	// Column bind â€” download and delegate to arrow engine
@@ -269,7 +274,7 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 
 	composer, ok := eng.(dataset.Composer)
 	if !ok {
-		return nil, errors.New("bigquery: local engine does not support Composer")
+		return nil, fmt.Errorf("local engine does not support Composer: %w", ErrUnsupportedType)
 	}
 
 	result, combErr := composer.Combine(localDS...)

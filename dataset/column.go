@@ -154,7 +154,7 @@ func GetColumn[T any](ds Table, name string) (Column[T], error) {
 
 	typed, ok := raw.(Column[T])
 	if !ok {
-		return nil, fmt.Errorf("dataset: column %q (%s) is not Column[%T]",
+		return nil, fmt.Errorf("dataset: column %q (%s) is not Column[%T]", //nolint:err113 // error contains dynamic context values that vary per call site.
 			name, raw.DType(), *new(T))
 	}
 

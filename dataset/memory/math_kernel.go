@@ -22,7 +22,7 @@ import (
 func requireFloat64(col dataset.AnyColumn) (*float64Column, error) {
 	c, ok := col.(*float64Column)
 	if !ok {
-		return nil, fmt.Errorf("memory: MathKernel requires float64 column, got %T", col)
+		return nil, fmt.Errorf("MathKernel: got %T: %w", col, ErrRequiresFloat64)
 	}
 
 	return c, nil
@@ -41,7 +41,7 @@ func requireFloat64Pair(a, b dataset.AnyColumn) (*float64Column, *float64Column,
 	}
 
 	if len(ca.data) != len(cb.data) {
-		return nil, nil, fmt.Errorf("memory: column length mismatch: %d vs %d", len(ca.data), len(cb.data))
+		return nil, nil, fmt.Errorf("memory: column length mismatch: %d vs %d: %w", len(ca.data), len(cb.data), ErrLengthMismatch)
 	}
 
 	return ca, cb, nil
@@ -294,16 +294,16 @@ func (e *Engine) Atan(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) Atan2(y, x dataset.AnyColumn) (dataset.AnyColumn, error) {
 	cy, ok := y.(*float64Column)
 	if !ok {
-		return nil, fmt.Errorf("memory: Atan2 requires float64 column, got %T", y)
+		return nil, fmt.Errorf("Atan2: got %T: %w", y, ErrRequiresFloat64)
 	}
 
 	cx, ok := x.(*float64Column)
 	if !ok {
-		return nil, fmt.Errorf("memory: Atan2 requires float64 column, got %T", x)
+		return nil, fmt.Errorf("Atan2: got %T: %w", x, ErrRequiresFloat64)
 	}
 
 	if len(cy.data) != len(cx.data) {
-		return nil, fmt.Errorf("memory: column length mismatch: %d vs %d", len(cy.data), len(cx.data))
+		return nil, fmt.Errorf("memory: column length mismatch: %d vs %d: %w", len(cy.data), len(cx.data), ErrLengthMismatch)
 	}
 
 	out := make([]float64, len(cy.data))
@@ -356,16 +356,16 @@ func (e *Engine) Ceil(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func requireInt64Pair(a, b dataset.AnyColumn) (*int64Column, *int64Column, error) {
 	ca, ok := a.(*int64Column)
 	if !ok {
-		return nil, nil, fmt.Errorf("memory: bitwise op requires int64 column, got %T", a)
+		return nil, nil, fmt.Errorf("memory: bitwise op requires int64 column, got %T: %w", a, ErrUnsupportedType)
 	}
 
 	cb, ok := b.(*int64Column)
 	if !ok {
-		return nil, nil, fmt.Errorf("memory: bitwise op requires int64 column, got %T", b)
+		return nil, nil, fmt.Errorf("memory: bitwise op requires int64 column, got %T: %w", b, ErrUnsupportedType)
 	}
 
 	if len(ca.data) != len(cb.data) {
-		return nil, nil, fmt.Errorf("memory: column length mismatch: %d vs %d", len(ca.data), len(cb.data))
+		return nil, nil, fmt.Errorf("memory: column length mismatch: %d vs %d: %w", len(ca.data), len(cb.data), ErrLengthMismatch)
 	}
 
 	return ca, cb, nil
@@ -420,7 +420,7 @@ func (e *Engine) BitXor(a, b dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) BitNot(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	c, ok := col.(*int64Column)
 	if !ok {
-		return nil, fmt.Errorf("memory: BitNot requires int64 column, got %T", col)
+		return nil, fmt.Errorf("BitNot: got %T: %w", col, ErrRequiresInt64)
 	}
 
 	out := make([]int64, len(c.data))
@@ -435,7 +435,7 @@ func (e *Engine) BitNot(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 func (e *Engine) BitShiftLeft(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	c, ok := col.(*int64Column)
 	if !ok {
-		return nil, fmt.Errorf("memory: BitShiftLeft requires int64 column, got %T", col)
+		return nil, fmt.Errorf("BitShiftLeft: got %T: %w", col, ErrRequiresInt64)
 	}
 
 	out := make([]int64, len(c.data))
@@ -450,7 +450,7 @@ func (e *Engine) BitShiftLeft(col dataset.AnyColumn, n int) (dataset.AnyColumn, 
 func (e *Engine) BitShiftRight(col dataset.AnyColumn, n int) (dataset.AnyColumn, error) {
 	c, ok := col.(*int64Column)
 	if !ok {
-		return nil, fmt.Errorf("memory: BitShiftRight requires int64 column, got %T", col)
+		return nil, fmt.Errorf("BitShiftRight: got %T: %w", col, ErrRequiresInt64)
 	}
 
 	out := make([]int64, len(c.data))

@@ -10,6 +10,8 @@ import (
 )
 
 func TestLookup_Identity(t *testing.T) {
+	t.Parallel()
+
 	s, err := stat.Lookup(stat.Identity)
 	if err != nil {
 		t.Fatal(err)
@@ -21,6 +23,8 @@ func TestLookup_Identity(t *testing.T) {
 }
 
 func TestLookup_Unknown_ReturnsError(t *testing.T) {
+	t.Parallel()
+
 	_, err := stat.Lookup("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for unknown stat name")
@@ -28,6 +32,8 @@ func TestLookup_Unknown_ReturnsError(t *testing.T) {
 }
 
 func TestBinStat(t *testing.T) {
+	t.Parallel()
+
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -79,6 +85,8 @@ func TestBinStat(t *testing.T) {
 }
 
 func TestBinStat_MissingX(t *testing.T) {
+	t.Parallel()
+
 	eng2 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng2, eng2.NewFloat64Column("y", []float64{1}))
 
@@ -94,6 +102,8 @@ func TestBinStat_MissingX(t *testing.T) {
 }
 
 func TestCountStat(t *testing.T) {
+	t.Parallel()
+
 	eng3 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng3,
 		eng3.NewFloat64Column("x", []float64{1, 2, 2, 3, 3, 3}),
@@ -121,6 +131,8 @@ func TestCountStat(t *testing.T) {
 }
 
 func TestDensityStat(t *testing.T) {
+	t.Parallel()
+
 	xs := make([]float64, 100)
 	for i := range xs {
 		xs[i] = float64(i)
@@ -155,6 +167,8 @@ func TestDensityStat(t *testing.T) {
 }
 
 func TestSmoothStat(t *testing.T) {
+	t.Parallel()
+
 	eng5 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng5,
 		eng5.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
@@ -193,6 +207,8 @@ func TestSmoothStat(t *testing.T) {
 }
 
 func TestSummaryStat(t *testing.T) {
+	t.Parallel()
+
 	eng6 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng6,
 		eng6.NewFloat64Column("x", []float64{1, 1, 2, 2}),
@@ -221,6 +237,8 @@ func TestSummaryStat(t *testing.T) {
 }
 
 func TestIdentityStat(t *testing.T) {
+	t.Parallel()
+
 	eng7 := memory.NewEngine(context.Background())
 	ds, _ := dataset.NewDataset(eng7, eng7.NewFloat64Column("x", []float64{1, 2, 3}))
 
@@ -240,6 +258,8 @@ func TestIdentityStat(t *testing.T) {
 }
 
 func TestOutputSchema(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   stat.Name
 		expect []string

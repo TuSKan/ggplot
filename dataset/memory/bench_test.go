@@ -51,7 +51,12 @@ func BenchmarkSum(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -68,7 +73,12 @@ func BenchmarkMean(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -85,7 +95,12 @@ func BenchmarkMinMax(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -102,7 +117,12 @@ func BenchmarkMedian(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -119,7 +139,12 @@ func BenchmarkVariance(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -136,7 +161,12 @@ func BenchmarkCount(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -155,7 +185,12 @@ func BenchmarkSortIndices(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -172,7 +207,12 @@ func BenchmarkTake(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			rng := rand.New(rand.NewSource(99))
@@ -197,7 +237,12 @@ func BenchmarkSlice(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -216,7 +261,12 @@ func BenchmarkLag(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -233,7 +283,12 @@ func BenchmarkLead(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -250,7 +305,12 @@ func BenchmarkCumSum(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -267,7 +327,12 @@ func BenchmarkCumMax(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -284,7 +349,12 @@ func BenchmarkCumMin(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -301,7 +371,12 @@ func BenchmarkRank(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -318,7 +393,12 @@ func BenchmarkDenseRank(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -403,7 +483,12 @@ func benchMemMathUnary(b *testing.B, fn func(*memory.Engine, dataset.AnyColumn) 
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -448,7 +533,12 @@ func BenchmarkMemAddCols(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -465,7 +555,12 @@ func BenchmarkMemMulScalar(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("x")
 
 			b.ResetTimer()
@@ -482,7 +577,12 @@ func BenchmarkMemBitShiftLeft(b *testing.B) {
 	for _, n := range []int{1_000, 100_000, 1_000_000, 10_000_000} {
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			ds := makeBenchDS(b, n)
-			eng := dataset.GetEngine(ds).(*memory.Engine)
+
+			eng, ok := dataset.GetEngine(ds).(*memory.Engine)
+			if !ok {
+				b.Fatalf("expected *memory.Engine, got %T", dataset.GetEngine(ds))
+			}
+
 			col, _ := ds.Column("id")
 
 			b.ResetTimer()

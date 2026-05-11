@@ -130,7 +130,7 @@ func (n *LogNorm) Train(col dataset.AnyColumn) error {
 	}
 
 	if !ok {
-		return fmt.Errorf("colormap: LogNorm requires strictly positive values in %q", col.Name())
+		return fmt.Errorf("colormap: LogNorm requires strictly positive values in %q: %w", col.Name(), ErrParseColor)
 	}
 
 	if !n.trained {
@@ -302,7 +302,7 @@ func (n *TwoSlopeNorm) Train(col dataset.AnyColumn) error {
 	}
 
 	if n.Vcenter <= n.Vmin || n.Vcenter >= n.Vmax {
-		return fmt.Errorf("colormap: TwoSlopeNorm Vcenter=%g must lie strictly within [Vmin=%g, Vmax=%g]",
+		return fmt.Errorf("colormap: TwoSlopeNorm Vcenter=%g must lie strictly within [Vmin=%g, Vmax=%g]", //nolint:err113 // error contains dynamic context values that vary per call site.
 			n.Vcenter, n.Vmin, n.Vmax)
 	}
 
@@ -541,7 +541,7 @@ func minMaxColumn(col dataset.AnyColumn) (mn, mx float64, ok bool, err error) {
 
 		return mn, mx, true, nil
 	default:
-		return 0, 0, false, fmt.Errorf("colormap: column %q has non-numeric type %s", col.Name(), col.DType())
+		return 0, 0, false, fmt.Errorf("colormap: column %q has non-numeric type %s: %w", col.Name(), col.DType(), ErrParseColor)
 	}
 }
 
@@ -598,6 +598,6 @@ func minMaxPositive(col dataset.AnyColumn) (mn, mx float64, ok bool, err error) 
 
 		return mn, mx, true, nil
 	default:
-		return 0, 0, false, fmt.Errorf("colormap: column %q has non-numeric type %s", col.Name(), col.DType())
+		return 0, 0, false, fmt.Errorf("colormap: column %q has non-numeric type %s: %w", col.Name(), col.DType(), ErrParseColor)
 	}
 }
