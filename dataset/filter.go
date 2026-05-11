@@ -69,6 +69,8 @@ func (o Op) sql() string {
 		return "="
 	case OpNe:
 		return "!="
+	case OpBetween, OpIn, OpIsNull, OpIsNotNull:
+		return "?" // handled by dedicated predicate types
 	default:
 		return "?"
 	}
@@ -537,7 +539,7 @@ func toInt64(v any) int64 {
 }
 
 func cmpFloat64(a, b float64, op Op) bool {
-	switch op {
+	switch op { //nolint:exhaustive // handled by default case.
 	case OpGt:
 		return a > b
 	case OpLt:
@@ -556,7 +558,7 @@ func cmpFloat64(a, b float64, op Op) bool {
 }
 
 func cmpInt64(a, b int64, op Op) bool {
-	switch op {
+	switch op { //nolint:exhaustive // handled by default case.
 	case OpGt:
 		return a > b
 	case OpLt:
@@ -575,7 +577,7 @@ func cmpInt64(a, b int64, op Op) bool {
 }
 
 func cmpString(a, b string, op Op) bool {
-	switch op {
+	switch op { //nolint:exhaustive // handled by default case.
 	case OpGt:
 		return a > b
 	case OpLt:

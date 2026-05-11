@@ -186,7 +186,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 				continue // skip — proto default value
 			}
 
-			switch field.Dtype {
+			switch field.Dtype { //nolint:exhaustive // intentionally handles subset.
 			case dataset.DTypeFloat64:
 				if i < len(a.floats) && !math.IsNaN(a.floats[i]) {
 					msg.Set(fd, protoreflect.ValueOfFloat64(a.floats[i]))
@@ -238,7 +238,7 @@ func (b *bqBuilder) Build() (dataset.Table, error) {
 		engine:  b.engine,
 		schema:  schema,
 		table:   ref,
-		numRows: int64(meta.NumRows),
+		numRows: int64(meta.NumRows), //nolint:gosec // G115: safe — metadata values bounded by platform.
 	}, nil
 }
 

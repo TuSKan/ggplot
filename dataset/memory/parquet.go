@@ -78,7 +78,7 @@ func (e *Engine) ReadParquet(_ context.Context, r io.ReaderAt, size int64, _ dat
 	)
 
 	for colIdx, ci := range cols {
-		switch ci.dtype {
+		switch ci.dtype { //nolint:exhaustive // handled by default case.
 		case dataset.DTypeFloat64:
 			data := make([]float64, len(rows))
 			for i, row := range rows {
@@ -198,7 +198,7 @@ func parquetNodeToDType(node pq.Node) dataset.DType {
 	}
 
 	kind := node.Type().Kind()
-	switch kind {
+	switch kind { //nolint:exhaustive // handled by default case.
 	case pq.Double, pq.Float:
 		return dataset.DTypeFloat64
 	case pq.Int64, pq.Int32:
@@ -211,7 +211,7 @@ func parquetNodeToDType(node pq.Node) dataset.DType {
 }
 
 func dtypeToParquetNode(dt dataset.DType) pq.Node {
-	switch dt {
+	switch dt { //nolint:exhaustive // handled by default case.
 	case dataset.DTypeFloat64:
 		return pq.Optional(pq.Leaf(pq.DoubleType))
 	case dataset.DTypeInt64:

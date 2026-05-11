@@ -149,8 +149,8 @@ func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset
 		return nil, errors.New("bigquery: Join requires both datasets to be BigQuery datasets")
 	}
 
-	// Map JoinType → SQL
-	switch spec.Type {
+	// Map JoinType â†’ SQL
+	switch spec.Type { //nolint:exhaustive // intentionally handles subset.
 	case dataset.JoinSemi:
 		return e.lazySemiAntiJoin(leftBQ, rightBQ, spec, true)
 	case dataset.JoinAnti:
@@ -159,7 +159,7 @@ func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset
 
 	joinSQL := "INNER JOIN"
 
-	switch spec.Type {
+	switch spec.Type { //nolint:exhaustive // intentionally handles subset.
 	case dataset.JoinLeft:
 		joinSQL = "LEFT JOIN"
 	case dataset.JoinRight:
@@ -176,7 +176,7 @@ func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset
 
 	onClause := strings.Join(onParts, " AND ")
 
-	sql := fmt.Sprintf(
+	sql := fmt.Sprintf( //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
 		"SELECT * FROM %s AS L %s %s AS R ON %s",
 		leftBQ.sourceRef(), joinSQL, rightBQ.sourceRef(), onClause,
 	)
@@ -206,7 +206,7 @@ func (e *Engine) lazySemiAntiJoin(left, right *bqDataset, spec dataset.JoinSpec,
 		exists = "NOT EXISTS"
 	}
 
-	sql := fmt.Sprintf(
+	sql := fmt.Sprintf( //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
 		"SELECT L.* FROM %s AS L WHERE %s (SELECT 1 FROM %s AS R WHERE %s)",
 		left.sourceRef(), exists, right.sourceRef(), onClause,
 	)
@@ -229,7 +229,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 			return nil, errors.New("bigquery: Stack requires all BigQuery datasets")
 		}
 
-		parts[i] = "SELECT * FROM " + bq.sourceRef()
+		parts[i] = "SELECT * FROM " + bq.sourceRef() //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
 	}
 
 	sql := strings.Join(parts, " UNION ALL ")
@@ -249,7 +249,7 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 		return nil, errors.New("bigquery: Combine requires at least one dataset")
 	}
 
-	// Column bind — download and delegate to arrow engine
+	// Column bind â€” download and delegate to arrow engine
 	localDS := make([]dataset.Table, len(datasets))
 	for i, ds := range datasets {
 		bq, ok := ds.(*bqDataset)
@@ -284,7 +284,7 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 
 // Fill forward- or backward-fills null values (downloads then delegates).
 func (e *Engine) Fill(col dataset.AnyColumn, dir dataset.FillDirection) (dataset.AnyColumn, error) {
-	// Window-based fill is complex — download and delegate
+	// Window-based fill is complex â€” download and delegate
 	if bqCol, ok := col.(*bqColumn); ok {
 		ds, err := bqCol.ds.download()
 		if err != nil {
@@ -315,7 +315,7 @@ func (e *Engine) Fill(col dataset.AnyColumn, dir dataset.FillDirection) (dataset
 // DropNA returns a dataset with rows filtered by IS NOT NULL.
 func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error) {
 	if bq, ok := ds.(*bqDataset); ok {
-		// Pure RowRestriction — fully lazy
+		// Pure RowRestriction â€” fully lazy
 		parts := make([]string, len(cols))
 		for i, c := range cols {
 			parts[i] = fmt.Sprintf("`%s` IS NOT NULL", c)
@@ -335,7 +335,7 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 // ReplaceNA replaces null values with a default via SQL COALESCE.
 func (e *Engine) ReplaceNA(col dataset.AnyColumn, defaultVal float64) (dataset.AnyColumn, error) {
 	if bqCol, ok := col.(*bqColumn); ok {
-		// COALESCE — lazy SQL
+		// COALESCE â€” lazy SQL
 		sql := fmt.Sprintf(
 			"SELECT COALESCE(`%s`, %v) AS `%s` FROM %s",
 			bqCol.name, defaultVal, bqCol.name, bqCol.ds.sourceRef(),

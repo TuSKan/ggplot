@@ -1088,7 +1088,7 @@ func TestRender_Boxplot_SingleGroup(t *testing.T) {
 
 // --- SVG/PDF output tests ---
 
-func TestSave_SVG(t *testing.T) {
+func TestSave_SVG(t *testing.T) { //nolint:dupl // type-specialized code path.
 	ds, _ := dataset.NewDataset(
 		memory.NewEngine(context.Background()),
 		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4}),
@@ -1121,7 +1121,7 @@ func TestSave_SVG(t *testing.T) {
 	}
 }
 
-func TestSave_PDF(t *testing.T) {
+func TestSave_PDF(t *testing.T) { //nolint:dupl // type-specialized code path.
 	ds, _ := dataset.NewDataset(
 		memory.NewEngine(context.Background()),
 		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3, 4}),
@@ -1154,7 +1154,7 @@ func TestSave_PDF(t *testing.T) {
 	}
 }
 
-func TestWriteTo_SVG(t *testing.T) {
+func TestWriteTo_SVG(t *testing.T) { //nolint:dupl // type-specialized code path.
 	ds, _ := dataset.NewDataset(
 		memory.NewEngine(context.Background()),
 		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3}),
@@ -1179,7 +1179,7 @@ func TestWriteTo_SVG(t *testing.T) {
 	}
 }
 
-func TestWriteTo_PDF(t *testing.T) {
+func TestWriteTo_PDF(t *testing.T) { //nolint:dupl // type-specialized code path.
 	ds, _ := dataset.NewDataset(
 		memory.NewEngine(context.Background()),
 		memory.NewEngine(context.Background()).NewFloat64Column("x", []float64{1, 2, 3}),

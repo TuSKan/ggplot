@@ -34,7 +34,7 @@ func bqFieldToDataset(fs *bigquery.FieldSchema) dataset.Field {
 		Nullable: !fs.Required,
 	}
 
-	switch fs.Type {
+	switch fs.Type { //nolint:exhaustive // handled by default case.
 	case bigquery.FloatFieldType:
 		f.Dtype = dataset.DTypeFloat64
 	case bigquery.IntegerFieldType:
@@ -74,7 +74,7 @@ func datasetFieldToBQ(f dataset.Field) *bigquery.FieldSchema {
 		Required: !f.Nullable,
 	}
 
-	switch f.Dtype {
+	switch f.Dtype { //nolint:exhaustive // handled by default case.
 	case dataset.DTypeFloat64:
 		fs.Type = bigquery.FloatFieldType
 	case dataset.DTypeInt64:
@@ -131,7 +131,7 @@ func arrowRecordToDataset(eng *arrowEngine.Engine, rec arrow.RecordBatch) (datas
 
 // arrowTypeToDType maps Arrow types to dataset DType.
 func arrowTypeToDType(dt arrow.DataType) dataset.DType {
-	switch dt.ID() {
+	switch dt.ID() { //nolint:exhaustive // handled by default case.
 	case arrow.FLOAT64, arrow.FLOAT32, arrow.FLOAT16:
 		return dataset.DTypeFloat64
 	case arrow.INT64, arrow.INT32, arrow.INT16, arrow.INT8,
@@ -150,7 +150,7 @@ func arrowTypeToDType(dt arrow.DataType) dataset.DType {
 
 // arrowArrayToColumn wraps an Arrow array into a dataset.AnyColumn.
 func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, dtype dataset.DType) (dataset.AnyColumn, error) {
-	switch dtype {
+	switch dtype { //nolint:exhaustive // handled by default case.
 	case dataset.DTypeFloat64:
 		vals := make([]float64, arr.Len())
 		switch a := arr.(type) {

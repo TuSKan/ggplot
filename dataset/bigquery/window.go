@@ -87,7 +87,7 @@ func (e *Engine) lazyWindowFn(fn string, col dataset.AnyColumn, n int) (dataset.
 	}
 
 	resultName := fmt.Sprintf("%s_%s_%d", fn, bqCol.name, n)
-	sql := fmt.Sprintf(
+	sql := fmt.Sprintf( //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
 		"SELECT *, %s(`%s`, %d) OVER() AS `%s` FROM %s",
 		fn, bqCol.name, n, resultName, bqCol.ds.sourceRef(),
 	)
@@ -132,7 +132,7 @@ func (e *Engine) lazyCumulativeWindowFn(fn string, col dataset.AnyColumn) (datas
 	}
 
 	resultName := fmt.Sprintf("cum_%s_%s", fn, bqCol.name)
-	sql := fmt.Sprintf(
+	sql := fmt.Sprintf( //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
 		"SELECT *, %s(`%s`) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS `%s` FROM %s",
 		fn, bqCol.name, resultName, bqCol.ds.sourceRef(),
 	)
@@ -182,7 +182,7 @@ func (e *Engine) lazyRankWindowFn(fn string, col dataset.AnyColumn) (dataset.Any
 		dtype = dataset.DTypeFloat64
 	}
 
-	sql := fmt.Sprintf(
+	sql := fmt.Sprintf( //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
 		"SELECT *, %s() OVER(ORDER BY `%s`) AS `%s` FROM %s",
 		fn, bqCol.name, resultName, bqCol.ds.sourceRef(),
 	)
@@ -228,7 +228,7 @@ func (e *Engine) Cast(col dataset.AnyColumn, target dataset.DType) (dataset.AnyC
 
 // DtypeToBQSQL maps dataset.DType to BigQuery SQL type names.
 func DtypeToBQSQL(dt dataset.DType) string {
-	switch dt {
+	switch dt { //nolint:exhaustive // handled by default case.
 	case dataset.DTypeFloat64:
 		return "FLOAT64"
 	case dataset.DTypeInt64:

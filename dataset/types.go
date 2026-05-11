@@ -23,7 +23,7 @@ const (
 
 // String returns the human-readable name of the DType.
 func (d DType) String() string {
-	switch d {
+	switch d { //nolint:exhaustive // handled by default case.
 	case DTypeFloat64:
 		return "float64"
 	case DTypeInt64:

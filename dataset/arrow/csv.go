@@ -75,7 +75,7 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 			col := rec.Column(i)
 			a := &accums[i]
 
-			switch a.typeID {
+			switch a.typeID { //nolint:exhaustive // handled by default case.
 			case arrow.FLOAT64:
 				arr := col.(*array.Float64)
 				start := len(a.floats)
@@ -118,7 +118,7 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 	var dsCols []dataset.AnyColumn
 
 	for _, a := range accums {
-		switch a.typeID {
+		switch a.typeID { //nolint:exhaustive // handled by default case.
 		case arrow.FLOAT64:
 			fields = append(fields, dataset.FloatCol(a.name))
 			dsCols = append(dsCols, e.NewFloat64Column(a.name, a.floats))

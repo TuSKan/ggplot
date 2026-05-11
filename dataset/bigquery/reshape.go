@@ -48,7 +48,7 @@ func (e *Engine) PivotLonger(ds dataset.Table, spec dataset.PivotLongerSpec) (da
 		pivotColList[i] = "`" + c + "`"
 	}
 
-	sql := fmt.Sprintf(
+	sql := fmt.Sprintf( //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
 		"SELECT * FROM %s UNPIVOT (`%s` FOR `%s` IN (%s))",
 		bq.sourceRef(),
 		spec.ValuesTo,
@@ -95,7 +95,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 	}
 
 	// PivotWider needs to know the distinct values of NamesFrom.
-	// This requires a query — but we keep the result lazy.
+	// This requires a query â€” but we keep the result lazy.
 	// For now, materialize to get distinct names, then build the pivot SQL.
 	mat, err := bq.materialize()
 	if err != nil {
@@ -118,7 +118,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 		engine:  e,
 		schema:  bqSchemaToDataset(distinctMeta.Schema),
 		table:   distinctRef,
-		numRows: int64(distinctMeta.NumRows),
+		numRows: int64(distinctMeta.NumRows), //nolint:gosec // G115: safe — metadata values bounded by platform.
 	}
 
 	localDistinct, err := distinctDS.download()
@@ -316,7 +316,7 @@ func (e *Engine) Complete(ds dataset.Table, cols ...string) (dataset.Table, erro
 		)
 	}
 
-	sql := "SELECT * FROM " + strings.Join(crossParts, " CROSS JOIN ")
+	sql := "SELECT * FROM " + strings.Join(crossParts, " CROSS JOIN ") //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
 
 	// Build schema from selected columns
 	outFields := make([]dataset.Field, len(cols))

@@ -115,7 +115,7 @@ func colValueString(col dataset.AnyColumn, row int) string {
 
 // probeJoin probes the left dataset against the right hash index and produces
 // row index pairs. A value of -1 means "no match" (null-fill).
-func probeJoin(left, right dataset.Table, spec dataset.JoinSpec,
+func probeJoin(left, right dataset.Table, spec dataset.JoinSpec, //nolint:gocognit // probeJoin is a complex pipeline — splitting reduces clarity.
 	rightIndex map[string][]int) (leftIdx, rightIdx []int, err error) {
 	leftKeyCols := make([]dataset.AnyColumn, len(spec.LeftCols))
 	for i, name := range spec.LeftCols {

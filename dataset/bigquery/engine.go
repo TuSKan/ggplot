@@ -21,6 +21,7 @@ package bigquery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -167,7 +168,7 @@ func NewEngine(ctx context.Context, projectID string, opts ...Option) (*Engine, 
 	if e.readClient == nil {
 		rc, err := bqstorage.NewBigQueryReadClient(ctx, e._clientOpts...)
 		if err != nil {
-			e.bqClient.Close()
+			err := errors.Join(e.bqClient.Close(), err)
 			return nil, fmt.Errorf("bigquery: failed to create storage read client: %w", err)
 		}
 
@@ -233,7 +234,7 @@ func (e *Engine) Table(datasetID, tableID string) (dataset.Table, error) {
 	}
 
 	schema := bqSchemaToDataset(meta.Schema)
-	numRows := int64(meta.NumRows)
+	numRows := int64(meta.NumRows) //nolint:gosec // G115: safe — metadata values bounded by platform.
 
 	return &bqDataset{
 		engine:  e,

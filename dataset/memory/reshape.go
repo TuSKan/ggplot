@@ -146,7 +146,7 @@ func repeatColumn(col dataset.AnyColumn, times, outLen int, name string) dataset
 
 // gatherPivotValues collects values from multiple pivot columns into one.
 func gatherPivotValues(ds dataset.Table, cols []string, dtype dataset.DType, nRows, nPivot, outLen int, name string) dataset.AnyColumn {
-	switch dtype {
+	switch dtype { //nolint:exhaustive // handled by default case.
 	case dataset.DTypeFloat64:
 		out := make([]float64, outLen)
 

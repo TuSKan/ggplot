@@ -159,7 +159,7 @@ func (e *Engine) arrowRepeatColumn(col dataset.AnyColumn, times, outLen int, nam
 
 func (e *Engine) arrowGatherPivotValues(ds dataset.Table, cols []string, dtype dataset.DType,
 	nRows, _ /* nPivot */, outLen int, name string) dataset.AnyColumn {
-	switch dtype {
+	switch dtype { //nolint:exhaustive // handled by default case.
 	case dataset.DTypeFloat64:
 		b := array.NewFloat64Builder(e.alloc)
 		defer b.Release()
@@ -223,7 +223,7 @@ func (e *Engine) arrowGatherPivotValues(ds dataset.Table, cols []string, dtype d
 }
 
 // PivotWider reshapes a long dataset to wide format.
-func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (dataset.Table, error) {
+func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (dataset.Table, error) { //nolint:gocognit // PivotWider is a complex pipeline — splitting reduces clarity.
 	if spec.NamesFrom == "" || spec.ValuesFrom == "" {
 		return nil, errors.New("arrow: PivotWider requires NamesFrom and ValuesFrom")
 	}
@@ -333,7 +333,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 	}
 
 	switch c := valCol.(type) {
-	case *arrowFloat64Column:
+	case *arrowFloat64Column: //nolint:dupl // type-specialized code path.
 		pivotData := make([][]float64, len(pivotNames))
 
 		pivotValid := make([][]bool, len(pivotNames))
@@ -395,7 +395,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 			outCols = append(outCols, &arrowInt64Column{name: pn, arr: b.NewInt64Array(), dtype: c.dtype})
 			b.Release()
 		}
-	case *arrowStringColumn:
+	case *arrowStringColumn: //nolint:dupl // type-specialized code path.
 		pivotData := make([][]string, len(pivotNames))
 
 		pivotValid := make([][]bool, len(pivotNames))

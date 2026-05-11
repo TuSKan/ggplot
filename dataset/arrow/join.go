@@ -115,7 +115,7 @@ func arrowColValueString(col dataset.AnyColumn, row int) string {
 }
 
 // arrowProbeJoin probes left against right hash index and produces row pairs.
-func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec,
+func arrowProbeJoin(left, right dataset.Table, spec dataset.JoinSpec, //nolint:gocognit // arrowProbeJoin is a complex pipeline — splitting reduces clarity.
 	rightIndex map[string][]int) (leftIdx, rightIdx []int, err error) {
 	leftKeyCols := make([]dataset.AnyColumn, len(spec.LeftCols))
 	for i, name := range spec.LeftCols {

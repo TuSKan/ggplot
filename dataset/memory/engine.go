@@ -103,7 +103,7 @@ func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 	b.appenders = make(map[string]any, schema.NumFields())
 	for i := range schema.NumFields() {
 		f := schema.Field(i)
-		switch f.Dtype {
+		switch f.Dtype { //nolint:exhaustive // intentionally handles subset.
 		case dataset.DTypeFloat64:
 			b.appenders[f.Name] = &memFloat64Appender{}
 		case dataset.DTypeInt64, dataset.DTypeTimestamp:
@@ -268,7 +268,7 @@ func (e *Engine) Variance(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 
 // Cast converts a column to the specified dtype.
 func (e *Engine) Cast(col dataset.AnyColumn, target dataset.DType) (dataset.AnyColumn, error) {
-	switch target {
+	switch target { //nolint:exhaustive // handled by default case.
 	case dataset.DTypeFloat64:
 		return e.castToFloat64(col)
 	case dataset.DTypeInt64:
@@ -461,7 +461,7 @@ func (b *memBuilder) Build() (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, b.schema.NumFields())
 	for i := range b.schema.NumFields() {
 		f := b.schema.Field(i)
-		switch f.Dtype {
+		switch f.Dtype { //nolint:exhaustive // intentionally handles subset.
 		case dataset.DTypeFloat64:
 			a := b.appenders[f.Name].(*memFloat64Appender)
 			cols[i] = &float64Column{name: f.Name, data: a.data}
@@ -647,7 +647,7 @@ func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, e
 		cols := make([]dataset.AnyColumn, schema.NumFields())
 		for i := range schema.NumFields() {
 			f := schema.Field(i)
-			switch f.Dtype {
+			switch f.Dtype { //nolint:exhaustive // intentionally handles subset.
 			case dataset.DTypeFloat64:
 				cols[i] = e.NewFloat64Column(f.Name, nil)
 			case dataset.DTypeInt64:
@@ -920,7 +920,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, schema.NumFields())
 	for ci := range schema.NumFields() {
 		name := schema.Field(ci).Name
-		switch schema.Field(ci).Dtype {
+		switch schema.Field(ci).Dtype { //nolint:exhaustive // intentionally handles subset.
 		case dataset.DTypeFloat64:
 			vals := make([]float64, 0, totalLen)
 
@@ -1087,7 +1087,8 @@ func (e *Engine) CumSum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	}
 }
 
-func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+// CumMax returns the cumulative maximum of a numeric column.
+func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) { //nolint:dupl // type-specialized code path.
 	switch c := col.(type) {
 	case *float64Column:
 		out := make([]float64, len(c.data))
@@ -1118,7 +1119,8 @@ func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	}
 }
 
-func (e *Engine) CumMin(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+// CumMin returns the cumulative minimum of a numeric column.
+func (e *Engine) CumMin(col dataset.AnyColumn) (dataset.AnyColumn, error) { //nolint:dupl // type-specialized code path.
 	switch c := col.(type) {
 	case *float64Column:
 		out := make([]float64, len(c.data))

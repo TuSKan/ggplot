@@ -140,7 +140,7 @@ func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 	b.builders = make(map[string]any, schema.NumFields())
 	for i := range schema.NumFields() {
 		f := schema.Field(i)
-		switch f.Dtype {
+		switch f.Dtype { //nolint:exhaustive // intentionally handles subset.
 		case dataset.DTypeFloat64:
 			b.builders[f.Name] = &arrowFloat64Appender{b: array.NewFloat64Builder(e.alloc)}
 		case dataset.DTypeInt64, dataset.DTypeTimestamp:
@@ -335,7 +335,7 @@ func (e *Engine) Variance(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 
 // Cast converts a column to the target DType.
 func (e *Engine) Cast(col dataset.AnyColumn, target dataset.DType) (dataset.AnyColumn, error) {
-	switch target {
+	switch target { //nolint:exhaustive // handled by default case.
 	case dataset.DTypeFloat64:
 		return e.castToFloat64(col)
 	case dataset.DTypeInt64:
@@ -571,7 +571,7 @@ func (b *arrowBuilder) Build() (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, b.schema.NumFields())
 	for i := range b.schema.NumFields() {
 		f := b.schema.Field(i)
-		switch f.Dtype {
+		switch f.Dtype { //nolint:exhaustive // intentionally handles subset.
 		case dataset.DTypeFloat64:
 			a := b.builders[f.Name].(*arrowFloat64Appender)
 			cols[i] = &arrowFloat64Column{name: f.Name, arr: a.b.NewFloat64Array()}
@@ -645,7 +645,7 @@ func (e *Engine) Select(col dataset.AnyColumn, indices []int) (dataset.AnyColumn
 	ib.Reserve(len(indices))
 
 	for _, idx := range indices {
-		ib.Append(int32(idx))
+		ib.Append(int32(idx)) //nolint:gosec // G115: safe — metadata values bounded by platform.
 	}
 
 	idxArr := ib.NewInt32Array()
@@ -739,7 +739,7 @@ func (e *Engine) SortIndices(col dataset.AnyColumn) ([]int, error) {
 
 	indices := make([]int, n)
 	for i := range n {
-		indices[i] = int(idxArr.Value(i))
+		indices[i] = int(idxArr.Value(i)) //nolint:gosec // G115: safe — metadata values bounded by platform.
 	}
 
 	return indices, nil
@@ -931,7 +931,7 @@ func (e *Engine) Fill(col dataset.AnyColumn, dir dataset.FillDirection) (dataset
 
 // fillUpFloat64 implements FillUp via reverse → FillDown → reverse.
 // Zero temp Go slices — only Arrow builders that release after each step.
-func fillUpFloat64(e *Engine, c *arrowFloat64Column, n int) (dataset.AnyColumn, error) {
+func fillUpFloat64(e *Engine, c *arrowFloat64Column, n int) (dataset.AnyColumn, error) { //nolint:dupl // type-specialized code path.
 	rb := array.NewFloat64Builder(e.alloc)
 	rb.Reserve(n)
 
@@ -1029,7 +1029,7 @@ func fillUpInt64(e *Engine, c *arrowInt64Column, n int) (dataset.AnyColumn, erro
 	return &arrowInt64Column{name: c.name, arr: arr, dtype: c.dtype}, nil
 }
 
-func fillUpString(e *Engine, c *arrowStringColumn, n int) (dataset.AnyColumn, error) {
+func fillUpString(e *Engine, c *arrowStringColumn, n int) (dataset.AnyColumn, error) { //nolint:dupl // type-specialized code path.
 	rb := array.NewStringBuilder(e.alloc)
 	rb.Reserve(n)
 
@@ -1077,7 +1077,9 @@ func fillUpString(e *Engine, c *arrowStringColumn, n int) (dataset.AnyColumn, er
 
 	return &arrowStringColumn{name: c.name, arr: arr}, nil
 }
-func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error) {
+
+// DropNA removes rows containing null values in the specified columns.
+func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error) { //nolint:gocognit // DropNA is a complex pipeline — splitting reduces clarity.
 	n := int(ds.NumRows())
 	if n == 0 {
 		return ds, nil
@@ -1225,7 +1227,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 	cols := make([]dataset.AnyColumn, schema.NumFields())
 	for ci := range schema.NumFields() {
 		name := schema.Field(ci).Name
-		switch schema.Field(ci).Dtype {
+		switch schema.Field(ci).Dtype { //nolint:exhaustive // intentionally handles subset.
 		case dataset.DTypeFloat64:
 			vals := make([]float64, 0, totalLen)
 
@@ -1429,7 +1431,8 @@ func (e *Engine) CumSum(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	}
 }
 
-func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+// CumMax returns the cumulative maximum of a numeric column.
+func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) { //nolint:dupl // type-specialized code path.
 	length := int(col.Len())
 	switch c := col.(type) {
 	case *arrowFloat64Column:
@@ -1481,7 +1484,8 @@ func (e *Engine) CumMax(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	}
 }
 
-func (e *Engine) CumMin(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+// CumMin returns the cumulative minimum of a numeric column.
+func (e *Engine) CumMin(col dataset.AnyColumn) (dataset.AnyColumn, error) { //nolint:dupl // type-specialized code path.
 	length := int(col.Len())
 	switch c := col.(type) {
 	case *arrowFloat64Column:

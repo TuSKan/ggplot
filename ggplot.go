@@ -430,7 +430,7 @@ func (p *Plot) saveVector(ctx context.Context, filename, ext string, width, heig
 
 	rec := cv.FinishRecording()
 
-	f, err := os.Create(filename)
+	f, err := os.Create(filename) //nolint:gosec // G304: user-provided plot output path.
 	if err != nil {
 		return fmt.Errorf("ggplot: %w", err)
 	}
@@ -542,7 +542,7 @@ func (cw *countWriter) Write(p []byte) (int, error) {
 // renderTo is the core rendering pipeline orchestrator.
 //
 // Pipeline: Stat Transform → Scale Training → Layout → Grid → Data → Axes → Labels.
-func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int) error {
+func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int) error { //nolint:gocognit // renderTo is a complex pipeline — splitting reduces clarity.
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("ggplot: %w", err)
 	}
@@ -896,7 +896,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 
 		// Ensure Y starts at 0 for bar/histogram/area/density/boxplot.
 		for _, rl := range resolved {
-			switch rl.geom.Geom {
+			switch rl.geom.Geom { //nolint:exhaustive // intentionally handles subset.
 			case geom.TypeBar, geom.TypeHistogram, geom.TypeArea, geom.TypeDensity:
 				yMin, yMax := yScale.Bounds()
 				if yMin > 0 {
@@ -948,7 +948,7 @@ func (p *Plot) renderTo(ctx context.Context, cv canvas.Canvas, width, height int
 				hasBars := false
 
 				for _, rl := range resolved {
-					switch rl.geom.Geom {
+					switch rl.geom.Geom { //nolint:exhaustive // intentionally handles subset.
 					case geom.TypeBar, geom.TypeHistogram, geom.TypeBoxPlot:
 						hasBars = true
 					}

@@ -58,7 +58,7 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 		chunked := tbl.Column(i)
 		name := f.Name
 
-		switch f.Type.ID() {
+		switch f.Type.ID() { //nolint:exhaustive // handled by default case.
 		case arrow.FLOAT64:
 			data := make([]float64, 0, nRows)
 
@@ -165,7 +165,7 @@ func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, 
 }
 
 func dtypeToArrowType(dt dataset.DType) arrow.DataType {
-	switch dt {
+	switch dt { //nolint:exhaustive // handled by default case.
 	case dataset.DTypeFloat64:
 		return arrow.PrimitiveTypes.Float64
 	case dataset.DTypeInt64:

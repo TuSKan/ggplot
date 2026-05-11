@@ -911,7 +911,7 @@ func mergeAggResults(factory ColumnFactory, name string, results []AnyColumn) (A
 	}
 
 	n := len(results)
-	switch results[0].DType() {
+	switch results[0].DType() { //nolint:exhaustive // handled by default case.
 	case DTypeFloat64:
 		vals := make([]float64, n)
 		for i, r := range results {
@@ -1080,28 +1080,28 @@ func (rh *rowHasher) hash(row int) uint64 {
 
 	for i := range rh.ncols {
 		if rh.nulls[i] != nil && rh.nulls[i][row] {
-			rh.h.Write([]byte{0xFF})
+			_, _ = rh.h.Write([]byte{0xFF})
 			continue
 		}
 
-		switch rh.dtypes[i] {
+		switch rh.dtypes[i] { //nolint:exhaustive // handled by default case.
 		case DTypeFloat64:
 			binary.LittleEndian.PutUint64(rh.buf[:], math.Float64bits(rh.float[i][row]))
-			rh.h.Write(rh.buf[:])
+			_, _ = rh.h.Write(rh.buf[:])
 		case DTypeInt64, DTypeTimestamp:
-			binary.LittleEndian.PutUint64(rh.buf[:], uint64(rh.intv[i][row]))
-			rh.h.Write(rh.buf[:])
+			binary.LittleEndian.PutUint64(rh.buf[:], uint64(rh.intv[i][row])) //nolint:gosec // G115: int64 row values are non-negative.
+			_, _ = rh.h.Write(rh.buf[:])
 		case DTypeString:
-			rh.h.Write([]byte(rh.str[i][row]))
-			rh.h.Write([]byte{0})
+			_, _ = rh.h.Write([]byte(rh.str[i][row]))
+			_, _ = rh.h.Write([]byte{0})
 		case DTypeBool:
 			if rh.boolv[i][row] {
-				rh.h.Write([]byte{1})
+				_, _ = rh.h.Write([]byte{1})
 			} else {
-				rh.h.Write([]byte{0})
+				_, _ = rh.h.Write([]byte{0})
 			}
 		default:
-			rh.h.Write([]byte{0xFF})
+			_, _ = rh.h.Write([]byte{0xFF})
 		}
 	}
 

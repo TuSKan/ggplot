@@ -180,7 +180,7 @@ func executeOps(ctx context.Context, eng Engine, tbl Table, ops []op) (Table, er
 			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
-		switch o.kind {
+		switch o.kind { //nolint:exhaustive // intentionally handles subset.
 		case opSelect:
 			cur = cur.execSelect(o.cols)
 		case opRename:
