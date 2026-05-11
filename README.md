@@ -1,479 +1,170 @@
-# ggplot — Revised Roadmap
+﻿# ggplot
 
-> **Pure-Go implementation of the Grammar of Graphics.**
-> Inspired by [ggplot2](https://ggplot2-book.org/) (R, Wickham et al.), but architected for Go: static typing, composable interfaces, explicit pipelines, panel-parallel rendering, and zero-copy columnar data.
->
-> This is **not a port**. It is a Grammar of Graphics implementation that takes ggplot2's *concepts* and re-expresses them through Go's design vocabulary — interfaces over `ggproto`, generics over R's S3 dispatch, `context.Context` over global state, `io.Writer` over device handles, errgroups over implicit serialization.
+[![Go Reference](https://pkg.go.dev/badge/github.com/TuSKan/ggplot.svg)](https://pkg.go.dev/github.com/TuSKan/ggplot)
+[![Go Report Card](https://goreportcard.com/badge/github.com/TuSKan/ggplot)](https://goreportcard.com/report/github.com/TuSKan/ggplot)
+[![CI](https://github.com/TuSKan/ggplot/actions/workflows/ci.yml/badge.svg)](https://github.com/TuSKan/ggplot/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/TuSKan/ggplot/branch/main/graph/badge.svg)](https://codecov.io/gh/TuSKan/ggplot)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/TuSKan/ggplot)](https://github.com/TuSKan/ggplot/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
----
+![ggplot](assets/cover.jpg)
 
-## Guiding Principles
+**Production-grade Grammar of Graphics for Go.**
 
-1. **Spec, Build, Render are three distinct phases with public boundaries.**
-   `Plot` is a declarative spec. `Build(ctx)` resolves data through the grammar pipeline and returns a `*Built`. `Built.Draw(ctx, canvas)` produces graphical output. Each boundary is testable in isolation.
+A pure-Go data visualization library implementing a rigorous, declarative Grammar of Graphics pipeline. Inspired by Hadley Wickham's renowned [ggplot2](https://ggplot2-book.org/), but architected specifically for Go's type safety and interface-driven engine architecture.
 
-2. **Data flows through a typed columnar abstraction (`dataset.Table`) with three engines: memory, Arrow, BigQuery.** Lazy where possible. Materialized only at `Collect(ctx)`.
+## Overview
 
-3. **Every layer's data carries `PANEL` and `group` columns** from data-prep onward. These are first-class system columns, not internal annotations.
+`ggplot` provides an expressive, composable API for generating complex data visualizations. It decouples the data manipulation (Apache Arrow, BigQuery, Memory) from the statistical transformations and the final vector rendering, resulting in highly scalable plotting pipelines.
 
-4. **Position scales are trained twice** (pre-stat for transform application, post-stat for range). Non-position scales are trained once, after position adjustment. This is the correct grammar order, not an optimization.
-
-5. **The Theme `Element` system is foundational, not cosmetic.** Every guide drawer (axis, legend, strip) consumes `ElementText`/`ElementLine`/`ElementRect`/`ElementBlank` with inheritance. Named themes are instances; the system is the spec.
-
-6. **Extension contracts (`Geom`, `Stat`, `Scale`, `Position`, `Coord`) are public and stable from v0.x onward.** Third-party packages pin to them. Breaking changes cost a major version bump.
-
-7. **No global state.** No `theme_set()`. No package-level mutable defaults. Everything is on the `Plot` value or passed explicitly.
-
-8. **Concurrency is panel-parallel, not pixel-parallel.** Once `Build` is done, panels are independent. `errgroup` fans out drawing.
-
-9. **Errors are typed and phase-aware.** `*ggplot.Error{Phase, Layer, Stage, Cause}`. Build-time errors (user spec) are distinguishable from engine errors (data/SQL/Arrow) and render errors (canvas).
-
-10. **Performance is a tracked invariant.** Allocs/op and ns/op are gated in CI for canonical plots. Regressions block PRs.
+| Capability | Supported Features |
+|---|---|
+| **Geometries** | Point, Line, Path, Step, Bar, Histogram, Area, Density, Rug, HLine, VLine, Text, BoxPlot, Smooth |
+| **Statistics** | Identity, Bin/Count, Density (KDE), Smooth (LOESS + lm), Summary, BoxPlot (Tukey/range whiskers, notch CI) |
+| **Scales** | Linear, Log10, Sqrt, Reverse, Discrete |
+| **Color Palettes** | Viridis, ColorBrewer (sequential, diverging, qualitative), manual, continuous |
+| **Faceting** | Grid (row ~ col), Wrap (NCols/NRows) |
+| **Data Backends** | Native Memory, Apache Arrow IPC/Parquet, BigQuery SQL pushdown |
+| **Output** | PNG, SVG 1.1, PDF 1.4, HiDPI via `WithScale()` |
+| **Theming** | Default, Classic, Minimal, Dark, BW |
 
 ---
 
-## The Pipeline (Reference)
+## Gallery
 
-```
-                  ┌──────────────────────────────────┐
-                  │  Plot (immutable spec)           │
-                  │  data, layers, scales, coord,    │
-                  │  facet, theme, labels            │
-                  └────────────────┬─────────────────┘
-                                   │ Build(ctx)
-                                   ▼
-  ┌────────────────────────────────────────────────────────────────────┐
-  │ BUILD PHASE                                                        │
-  │  1. Per-layer data resolution (data ← layer or plot default)       │
-  │  2. Coord pre-pass + Facet inspection → assign PANEL column        │
-  │  3. Aesthetic evaluation → group column from non-continuous aes    │
-  │  4. Scale-transform pass (log/sqrt applied to raw data)            │
-  │  5. Position-scale 1st training + oob handling + NA filtering      │
-  │  6. Stat compute (split by PANEL × group, then reassemble)         │
-  │  7. after_stat() aesthetic re-binding                              │
-  │  8. Geom data setup (xmin/xmax reparameterisation, etc.)           │
-  │  9. Position adjustment (stack/dodge/fill/jitter)                  │
-  │ 10. Position-scale 2nd training (range may have changed)           │
-  │ 11. Non-position scale training (color, size, alpha, shape, …)     │
-  │ 12. after_scale() aesthetic re-binding                             │
-  │ 13. finish_data() hook (stat + facet)                              │
-  └─────────────────────────────┬──────────────────────────────────────┘
-                                │ → *Built{Layers, Layout, Coord, Theme}
-                                │   (data-only, fully resolved)
-                                │
-                                │ Built.Draw(ctx, canvas)
-                                ▼
-  ┌────────────────────────────────────────────────────────────────────┐
-  │ RENDER PHASE                                                       │
-  │  1. Layout solve (panel grid, strip placement, legend pack)        │
-  │  2. Per-panel coord transform (cartesian → polar, etc.)            │
-  │  3. Per-panel geom render → Grob list  ← errgroup parallel         │
-  │  4. Guide render (axes, legends, color bars) using Theme Elements  │
-  │  5. Adornment (title, subtitle, caption, plot margin)              │
-  │  6. Composite onto canvas (PNG / SVG / PDF / writer)               │
-  └────────────────────────────────────────────────────────────────────┘
-```
+| | |
+|---|---|
+| ![Clifford Attractor](assets/clifford.png) | ![Butterfly Curve](assets/butterfly.png) |
+| *Clifford attractor ΓÇö 500 k points, alpha blending, continuous color scale* | *Butterfly curve ΓÇö parametric path with color interpolation* |
 
-This is the contract. Every phase, geom, and refactor is judged against whether it preserves or violates these stages.
-
----
-
-## Roadmap Phases
-
-> Legend: ✅ shipped · 🔶 partial · 🔲 planned · ⚠️ blocked/needs design
-
----
-
-### Phase 1 — Core Grammar & Data Plane 🔶
-
-> Book Ch.1–2 (Introduction, First Steps), Ch.13 (Layers), Ch.19 (Internals)
-
-**Public API:**
-- ✅ Typed `Dataset`/`Frame` with `DType` system (Float64, Int64, String, Bool) and null masks
-- ✅ Fluent ETL: `Select`, `Filter`, `Mutate`, `Arrange`, `Distinct`, `Summarize` (eager; lazy planned)
-- ✅ Cross-type column iterators
-- ✅ Canvas abstraction over `gg` with full 2D primitives
-- ✅ Aesthetic constructors (`X`, `Y`, `Color`, `Group`, `Fill`, `Label`, `Size`, `Alpha`)
-
-**Pipeline scaffolding:**
-- ✅ `PlotSpec` declarative composition
-- 🔶 Single-pass renderer in `renderTo()` — to be replaced by `Build`/`Draw` in Phase 4
-- ⚠️ Missing: `PANEL` and `group` as first-class system columns
-
-**Engine extensibility:**
-- ✅ `NativeFilterProvider`, `IterableColumn` interfaces
-- 🔲 Document the column extension surface (custom dtypes: decimal, geo, fixed-point)
-
----
-
-### Phase 2 — Grammar Primitives ✅ (with gaps)
-
-> Book Ch.3 (Individual Geoms), Ch.4 (Collective Geoms), Ch.5 (Statistical Summaries)
-
-**Geometries:** ✅ Point, Line, Path, Step, Bar, Histogram, Area, Density, Rug, HLine, VLine, Text, BoxPlot, Smooth
-
-**Statistics:** ✅ Identity, Bin/Count, Density (KDE), Smooth (LOESS + LM), Summary, BoxPlot
-
-**Scales:** ✅ Linear, Log10, Sqrt, Reverse, Discrete + `scale.Resolve(name)` factory
-
-**Coordinates:** ✅ Cartesian, Polar + geom-level Orientation
-
-**Faceting:** ✅ None, Wrap (NCols/NRows), Grid (row ~ col), Strip Labels
-
-**Themes:** ✅ Default, Classic, Minimal, Dark, BW *(hard-coded — to be refactored onto Element system in Phase 4)*
-
-**Guides:** ✅ X/Y Axes, Grid, Categorical Legend, Continuous Color Bar (vert + horiz)
-
-**Aesthetics:** ✅ X, Y, Color, Group, Fill, Label, Size, Alpha
-
-**Builder shortcuts:** ✅ `LegendPosition()`, `ScaleX("log10")`, `ScaleY("sqrt")`
-
-> ⚠️ **Known semantic gap:** `geom.Bar` ships with implicit `position.Identity`. True `geom_bar` with default `position.Stack` requires Phase 4. Until then, `geom.Bar` is functionally `geom_col` from ggplot2.
-
----
-
-### Phase 3 — Data Backends 🔶
-
-- ✅ **Arrow adapter** — zero-copy `TableDataset` / `TableColumn`, chunked iterators, `Buffer` pre-allocator
-- ✅ **SQL/BigQuery adapter** — lazy `Table` with predicate pushdown, `FilterSQL` / `GroupBySQL`, auto type detection, escaped filters, `errors.Is(err, io.EOF)` correctness
-- ✅ Backend extensibility: `NativeFilterProvider`, `IterableColumn`
-- 🔲 **Iceberg/S3Tables read** *(natural alignment with existing Beam-Iceberg work)* — read-side adapter mirroring the BQ engine
-- 🔲 **DuckDB engine** — for local Parquet/CSV without spinning Arrow IPC, useful for notebooks/CLI
-- 🔲 **`GroupAggregator` interface** — current `dispatchAgg` allocates per group; Arrow `hash_aggregate` for single-pass grouped agg. **Required before any new Phase 9 stat.**
-- 🔲 **FNV-64 collision guard** in `execDistinct` (frame.go:802) — fix: xxh3 + equality fallback at >10M rows
-- 🔲 **`context.Context` plumbed through engine sub-interfaces** — currently only at `executeOps` boundary; `AddCols`, `Sum`, `Join`, `PivotLonger` need it for cancellation across long BQ scans
-- 🔲 **OpenTelemetry spans** in BQ engine — surface bytes-billed and slot-millis as metrics
-
----
-
-### Phase 4 — Pipeline Refactor & Extension Contracts ⚠️ (Architectural Foundation)
-
-> **This phase is the gate for everything after.** No new geoms, scales, or themes ship until these contracts are public and frozen.
-
-#### 4.1 — Build / Render Separation
-
-- 🔲 Public `Built` type with `Layers []LayerData`, `Layout`, `Coord`, `Theme`, `Labels`
-- 🔲 `Plot.Build(ctx context.Context) (*Built, error)`
-- 🔲 `Built.Draw(ctx context.Context, c canvas.Canvas) error`
-- 🔲 `Built.LayerData(i int) Frame` — introspection for testing & debugging
-- 🔲 Decompose ~600-line `renderTo` into: `resolveLayers`, `trainPositionScales`, `runStats`, `applyPositions`, `retrainPositionScales`, `trainNonPositionScales`, `solveLayout`, `drawPanel`, `drawAxes`, `drawLegend`
-
-#### 4.2 — System Columns (PANEL, group)
-
-- 🔲 Add `PanelColumn` (int32) and `GroupColumn` (int64) as reserved system columns
-- 🔲 Coord pre-pass + Facet inspection assigns `PANEL` to every layer's data
-- 🔲 Aesthetic evaluation derives `group` from interaction of non-continuous aesthetics
-- 🔲 Document: PANEL and group are preserved through every transform; stats and positions split on them
-
-#### 4.3 — Position Adjustment Interface (extracted from former Phase 13)
-
-- 🔲 `position.Position` interface
-- 🔲 `position.Identity` (default for points/lines)
-- 🔲 `position.Stack` (default for bar/area)
-- 🔲 `position.Dodge` (side-by-side)
-- 🔲 `position.Fill` (proportional 100%)
-- 🔲 Wire `geom.Bar`/`geom.Histogram`/`geom.Area` defaults to `Stack`
-
-> Jitter, Nudge, JitterDodge remain in Phase 13 — they're refinements, not core grammar.
-
-#### 4.4 — Theme Element System (foundation, formerly Phase 12)
-
-- 🔲 `theme.Element` interface
-- 🔲 `theme.ElementText{Family, Face, Size, Color, Hjust, Vjust, Angle, Margin, LineHeight}`
-- 🔲 `theme.ElementLine{Color, Size, Linetype, Lineend}`
-- 🔲 `theme.ElementRect{Fill, Color, Size, Linetype}`
-- 🔲 `theme.ElementBlank{}`
-- 🔲 Inheritance hierarchy (`axis.title.x` ← `axis.title` ← `text` ← root)
-- 🔲 Re-implement `Default`, `Classic`, `Minimal`, `Dark`, `BW` as compositions of Elements
-- 🔲 All guide drawers consume Elements (no hard-coded font/color in `guide/`)
-
-> Granular `theme()` overrides and `theme.New(base, ...)` user composition stay in Phase 12; this phase establishes the substrate.
-
-#### 4.5 — Extension Contracts (formerly Phase 17 interfaces)
-
-The public, **stable-from-v0.5** extension API:
-
-- 🔲 `geom.Geom` — `DefaultStat() Stat`, `DefaultPosition() Position`, `RequiredAes() []string`, `OptionalAes() []string`, `DrawPanel(...) []Grob`, `DrawKey(...) Grob`
-- 🔲 `stat.Stat` — `RequiredAes() []string`, `OutputAes() []string` (✅ via `OutputMapping`), `Compute(panel, group, params) []Row`
-- 🔲 `scale.Scale` — `Train()`, `Map()`, `Transform()`, `Breaks()`, `Labels()`, `Limits()`
-- 🔲 `position.Position` — `Compute(data) data` (see 4.3)
-- 🔲 `coord.Coord` — `Transform(data, scales) data`, `Render(...)`, `IsLinear() bool`
-- 🔲 Document stability guarantees: 2 minor releases of deprecation before removal
-
-#### 4.6 — Production Hardening (continued)
-
-- ✅ Lint matrix (`errcheck`, `staticcheck`, `gocritic`, `errorlint`), `-race` CI, `GOEXPERIMENT` matrix
-- ✅ 6 PNG goldens (SHA-256, platform-tagged)
-- ✅ Clone independence tests, deep-clone safety
-- ✅ Hot-path optimizations (`strconv` over `Sprintf`, `SelectRows` over `BoolMask`, `engine()` parent walk eliminated, `flatten()` exact capacity)
-- 🔲 **`Built`-level golden tests** — JSON snapshots of `Built` are platform-independent and orders of magnitude more sensitive than PNG goldens; PNG goldens stay as smoke tests
-- 🔲 **Performance CI gates** — track allocs/op and ns/op for ~10 canonical plots; fail PR on >10% regression
-- 🔲 **Typed error envelope** — `*ggplot.Error{Phase, Layer, Stage, Cause}` with `errors.Is`/`Unwrap` support
-- 🔲 **Real SIMD execution** — pending Go SIMD intrinsics that don't heap-escape `Vec[T]` through generic call sites ([golang/go#65592](https://github.com/golang/go/issues/65592)); current scalar loops + go-highway in `dmath`
-- 🔲 **KDE inner-loop SIMD** — `stat.Density` Gaussian kernel via `compute.Exp`/`compute.Mul`/`compute.ReduceSum`; currently scalar + NumCPU parallelism
-- 🔲 **Panel-parallel rendering** — `errgroup.Group` over `Built.Layers × panels`; gated on Phase 4.1
-
----
-
-### Phase 5 — Position Scales & Axes 🔶
-
-> Book Ch.10 (Position scales and axes), Ch.14 (Scales and guides)
-
-#### 5a — Scale Configuration ✅
-- ✅ `scale.WithBreaks([]float64)` — user-supplied tick positions
-- ✅ `scale.WithLabels([]string)` — user-supplied tick labels
-- ✅ `scale.WithFormatter(func(float64) string)` — currency, percent, scientific, custom
-- ✅ `scale.WithExpand(mult, add)` — axis padding
-- ✅ `scale.WithMinorBreaks([]float64)` — minor grid line positions
-- ✅ `scale.WithClipBounds(min, max)` — coord_cartesian-style zoom-without-filter
-
-#### 5b — Axes & Time Scales (unblocked by Phase 4.1)
-- 🔲 **Date/Time scale** — `scale.DateTime()` with auto tick formatting (year/month/day/hour); training path on `Column[int64]` epoch; `Format()` via `time.Unix`. Forces the renderer off the float64-everywhere assumption (return: more honest typing)
-- 🔲 **Secondary axes** — `SecAxis()` / `DupAxis()` for dual Y. Requires dual-axis layout (right margin, second tick column) — straightforward once `Built.Layout` exists
-- 🔲 **`guide_axis(n.dodge)`** — rotated/dodged labels for dense categorical axes (consumes ElementText.Angle and inheritance)
-- 🔲 **`scale_x_binned()`** — discretize continuous axes for histogram-on-x scenarios
-- 🔲 **out-of-bounds (oob) policies** — `scale.WithOOB(squish | censor | error | na)` per ggplot2 Ch.14.4
-
----
-
-### Phase 6 — Colour Scales & Legends 🔲
-
-> Book Ch.11 (Colour scales and legends)
-
-- 🔲 **Continuous color** — `scale.ColorGradient(low, high)`, `Gradient2(low, mid, high, midpoint)`, `GradientN([]colors)`
-- 🔲 **Discrete color** — `scale.ColorBrewer(palette)`, `ColorManual(map[string]color)`, `ColorGrey(start, end)`
-- 🔲 **Palette system** — viridis (A–E), ColorBrewer (sequential/diverging/qualitative), HCL hue/chroma/luminance
-- 🔲 **Color-blind defaults** — `scale.ColorViridisD()`, `ColorViridisC()` as accessibility-first defaults
-- 🔲 **Fill vs Color** — independent `scale.Fill*` mirrors of color scales
-- 🔲 **NA color** — `WithNAColor(c)` parameter
-- 🔲 **Guide customization** — `guide.ColorBar(barwidth, barheight, nbin, direction)`, `guide.Legend(ncol, nrow, byrow)`
-- 🔲 **Legend key glyphs** — per-geom key shape (line key for `geom.Smooth`, point key for `geom.Point`)
-
----
-
-### Phase 7 — Other Aesthetic Scales 🔲
-
-> Book Ch.12 (Other aesthetics)
-
-- 🔲 **Size** — `scale.Size(range)`, `scale.SizeArea()` (proportional to value), `scale.Radius()`
-- 🔲 **Shape** — `scale.ShapeManual()` with 25+ built-in point shapes
-- 🔲 **Linetype** — `scale.Linetype()` — solid, dashed, dotted, dotdash, longdash, twodash + custom dash arrays
-- 🔲 **Alpha** — `scale.Alpha(range)` for opacity mapping
-- 🔲 **Identity scales** — `scale.*Identity()` to use raw column values directly as aesthetic values
-
----
-
-### Phase 8 — Advanced Geometries 🔲
-
-> Book Ch.3–5 (revisited with full position/coord/scale support)
-
-- 🔲 `geom.Tile` / `geom.Raster` — 2D grids for density and correlation matrices
-- 🔲 `geom.Violin` — mirrored density per group
-- 🔲 `geom.Ribbon` — filled bands (ymin/ymax) for confidence intervals
-- 🔲 `geom.Segment` / `geom.Curve` — directed segments and bezier curves
-- 🔲 `geom.ErrorBar` / `Crossbar` / `Linerange` / `Pointrange` — full error-bar family
-- 🔲 `geom.Contour` / `ContourFilled` — 2D density contours from XYZ
-- 🔲 `geom.Polygon` — arbitrary filled/stroked polygons
-- 🔲 `geom.Rect` — parameterised by xmin/ymin/xmax/ymax
-- 🔲 `geom.Jitter` (full) — random displacement; deterministic via injectable `rand.Source`
-- 🔲 `geom.Dotplot` — dot plots for small datasets
-- 🔲 `geom.Hex` — hexagonal binning (server-side aggregation hook for >1M points)
-
----
-
-### Phase 9 — Annotations 🔲
-
-> Book Ch.8 (Annotations)
-
-- ✅ Reference lines: `geom.HLine(WithIntercept)`, `geom.VLine(WithIntercept)`, `geom.ABLine(WithSlope, WithIntercept)`
-- 🔲 `annotate()` — layer-less annotations: rect, text, segment, arrow, curve, pointrange
-- 🔲 `geom.Label` — text with background box and connector lines
-- 🔲 **Direct labelling / anti-collision** — `ggrepel`-style force-directed text placement
-- 🔲 **Marginal annotations** — custom axis marks, distribution overlays
-
----
-
-### Phase 10 — Coordinate Systems 🔲
-
-> Book Ch.15 (Coordinate systems)
-
-- 🔲 `coord.Cartesian(xlim, ylim)` — zoom without data clipping (vs. `XLim`/`YLim` which filter via oob)
-- 🔲 `coord.Fixed(ratio)` — fixed aspect ratio (1:1 for maps and correlation plots)
-- ✅ `coord.Polar(theta, start, direction)` — already shipped; verify pie/rose/radar interactions with `position.Stack`
-- 🔲 `coord.Trans(xtrans, ytrans)` — separate transformations per axis (post-stat, vs. scale transforms which are pre-stat)
-- 🔲 `coord.Map(projection)` — map projections (Mercator, Lambert, equal-area)
-
----
-
-### Phase 11 — Faceting Deep Dive 🔲
-
-> Book Ch.16 (Faceting). Unblocked by Phase 4.1 (per-panel scale state).
-
-- 🔲 **Free scales** — `facet.Wrap(col, FreeX(), FreeY())` per-panel independent axes (requires per-panel scale clones in `Built.Layout`)
-- 🔲 **Free space** — `facet.Grid(row, col, Space("free"))` proportional panel sizing
-- 🔲 **Labellers** — `labeller.Both()`, `labeller.Parsed()`, custom label formatters
-- 🔲 **Facet margins** — `Margins(true)` for aggregate panels alongside facets
-- 🔲 **Drop control** — `Drop(false)` to show empty panels for missing combinations
-- 🔲 **Strip placement** — `StripPosition("bottom" | "left")` for axis-adjacent strips
-
----
-
-### Phase 12 — Theme System Granularity 🔲
-
-> Book Ch.17 (Themes). Foundation already built in Phase 4.4.
-
-- 🔲 **Granular `theme()` overrides** — `Theme(WithAxisTitleX(ElementText{Face: "bold"}))` etc. (every `axis.title.x`, `legend.key.size`, …)
-- 🔲 **User-composable themes** — `theme.New(base, overrides...)` returning a composed `Theme`
-- 🔲 **Plot margin** with unit support — `cm`, `inches`, `lines`, `pt`
-- 🔲 **Legend layout** — `legend.box`, `legend.key`, `legend.background`, `legend.margin`
-- 🔲 **Strip styling** — `strip.text`, `strip.background`, `strip.clip`
-- 🔲 **Theme inheritance proofs** — golden tests that `axis.title.x` correctly inherits from `axis.title` from `text` from root
-
----
-
-### Phase 13 — Position Adjustment Refinements 🔲
-
-> Phase 4.3 shipped Identity, Stack, Dodge, Fill. This phase adds the rest.
-
-- 🔲 `position.Jitter(width, height)` — random displacement; injectable `rand.Source` for determinism
-- 🔲 `position.JitterDodge` — combined within dodged groups
-- 🔲 `position.Nudge(x, y)` — fixed offset for labels relative to anchor
-
----
-
-### Phase 14 — Maps & Spatial 🔲
-
-> Book Ch.6 (Maps)
-
-- 🔲 `geom.SF` — Simple Features rendering from GeoJSON / Shapefile (via `paulmach/orb` or similar)
-- 🔲 `coord.SF` — CRS-aware coordinate system with proper map projection
-- 🔲 `borders()` — convenience for country/state outlines
-- 🔲 **Choropleth** — fill polygons by data values
-
----
-
-### Phase 15 — Networks 🔲
-
-> Book Ch.7 (Networks)
-
-- 🔲 **Graph layouts** — force-directed (Fruchterman-Reingold), tree, circle, grid
-- 🔲 `geom.Edge` / `geom.Node` — edge bundling, node glyphs
-- 🔲 **Network aesthetics** — edge weight, node size mapped via standard scales
-
----
-
-### Phase 16 — Composition (Patchwork) 🔲
-
-> Book Ch.9 (Arranging plots). May be a separate `ggplot/compose` subpackage.
-
-- 🔲 `compose.Arrange(p1, p2, p3, layout)` — multi-plot grids
-- 🔲 `compose.Layout(areas)` — custom grid arrangements
-- 🔲 `compose.Inset(p, x, y, width, height)` — overlaid mini-plots
-- 🔲 **Shared axes** — linked scales across composed plots
-- 🔲 **Collected guides** — single legend for multiple composed plots
-
----
-
-### Phase 17 — Programming Surface 🔲
-
-> Book Ch.18, Ch.20, Ch.21 (Programming, Extensions, Case study). Interfaces shipped in Phase 4.5; this phase adds higher-level programming sugar.
-
-- 🔲 **Programmatic aesthetics** — `aes.String("colname")` for dynamic column names from variables
-- 🔲 **Custom Geom protocol docs** — examples + cookbook for third-party `geom.Geom` implementations
-- 🔲 **Custom Stat protocol docs** — examples for third-party `stat.Stat`
-- 🔲 **Custom Scale protocol docs** — examples for third-party `scale.Scale`
-- 🔲 **Smooth method expansion** — `stat.Smooth` dispatch for GAM, cubic spline, LOWESS in addition to LM/LOESS
-- 🔲 `after_stat()` / `after_scale()` — computed aesthetics from stat/scale output (already in pipeline at steps 7 and 12, this exposes the user API)
-- 🔲 **`ggplot/extra` module** — example third-party geoms (springs, marquee, sina) demonstrating the extension contract
-
----
-
-### Phase 18 — Output & Interactivity 🔶
-
-> Beyond book scope — Go-specific extensions.
-
-- ✅ SVG export via `RecordingCanvas`
-- ✅ PDF export via `RecordingCanvas`
-- ✅ HiDPI / scaled output (`Save(... WithScale(2.0))`, `WriteTo` with `RenderOpt`)
-- 🔲 **`io.Writer` outputs** — `WriteTo(w io.Writer, opt RenderOpt) error` for streaming to HTTP, gzip, blob stores
-- 🔲 **HTML output** — interactive plots with hover tooltips via embedded SVG + minimal JS (no React/heavyweight runtime)
-- 🔲 **Animated GIF / APNG** — frame-by-frame rendering for time-series; `Plot.Animate(frames, fn)` builds a sequence of `Built`s
-- 🔲 **Live preview** — `p.Show()` opens a native window with hot-reload on data changes (development tool)
-- 🔲 **Server-side aggregation hooks** — datashader-style auto-aggregation for >1M points (hexbin, gridding) before geom hits renderer
-
----
-
-### Phase 19 — Documentation, Ecosystem, Stability 🔲
-
-- 🔲 **API reference** — `godoc` with runnable examples for every public type
-- 🔲 **Gallery** — 30+ curated examples with source + rendered output
-- 🔲 **Cookbook** — task-oriented guides (time series, distributions, maps, composition, Beam→ggplot pipelines)
-- 🔲 **Benchmarks** — `BENCHMARK.md` with comparison vs R/ggplot2 for equivalent plots; tracked over time
-- 🔲 **Performance regression CI** — golden numbers for 10+ canonical plots
-- 🔲 **CI/CD** — GitHub Actions: lint, test, race, benchmark, example rendering, doc build on every PR
-- 🔲 **Stability policy** — public surfaces semver-guaranteed; deprecation cycle of 2 minor releases minimum; `internal/` is unpublished
-- 🔲 **NOTICES** — font licensing (Go Noto Sans Apache 2.0), dependency attribution
-- 🔲 **`v1.0` release** — frozen public API, CHANGELOG, migration guide from v0.x
-
----
-
-## Cross-Cutting Concerns
-
-These are not phases; they thread through every phase.
-
-### Concurrency
-- `Plot` is immutable (deep-cloned on every method) — already shipped, goroutine-safe by construction
-- `Build` is single-threaded but `Stat` compute is panel-parallel via `errgroup`
-- `Draw` is panel-parallel after Phase 4.1
-- Engines (memory/Arrow/BQ) do their own internal parallelism
-
-### Context propagation
-- `ctx` flows through `Build`, `Draw`, every engine op
-- Cancellation honored at every IO and per-row hot loop boundary
-- Phase 4 hardens this end-to-end
-
-### Determinism
-- Stats with randomness (`stat.Density` with bootstrap, `position.Jitter`) accept injectable `rand.Source`
-- Float-ordering invariants: stable sorts, deterministic group iteration
-- Documented per-stat in godoc
-
-### Observability
-- Optional `slog.Logger` injection at `Build` boundary
-- OpenTelemetry spans in BQ engine (bytes-billed, slot-millis)
-- Phase counters in `Built` (rows-in, rows-out per stage) for debugging
-
-### Error model
-- `*ggplot.Error{Phase, Layer, Stage, Cause}` with `errors.Is`/`Unwrap`
-- Build errors (user spec) vs Engine errors (data) vs Render errors (canvas)
-- No panics in public API for non-bug conditions
-
-### Performance gates
-- `make bench` runs canonical suite
-- CI compares against `benchmarks/golden.json` and fails PR on >10% regression
-- Allocs/op tracked separately from ns/op
-
-### Stability and versioning
-- Public packages (`ggplot`, `aes`, `geom`, `stat`, `scale`, `coord`, `facet`, `theme`, `guide`, `position`, `dataset`, `dataset/memory`, `dataset/arrow`, `dataset/bigquery`) have stability guarantees from v0.5 onward
-- `internal/*` is unpublished and may break at any time
-- 2-minor-release deprecation cycle minimum
-
----
-
-## Why This Roadmap (vs. ggplot2 Port)
-
-This roadmap deliberately does not ship as a ggplot2 clone. Specifically:
-
-| ggplot2 (R) | This package (Go) | Rationale |
+| | | |
 |---|---|---|
-| `ggproto` OOP | Go interfaces | Native, simpler, type-checked |
-| S3 dispatch | Type switches and generics | Compile-time correctness |
-| Lazy data via promises | `dataset.Table` lazy chain via engines | Explicit, cancellable, distributable |
-| Global `theme_set()` | No global state | Concurrency-safe, embeddable |
-| `aes_string()` | `aes.String("col")` | Programmatic aesthetics without quasiquotation |
-| `+` operator overloading | Fluent builder methods | Idiomatic Go |
-| `print(p)` triggers render | Explicit `Build()` then `Draw()` | Inspectable, testable, parallelizable |
-| Tied to grid graphics | Pluggable canvas (gg, SVG, PDF, HTML, custom) | Backend-agnostic |
-| Single-row dataframe | Typed `Frame` with `Column[T]` generics | Compile-time dtype, zero-copy Arrow |
-| `data.frame` only | Memory, Arrow, BigQuery, Iceberg engines | Production data plane |
+| ![Scatter](assets/point.png) | ![Line](assets/line.png) | ![Area](assets/area.png) |
+| ![Bar](assets/bar.png) | ![Histogram](assets/histogram.png) | ![Smooth](assets/smooth.png) |
 
-The grammar is the same. The implementation is Go.
+---
+
+## Why `ggplot`?
+
+Data science in Go often suffers from fragmented or overly imperative plotting APIs. `ggplot` solves this by introducing:
+- **Declarative Compositions** ΓÇö Build complex charts by layering geometries and statistics instead of drawing pixels.
+- **Provider-Agnostic Engines** ΓÇö Swap out the underlying dataset execution engine (`memory` vs `arrow`) without changing a single line of your plotting code.
+- **Publication-Ready Outputs** ΓÇö Anti-aliased 2D vector rendering powered by `gogpu/gg`, saving to PNG, SVG, or PDF at configurable DPI scales.
+
+## Quick Start
+
+### Installation
+
+```bash
+go get github.com/TuSKan/ggplot
+```
+
+### 1. Scatter Plot
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+
+	"github.com/TuSKan/ggplot"
+	"github.com/TuSKan/ggplot/aes"
+	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
+	"github.com/TuSKan/ggplot/geom"
+)
+
+func main() {
+	ctx := context.Background()
+	// Initialize a memory engine and construct columns explicitly.
+	eng := memory.NewEngine(ctx)
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}),
+		eng.NewFloat64Column("y", []float64{2, 4, 5, 4, 6, 8, 7, 9, 10, 11}),
+	)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Build the plot using declarative Grammar of Graphics.
+	ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point(geom.WithSize(5), geom.WithColor("coral"))).
+		Layer(geom.Smooth()).
+		Labs(ggplot.Title("Quick Start"), ggplot.XLab("X"), ggplot.YLab("Y")).
+		Theme("minimal").
+		Save(ctx, "scatter.png", 800, 500)
+}
+```
+
+### 2. Faceted Time Series
+
+```go
+ggplot.New(ds, aes.X("day"), aes.Y("temp")).
+    Layer(geom.Line(geom.WithColor("seagreen"), geom.WithLineWidth(1.5))).
+    FacetWrap("season", 2, 0).
+    Labs(ggplot.Title("Temperature by Season")).
+    Theme("dark").
+    Save(ctx, "facets.png", 900, 600)
+```
+
+### 3. Box Plot with Groups
+
+```go
+ggplot.New(ds, aes.X("group"), aes.Y("value")).
+    Layer(geom.BoxPlot(geom.WithFill("lightyellow"), geom.WithAlpha(0.8))).
+    Labs(ggplot.Title("Distribution by Group")).
+    Theme("classic").
+    Save(ctx, "boxplot.png", 800, 500)
+```
+
+---
+
+## Architecture & Data Backends
+
+`ggplot` is built around a rigorous, interface-driven `dataset.Table` engine. This means you are not limited to `[]float64` slices. You can back your plots with robust columnar frameworks. See [**DATASET.md**](docs/DATASET.md) for a deep-dive into the backend engine architecture.
+
+- **Memory Engine (`dataset/memory`)**: Lightweight, native Go slices. Best for standard web-server rendering.
+- **Arrow Engine (`dataset/arrow`)**: Apache Arrow backed IPC streams and Parquet datasets. Provides zero-copy reads from IPC/Parquet files. Best for datasets >1M rows.
+- **BigQuery Engine (`dataset/bigquery`)**: Lazy SQL pushdown execution. Best for massive data warehouses where filtering and statistics must be executed on the database before streaming the visual aggregate to Go.
+
+---
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [DATASET.md](docs/DATASET.md) | Deep dive into the Engine abstraction, Memory, and Arrow backends |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Package map, rendering pipeline, design decisions |
+| [ROADMAP.md](docs/ROADMAP.md) | Development plan aligned with the ggplot2 book (3e) |
+| [BENCHMARK.md](docs/BENCHMARK.md) | Arrow vs Memory engine performance benchmarks |
+
+---
+
+## Project Roadmap
+
+We actively track our development pipeline across multiple capability tiers focusing on Grammar Primitives, Scaling Functions, and Advanced Geometries.
+
+Please see our full [**Project Roadmap**](docs/ROADMAP.md) to understand current milestones and architectural expansion goals.
+
+- ≡ƒö╢ **Phases 1ΓÇô4** ΓÇö Core architecture, grammar primitives, data backends, production hardening (in progress)
+- ≡ƒö▓ **Phases 5ΓÇô8** ΓÇö Position/colour/other scales, faceting controls
+- ≡ƒö▓ **Phases 9ΓÇô12** ΓÇö Annotations, composition (patchwork), maps, networks
+- ≡ƒö▓ **Phases 13ΓÇô19** ΓÇö Themes deep-dive, guides, output backends, programming/extensibility
+
+---
+
+## Dependencies
+
+| Package | Role |
+|---|---|
+| [`gogpu/gg`](https://github.com/gogpu/gg) | 2D vector rendering with anti-aliased lines, fills, and text |
+| [`apache/arrow-go`](https://github.com/apache/arrow-go) | Columnar data (zero-copy for IPC/Parquet reads) |
+
+## Contributing
+
+Contributions are welcome!
+
+## License
+
+MIT ΓÇö see [LICENSE](LICENSE).
