@@ -58,3 +58,9 @@ func XMin(col string) Mapping { return Mapping{Channel: "xmin", Column: col} }
 
 // XMax maps a column to the right bound of a range aesthetic.
 func XMax(col string) Mapping { return Mapping{Channel: "xmax", Column: col} }
+
+// XEnd maps a column to the end x-position of a segment.
+func XEnd(col string) Mapping { return Mapping{Channel: "xend", Column: col} }
+
+// YEnd maps a column to the end y-position of a segment.
+func YEnd(col string) Mapping { return Mapping{Channel: "yend", Column: col} }

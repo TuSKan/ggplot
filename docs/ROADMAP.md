@@ -221,6 +221,13 @@ The public, **stable-from-v0.5** extension API:
 - 🔲 **KDE inner-loop SIMD** — `stat.Density` Gaussian kernel via `compute.Exp`/`compute.Mul`/`compute.ReduceSum`; currently scalar + NumCPU parallelism
 - 🔲 **Panel-parallel rendering** — `errgroup.Group` over `Built.Layers × panels`; gated on Phase 4.1
 
+#### 4.7 — Visual Polish (analysis.md §6)
+
+- ✅ **Histogram bar inset (S4)** — 0.5px inset per side between continuous-mode bars so adjacent bins never visually merge; matches Observable Plot's default
+- ✅ **Placeholder geom drawers (S5)** — `geom.Tile` (heatmap), `geom.Segment` (x,y→xend,yend), `geom.ErrorBar` (ymin/ymax + caps), `geom.Polygon` (closed paths); all four had declared types but no drawer
+- ✅ **`aes.XEnd`/`aes.YEnd` channels** — endpoint aesthetics for Segment geom
+- 🔲 **Tabular figures on quantitative axes (S1)** — monospaced digit rendering for aligned tick labels; requires canvas font-feature support or mono-digit tick font
+
 ---
 
 ### Phase 5 — Position Scales & Axes 🔶
@@ -248,6 +255,12 @@ The public, **stable-from-v0.5** extension API:
 
 > Book Ch.11 (Colour scales and legends)
 
+- ✅ **Colormap registry** — `colormap.Cmap` interface, 40+ built-in colormaps (sequential, diverging, qualitative, perceptually-uniform, cyclic, miscellaneous)
+- ✅ **Cyclic colormaps** — `Twilight` (perceptually-uniform) + `Phase` (HSL wrap) for circular variables
+- ✅ **Turbo / JetLegacy** — high-dynamic-range + legacy MATLAB (with doc warning; never a default)
+- ✅ **Theme → ColorDefaults** — `ColorDefaults{Discrete, Sequential, Diverging, Cyclic}` mapped for all 75 themes; `DefaultCmapFor(name, category)` lookup
+- 🔲 **Color/Fill split** — extend `ColorDefaults` with `ColorDiscrete`/`ColorContinuous`/`FillDiscrete`/`FillContinuous` when a real use case demands it; zero-value fields fall back to `Discrete`/`Sequential`
+- 🔲 **Wire into scale pipeline** — `scale.ScaleColor`/`scale.ScaleFill` should call `theme.DefaultCmapFor(th.Name, category)` when the user hasn't set an explicit colormap
 - 🔲 **Continuous color** — `scale.ColorGradient(low, high)`, `Gradient2(low, mid, high, midpoint)`, `GradientN([]colors)`
 - 🔲 **Discrete color** — `scale.ColorBrewer(palette)`, `ColorManual(map[string]color)`, `ColorGrey(start, end)`
 - 🔲 **Palette system** — viridis (A–E), ColorBrewer (sequential/diverging/qualitative), HCL hue/chroma/luminance
@@ -256,6 +269,8 @@ The public, **stable-from-v0.5** extension API:
 - 🔲 **NA color** — `WithNAColor(c)` parameter
 - 🔲 **Guide customization** — `guide.ColorBar(barwidth, barheight, nbin, direction)`, `guide.Legend(ncol, nrow, byrow)`
 - 🔲 **Legend key glyphs** — per-geom key shape (line key for `geom.Smooth`, point key for `geom.Point`)
+
+> Anti-patterns: no theme-specific colormap variants (ObservableViridis, NordMagma); no Jet/Turbo as defaults.
 
 ---
 

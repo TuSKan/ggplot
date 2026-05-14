@@ -886,7 +886,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 
 	for _, layer := range p.spec.Layers {
 		layerStart := len(resolved) // track where this layer's BuiltLayers start
-		merged := p.spec.GlobalMapping.Merge(layer.Mapping)
+		merged := layer.Mapping.Merge(p.spec.GlobalMapping)
 		statName := layer.Geom.StatName
 
 		s, err := stat.Lookup(statName)
@@ -1368,6 +1368,28 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 		if colName, ok := rl.Mapping["y"]; ok {
 			if col, err := rl.Data.Column(colName); err == nil {
 				_ = yScale.Train(col)
+			}
+		}
+
+		// Train X scale on range/endpoint aesthetics so segments, tiles,
+		// and error bars with horizontal orientation include their full extent.
+		if !xIsDiscrete {
+			for _, extra := range []string{"xmin", "xmax", "xend"} {
+				if colName, ok := rl.Mapping[extra]; ok {
+					if col, err := rl.Data.Column(colName); err == nil {
+						_ = xScale.Train(col)
+					}
+				}
+			}
+		}
+
+		// Train Y scale on range/endpoint aesthetics so error bars,
+		// segments, and ribbons include their full extent.
+		for _, extra := range []string{"ymin", "ymax", "yend"} {
+			if colName, ok := rl.Mapping[extra]; ok {
+				if col, err := rl.Data.Column(colName); err == nil {
+					_ = yScale.Train(col)
+				}
 			}
 		}
 

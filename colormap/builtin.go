@@ -88,6 +88,21 @@ var (
 	OkabeIto Cmap
 	// Observable10 is a qualitative palette optimized for online displays.
 	Observable10 Cmap
+
+	// Twilight is a perceptually-uniform cyclic colormap. 0 and 1 map to the
+	// same color, making it suitable for circular variables (phase, angle).
+	Twilight Cmap
+	// Phase is an HSL-based cyclic colormap. Wraps smoothly through hues.
+	Phase Cmap
+
+	// Turbo is a high-dynamic-range sequential colormap (Mikhailov 2019).
+	// Excellent for revealing fine structure in engineering/dashboard contexts
+	// but not colorblind-safe. Prefer Viridis/Cividis for scientific work.
+	Turbo Cmap
+	// JetLegacy is the classic MATLAB jet colormap. It has known perceptual
+	// defects: non-monotonic luminance, colorblind-unsafe, and phantom
+	// banding artifacts. Prefer Turbo, Viridis, or Inferno for new work.
+	JetLegacy Cmap
 )
 
 func init() {
@@ -97,6 +112,11 @@ func init() {
 	infernoLUT = lutFromStops(infernoStops)
 	magmaLUT = lutFromStops(magmaStops)
 	cividisLUT = lutFromStops(cividisStops)
+
+	twilightLUT = lutFromStops(twilightStops)
+	phaseLUT = lutFromStops(phaseStops)
+	turboLUT = lutFromStops(turboStops)
+	jetLUT = lutFromStops(jetStops)
 
 	greysLUT = lutFromStops(greysStops)
 	bluesLUT = lutFromStops(bluesStops)
@@ -166,6 +186,12 @@ func init() {
 	OkabeIto = NewListed("okabe_ito", Qualitative, okabeItoData)
 	Observable10 = NewListed("observable10", Qualitative, observable10Colors)
 
+	Twilight = NewLinearSegmented("twilight", Cyclic, twilightLUT)
+	Phase = NewLinearSegmented("phase", Cyclic, phaseLUT)
+
+	Turbo = NewLinearSegmented("turbo", Miscellaneous, turboLUT)
+	JetLegacy = NewLinearSegmented("jet", Miscellaneous, jetLUT)
+
 	// Register everything in the global registry.
 	for _, c := range []Cmap{
 		Viridis, Plasma, Inferno, Magma, Cividis,
@@ -173,6 +199,8 @@ func init() {
 		RdBu, RdYlBu, RdYlGn, Spectral, BrBG, PiYG, PRGn, PuOr, RdGy, Coolwarm, Bwr,
 		Tab10, Tab20, Tab20b, Tab20c, Set1, Set2, Set3, Paired, Pastel1, Pastel2,
 		Accent, Dark2, OkabeIto, Observable10,
+		Twilight, Phase,
+		Turbo, JetLegacy,
 	} {
 		MustRegister(c)
 	}

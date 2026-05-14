@@ -67,7 +67,7 @@ func init() {
 	RegisterDrawer(geom.TypeSmooth, DrawerFunc(drawLineFn))
 	RegisterDrawer(geom.TypeStep, DrawerFunc(drawStepFn))
 	RegisterDrawer(geom.TypeBar, DrawerFunc(drawBarsFn))
-	RegisterDrawer(geom.TypeHistogram, DrawerFunc(drawBarsFn))
+	RegisterDrawer(geom.TypeHistogram, DrawerFunc(drawHistogramFn))
 	RegisterDrawer(geom.TypeArea, DrawerFunc(drawAreaFn))
 	RegisterDrawer(geom.TypeDensity, DrawerFunc(drawAreaFn))
 	RegisterDrawer(geom.TypeRug, DrawerFunc(drawRugFn))
@@ -76,6 +76,10 @@ func init() {
 	RegisterDrawer(geom.TypeABLine, DrawerFunc(drawABLineFn))
 	RegisterDrawer(geom.TypeText, DrawerFunc(drawTextFn))
 	RegisterDrawer(geom.TypeBoxPlot, DrawerFunc(drawBoxplotFn))
+	RegisterDrawer(geom.TypeTile, DrawerFunc(drawTileFn))
+	RegisterDrawer(geom.TypeSegment, DrawerFunc(drawSegmentFn))
+	RegisterDrawer(geom.TypeErrorBar, DrawerFunc(drawErrorBarFn))
+	RegisterDrawer(geom.TypePolygon, DrawerFunc(drawPolygonFn))
 }
 
 // drawLayer dispatches rendering to the registered Drawer for the layer's geom type.
@@ -139,7 +143,14 @@ func drawStepFn(dc DrawContext) {
 
 func drawBarsFn(dc DrawContext) {
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
-	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme)
+	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, 0)
+}
+
+func drawHistogramFn(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	// Half-pixel inset per side → 1px total gap between adjacent bins,
+	// matching Observable Plot's continuous-bar default.
+	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, 0.5)
 }
 
 func drawAreaFn(dc DrawContext) {
@@ -295,7 +306,7 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 	}
 }
 
-func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, th theme.Theme) {
+func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, th theme.Theme, barInsetPx float64) {
 	// Collect all points first so we can compute spacing.
 	type barPt struct{ x, y, ymin float64 }
 
@@ -414,6 +425,25 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 			ry = math.Min(cyVal, cyBase)
 			rw = halfBarPx * 2
 			rh = math.Abs(cyVal - cyBase)
+		}
+
+		// Apply inset: shrink each bar by barInsetPx on each side.
+		if barInsetPx > 0 {
+			if p.Orientation == geom.Horizontal {
+				ry += barInsetPx
+				rh -= 2 * barInsetPx
+			} else {
+				rx += barInsetPx
+				rw -= 2 * barInsetPx
+			}
+
+			if rw < 0.5 { //nolint:mnd // Never collapse a bar to less than half a pixel.
+				rw = 0.5
+			}
+
+			if rh < 0.5 { //nolint:mnd // Never collapse a bar to less than half a pixel.
+				rh = 0.5
+			}
 		}
 
 		cv.SetRGBA(fr, fg, fb, alpha)
@@ -984,4 +1014,288 @@ func normalize(v, lo, hi float64) float64 {
 	}
 
 	return (v - lo) / (hi - lo)
+}
+
+// ---------------------------------------------------------------------------
+// Tile (heatmap cells)
+// ---------------------------------------------------------------------------
+
+func drawTileFn(dc DrawContext) {
+	xVals, err := dc.Data.Float64(dc.Mapping["x"])
+	if err != nil {
+		return
+	}
+
+	yVals, err := dc.Data.Float64(dc.Mapping["y"])
+	if err != nil {
+		return
+	}
+
+	n := min(len(xVals), len(yVals))
+	if n == 0 {
+		return
+	}
+
+	// Auto-detect cell size from minimum spacing.
+	dx := autoSpacing(xVals)
+	dy := autoSpacing(yVals)
+
+	fr, fg, fb := colormap.ParseRGB(dc.Params.Fill, 0.2, 0.4, 0.8)
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 1.0
+	}
+
+	for i := range n {
+		x, y := xVals[i], yVals[i]
+
+		// Normalize the four corners.
+		nxLo := normalize(x-dx/2, dc.XMin, dc.XMax)
+		nxHi := normalize(x+dx/2, dc.XMin, dc.XMax)
+		nyLo := normalize(y-dy/2, dc.YMin, dc.YMax)
+		nyHi := normalize(y+dy/2, dc.YMin, dc.YMax)
+
+		// Transform corners to pixel coords.
+		px0, py0 := dc.Coord.Transform(nxLo, nyLo, dc.W, dc.H)
+		px1, py1 := dc.Coord.Transform(nxHi, nyHi, dc.W, dc.H)
+
+		rx := math.Min(px0, px1)
+		ry := math.Min(py0, py1)
+		rw := math.Abs(px1 - px0)
+		rh := math.Abs(py1 - py0)
+
+		// Per-datum color from continuous scale, or fallback to fill.
+		if dc.ContScale != nil && dc.ContColorCol != "" {
+			zVals, zErr := dc.Data.Float64(dc.ContColorCol)
+			if zErr == nil && i < len(zVals) {
+				c := dc.ContScale.At(zVals[i])
+				dc.Canvas.SetRGBA(c.R, c.G, c.B, alpha)
+			} else {
+				dc.Canvas.SetRGBA(fr, fg, fb, alpha)
+			}
+		} else {
+			dc.Canvas.SetRGBA(fr, fg, fb, alpha)
+		}
+
+		dc.Canvas.DrawRectangle(rx, ry, rw, rh)
+		dc.Canvas.Fill()
+	}
+}
+
+// autoSpacing returns the minimum absolute spacing between sorted values,
+// or 1.0 if fewer than 2 values.
+func autoSpacing(vals []float64) float64 {
+	if len(vals) < 2 {
+		return 1.0
+	}
+
+	sorted := make([]float64, len(vals))
+	copy(sorted, vals)
+	sort.Float64s(sorted)
+
+	sp := math.Abs(sorted[1] - sorted[0])
+	for i := 2; i < len(sorted); i++ {
+		d := math.Abs(sorted[i] - sorted[i-1])
+		if d > 0 && d < sp {
+			sp = d
+		}
+	}
+
+	if sp <= 0 {
+		sp = 1.0
+	}
+
+	return sp
+}
+
+// ---------------------------------------------------------------------------
+// Segment (x,y → xend,yend line segments)
+// ---------------------------------------------------------------------------
+
+func drawSegmentFn(dc DrawContext) {
+	xVals, err := dc.Data.Float64(dc.Mapping["x"])
+	if err != nil {
+		return
+	}
+
+	yVals, err := dc.Data.Float64(dc.Mapping["y"])
+	if err != nil {
+		return
+	}
+
+	xeCol := dc.Mapping["xend"]
+	yeCol := dc.Mapping["yend"]
+
+	xeVals, err := dc.Data.Float64(xeCol)
+	if err != nil {
+		return
+	}
+
+	yeVals, err := dc.Data.Float64(yeCol)
+	if err != nil {
+		return
+	}
+
+	n := min(len(xVals), len(yVals), len(xeVals), len(yeVals))
+
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.2, 0.2, 0.2)
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 1.0
+	}
+
+	lw := dc.Params.LineWidth
+	if lw <= 0 {
+		lw = 1
+	}
+
+	dc.Canvas.SetLineWidth(lw)
+
+	for i := range n {
+		nx0 := normalize(xVals[i], dc.XMin, dc.XMax)
+		ny0 := normalize(yVals[i], dc.YMin, dc.YMax)
+		nx1 := normalize(xeVals[i], dc.XMin, dc.XMax)
+		ny1 := normalize(yeVals[i], dc.YMin, dc.YMax)
+
+		px0, py0 := dc.Coord.Transform(nx0, ny0, dc.W, dc.H)
+		px1, py1 := dc.Coord.Transform(nx1, ny1, dc.W, dc.H)
+
+		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+		dc.Canvas.MoveTo(px0, py0)
+		dc.Canvas.LineTo(px1, py1)
+		dc.Canvas.Stroke()
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ErrorBar (vertical or horizontal error bars with caps)
+// ---------------------------------------------------------------------------
+
+func drawErrorBarFn(dc DrawContext) {
+	xVals, err := dc.Data.Float64(dc.Mapping["x"])
+	if err != nil {
+		return
+	}
+
+	yminCol := dc.Mapping["ymin"]
+	ymaxCol := dc.Mapping["ymax"]
+
+	yminVals, err := dc.Data.Float64(yminCol)
+	if err != nil {
+		return
+	}
+
+	ymaxVals, err := dc.Data.Float64(ymaxCol)
+	if err != nil {
+		return
+	}
+
+	n := min(len(xVals), len(yminVals), len(ymaxVals))
+
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.2, 0.2, 0.2)
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 1.0
+	}
+
+	lw := dc.Params.LineWidth
+	if lw <= 0 {
+		lw = 1
+	}
+
+	// Cap half-width in pixels.
+	capW := dc.Params.Width
+	if capW <= 0 {
+		capW = 0.5
+	}
+
+	capPx := capW * 4 //nolint:mnd // Convert relative width to a reasonable pixel cap size.
+
+	dc.Canvas.SetLineWidth(lw)
+	dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+
+	for i := range n {
+		nx := normalize(xVals[i], dc.XMin, dc.XMax)
+		nyLo := normalize(yminVals[i], dc.YMin, dc.YMax)
+		nyHi := normalize(ymaxVals[i], dc.YMin, dc.YMax)
+
+		px, pyLo := dc.Coord.Transform(nx, nyLo, dc.W, dc.H)
+		_, pyHi := dc.Coord.Transform(nx, nyHi, dc.W, dc.H)
+
+		// Vertical stem.
+		dc.Canvas.MoveTo(px, pyLo)
+		dc.Canvas.LineTo(px, pyHi)
+		dc.Canvas.Stroke()
+
+		// Bottom cap.
+		dc.Canvas.MoveTo(px-capPx, pyLo)
+		dc.Canvas.LineTo(px+capPx, pyLo)
+		dc.Canvas.Stroke()
+
+		// Top cap.
+		dc.Canvas.MoveTo(px-capPx, pyHi)
+		dc.Canvas.LineTo(px+capPx, pyHi)
+		dc.Canvas.Stroke()
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Polygon (closed paths through grouped x/y points)
+// ---------------------------------------------------------------------------
+
+func drawPolygonFn(dc DrawContext) {
+	xVals, err := dc.Data.Float64(dc.Mapping["x"])
+	if err != nil {
+		return
+	}
+
+	yVals, err := dc.Data.Float64(dc.Mapping["y"])
+	if err != nil {
+		return
+	}
+
+	n := min(len(xVals), len(yVals))
+	if n < 3 { //nolint:mnd // A polygon needs at least 3 vertices.
+		return
+	}
+
+	fr, fg, fb := colormap.ParseRGB(dc.Params.Fill, 0.2, 0.4, 0.8)
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 0.6
+	}
+
+	lw := dc.Params.LineWidth
+	if lw <= 0 {
+		lw = 1
+	}
+
+	// Build closed path.
+	for i := range n {
+		nx := normalize(xVals[i], dc.XMin, dc.XMax)
+		ny := normalize(yVals[i], dc.YMin, dc.YMax)
+		px, py := dc.Coord.Transform(nx, ny, dc.W, dc.H)
+
+		if i == 0 {
+			dc.Canvas.MoveTo(px, py)
+		} else {
+			dc.Canvas.LineTo(px, py)
+		}
+	}
+
+	dc.Canvas.ClosePath()
+
+	// Fill.
+	dc.Canvas.SetRGBA(fr, fg, fb, alpha)
+	dc.Canvas.FillPreserve()
+
+	// Stroke.
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, fr*0.7, fg*0.7, fb*0.7)
+	dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+	dc.Canvas.SetLineWidth(lw)
+	dc.Canvas.Stroke()
 }

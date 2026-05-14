@@ -656,3 +656,54 @@ func ABLine(opts ...Opt) Layer {
 
 	return l
 }
+
+// Tile creates a heatmap-cell geometry layer. Each row maps to a filled
+// rectangle at (x, y) whose color comes from a continuous color scale.
+//
+// Required aesthetics: x, y, fill (or a continuous color column).
+// Relevant options: WithColor, WithFill, WithAlpha.
+func Tile(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeTile,
+		StatName: stat.Identity,
+		Position: position.Identity(),
+		Params:   Params{Alpha: 1.0},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// Segment creates a line-segment geometry layer. Each row draws a line
+// from (x, y) to (xend, yend).
+//
+// Required aesthetics: x, y, xend, yend.
+// Relevant options: WithColor, WithAlpha, WithLineWidth.
+func Segment(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeSegment,
+		StatName: stat.Identity,
+		Position: position.Identity(),
+		Params:   Params{LineWidth: 1, Alpha: 1.0},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// ErrorBar creates an error bar geometry layer. Each row draws a vertical
+// or horizontal line from (x, ymin) to (x, ymax) with small caps.
+//
+// Required aesthetics: x, ymin, ymax.
+// Relevant options: WithColor, WithAlpha, WithLineWidth, WithWidth, WithOrientation.
+func ErrorBar(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeErrorBar,
+		StatName: stat.Identity,
+		Position: position.Identity(),
+		Params:   Params{LineWidth: 1, Alpha: 1.0, Width: 0.5},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
