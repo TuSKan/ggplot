@@ -1580,6 +1580,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		yTicks := leftAxisScale.Ticks(6)
 
 		cv.SetFontSize(th.AxisTextElem().Size)
+		cv.SetTabularNums(true)
 
 		maxTickW := 0.0
 
@@ -1589,6 +1590,8 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 				maxTickW = tw
 			}
 		}
+
+		cv.SetTabularNums(false)
 
 		var (
 			mTop, mRight, mBottom, mLeft               float64
@@ -1920,7 +1923,9 @@ func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, 
 		// Label.
 		cv.SetRGBA(tr, tg, tb, 1)
 		cv.SetFontSize(th.AxisTextElem().Size)
+		cv.SetTabularNums(true)
 		cv.DrawStringAnchored(sc.Format(v), px, y+tickLen+12, 0.5, 0.5)
+		cv.SetTabularNums(false)
 	}
 
 	// Axis title.
@@ -1970,6 +1975,8 @@ func drawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 		if math.Abs(py-lastPy) >= minSpacing {
 			lbl := sc.Format(v)
 
+			cv.SetTabularNums(true)
+
 			tw, _ := cv.MeasureString(lbl)
 			if tw > maxLabelW {
 				maxLabelW = tw
@@ -1978,6 +1985,8 @@ func drawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 			cv.SetRGBA(tr, tg, tb, 1)
 			cv.SetFontSize(th.AxisTextElem().Size)
 			cv.DrawStringAnchored(lbl, x-tickLen-5, py, 1.0, 0.5)
+			cv.SetTabularNums(false)
+
 			lastPy = py
 		}
 	}

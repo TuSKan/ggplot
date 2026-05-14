@@ -122,12 +122,31 @@ func (b *svgBackend) DrawImage(_ image.Image, _, _ recording.Rect, _ recording.I
 	// Image embedding requires base64 inline data — deferred.
 }
 
-func (b *svgBackend) DrawText(s string, x, y float64, _ text.Face, brush recording.Brush) {
+func (b *svgBackend) DrawText(s string, x, y float64, face text.Face, brush recording.Brush) {
 	fill, _ := brushToSVG(brush)
 	escaped := svgEscape(s)
+
+	fontSize := 12.0
+	if face != nil {
+		fontSize = face.Size()
+	}
+
+	// Check if face has tabular-nums feature enabled.
+	variantAttr := ""
+
+	if face != nil {
+		for _, f := range face.Features() {
+			if f.Tag == [4]byte{'t', 'n', 'u', 'm'} && f.Value > 0 {
+				variantAttr = ` font-variant-numeric="tabular-nums"`
+
+				break
+			}
+		}
+	}
+
 	fmt.Fprintf(&b.buf,
-		"<text x=\"%.2f\" y=\"%.2f\" fill=\"%s\" font-family=\"sans-serif\" font-size=\"12\">%s</text>\n",
-		x, y, fill, escaped)
+		"<text x=\"%.2f\" y=\"%.2f\" fill=\"%s\" font-family=\"sans-serif\" font-size=\"%.1f\"%s>%s</text>\n",
+		x, y, fill, fontSize, variantAttr, escaped)
 }
 
 // WriteTo writes the SVG document to w.

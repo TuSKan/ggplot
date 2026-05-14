@@ -77,6 +77,11 @@ type Canvas interface {
 
 	// SetFontSize sets the font size in points.
 	SetFontSize(size float64)
+	// SetTabularNums enables or disables tabular (monospaced) digit widths
+	// for subsequent text rendering. When enabled, digits occupy uniform
+	// horizontal space for aligned numeric columns (e.g., axis tick labels).
+	// Backends that don't support OpenType features may ignore this.
+	SetTabularNums(enabled bool)
 	// DrawStringAnchored draws text at (x, y) with anchor (ax, ay) ∈ [0,1].
 	// (0,0) = top-left, (0.5,0.5) = center, (1,1) = bottom-right.
 	DrawStringAnchored(text string, x, y, ax, ay float64)

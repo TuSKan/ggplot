@@ -31,6 +31,8 @@ go.work.sum
 *.txt
 *.png
 *.jpg
+*.jpeg
+*.svg
 *.log
 *.zip
 

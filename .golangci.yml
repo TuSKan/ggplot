@@ -73,6 +73,10 @@ linters:
       check-type-assertions: true
       check-blank: false
 
+    gomoddirectives:
+      replace-allow-list:
+        - github.com/gogpu/gg
+
   exclusions:
     rules:
       # White-box tests are acceptable while the public API is still evolving.

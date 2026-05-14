@@ -91,3 +91,21 @@ func (h *FaceHandle) TextFace() text.Face {
 
 	return h.tFace
 }
+
+// FontSource returns the underlying text.FontSource for this handle,
+// enabling callers to create faces with custom options (e.g., OpenType features).
+// Returns nil if the font cannot be loaded.
+func (h *FaceHandle) FontSource() *text.FontSource {
+	if cached, ok := h.sources.Get(h.Font.Path); ok {
+		return cached
+	}
+
+	loaded, err := text.NewFontSourceFromFile(h.Font.Path)
+	if err != nil {
+		return nil
+	}
+
+	h.sources.Set(h.Font.Path, loaded)
+
+	return loaded
+}

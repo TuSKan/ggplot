@@ -12,6 +12,9 @@ import (
 	"golang.org/x/image/font/gofont/goregular"
 
 	"github.com/TuSKan/ggplot/fonts"
+
+	// opt-in GPU acceleration
+	_ "github.com/gogpu/gg/gpu"
 )
 
 // fontState holds the shared, lazily-initialized font resolver.
@@ -33,6 +36,9 @@ func initFonts() {
 		if err == nil {
 			embeddedSource = src
 		}
+
+		// 3. Enable HarfBuzz-level shaping for OpenType feature support (tnum, liga, etc.).
+		text.SetShaper(text.NewGoTextShaper())
 	})
 }
 
@@ -41,6 +47,7 @@ func initFonts() {
 type GGCanvas struct {
 	ctx      *gg.Context
 	fontSize float64
+	tabNums  bool // tabular figures enabled
 }
 
 // NewGGCanvas creates a Canvas backed by a gogpu/gg rasterizer.
@@ -152,6 +159,12 @@ func (c *GGCanvas) SetFontSize(size float64) {
 
 	c.fontSize = size
 
+	// Build face options (tabular nums if active).
+	var opts []text.FaceOption
+	if c.tabNums {
+		opts = append(opts, text.WithFeatures(text.TabularNums))
+	}
+
 	// Try system font resolver first (sans-serif family).
 	if fontResolver != nil {
 		handle, err := fontResolver.LoadFace(fonts.FaceRequest{
@@ -162,8 +175,9 @@ func (c *GGCanvas) SetFontSize(size float64) {
 			DPI:           72,
 		})
 		if err == nil && handle != nil {
-			if face := handle.TextFace(); face != nil {
-				c.ctx.SetFont(face)
+			if src := handle.FontSource(); src != nil {
+				c.ctx.SetFont(src.Face(size, opts...))
+
 				return
 			}
 		}
@@ -171,8 +185,18 @@ func (c *GGCanvas) SetFontSize(size float64) {
 
 	// Fallback to embedded Go Regular.
 	if embeddedSource != nil {
-		c.ctx.SetFont(embeddedSource.Face(size))
+		c.ctx.SetFont(embeddedSource.Face(size, opts...))
 	}
+}
+
+// SetTabularNums enables or disables tabular (monospaced) digit widths.
+func (c *GGCanvas) SetTabularNums(enabled bool) {
+	if c.tabNums == enabled {
+		return
+	}
+
+	c.tabNums = enabled
+	c.SetFontSize(c.fontSize) // re-resolve font with new features
 }
 
 // DrawStringAnchored draws text at (x, y) with anchor (ax, ay).

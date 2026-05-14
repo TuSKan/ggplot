@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/gogpu/gg/recording"
+	"github.com/gogpu/gg/text"
 
 	"github.com/TuSKan/ggplot/fonts"
 )
@@ -15,6 +16,7 @@ import (
 type RecordingCanvas struct {
 	rec      *recording.Recorder
 	fontSize float64
+	tabNums  bool // tabular figures enabled
 }
 
 // NewRecordingCanvas creates a Canvas that records all drawing operations.
@@ -124,6 +126,12 @@ func (c *RecordingCanvas) SetFontSize(size float64) {
 
 	c.fontSize = size
 
+	// Build face options (tabular nums if active).
+	var opts []text.FaceOption
+	if c.tabNums {
+		opts = append(opts, text.WithFeatures(text.TabularNums))
+	}
+
 	// Try system font resolver first.
 	if fontResolver != nil {
 		handle, err := fontResolver.LoadFace(fonts.FaceRequest{
@@ -134,8 +142,9 @@ func (c *RecordingCanvas) SetFontSize(size float64) {
 			DPI:           72,
 		})
 		if err == nil && handle != nil {
-			if face := handle.TextFace(); face != nil {
-				c.rec.SetFont(face)
+			if src := handle.FontSource(); src != nil {
+				c.rec.SetFont(src.Face(size, opts...))
+
 				return
 			}
 		}
@@ -143,8 +152,18 @@ func (c *RecordingCanvas) SetFontSize(size float64) {
 
 	// Fallback to embedded Go Regular.
 	if embeddedSource != nil {
-		c.rec.SetFont(embeddedSource.Face(size))
+		c.rec.SetFont(embeddedSource.Face(size, opts...))
 	}
+}
+
+// SetTabularNums enables or disables tabular (monospaced) digit widths.
+func (c *RecordingCanvas) SetTabularNums(enabled bool) {
+	if c.tabNums == enabled {
+		return
+	}
+
+	c.tabNums = enabled
+	c.SetFontSize(c.fontSize) // re-resolve font with new features
 }
 
 // DrawStringAnchored draws text at (x, y) with anchor (ax, ay).

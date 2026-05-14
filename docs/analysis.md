@@ -186,7 +186,9 @@ These six items are the differentiation story.
 
 Ordered by impact-to-effort ratio. Each item is something I read against your code (gap is real, not speculative), with concrete implementation sketches.
 
-### S1. Tabular figures on quantitative axes
+### S1. Tabular figures on quantitative axes [IMPLEMENTED ✅]
+
+**Status:** Implemented in `github.com/TuSKan/gogpugg` (font shaping) and `ggplot` (`canvas`, SVG exporter, axis drawing). See `examples/tabular_figures` for a demonstration.
 
 **Why it matters most.** This single change crosses the "looks amateur" → "looks publication-ready" line. Every quantitative axis benefits. Zero downside.
 
