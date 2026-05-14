@@ -12,7 +12,7 @@ import (
 // All math operations generate lazy SQL expressions via pendingSQL.
 // BQ Standard SQL supports all standard math functions.
 
-// --- Binary arithmetic (column Ã— column) ---
+// --- Binary arithmetic (column x column) ---
 
 // AddCols returns the element-wise sum of two columns.
 func (e *Engine) AddCols(a, b dataset.AnyColumn) (dataset.AnyColumn, error) {
@@ -97,7 +97,7 @@ func (e *Engine) localBinaryOp(op string, a, b dataset.AnyColumn) (dataset.AnyCo
 	}
 }
 
-// --- Scalar arithmetic (column Ã— scalar) ---
+// --- Scalar arithmetic (column x scalar) ---
 
 // AddScalar adds a scalar value to every element.
 func (e *Engine) AddScalar(col dataset.AnyColumn, val float64) (dataset.AnyColumn, error) {
@@ -197,7 +197,7 @@ func (e *Engine) Ln(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 // Log2 returns the base-2 logarithm of each element.
 func (e *Engine) Log2(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.unaryMathFn("LOG2", col)
-} // BQ: LOG(x, 2) but LOG2 not available â€” use LOG
+} // BQ: LOG(x, 2) but LOG2 not available -- use LOG
 // Log10 returns the base-10 logarithm of each element.
 func (e *Engine) Log10(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return e.unaryMathFn("LOG10", col)
@@ -278,7 +278,7 @@ func (e *Engine) Sigmoid(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 
 // Erf returns the error function of each element.
 func (e *Engine) Erf(col dataset.AnyColumn) (dataset.AnyColumn, error) {
-	// BQ doesn't have ERF â€” download and delegate
+	// BQ doesn't have ERF -- download and delegate
 	if bqCol, ok := col.(*bqColumn); ok {
 		ds, err := bqCol.ds.download()
 		if err != nil {
@@ -439,7 +439,7 @@ func (e *Engine) lazyExprCol(bqCol *bqColumn, expr, resultName string, dtype dat
 		sql = fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectParts, ", "), bqCol.ds.sourceRef())
 		schema = dataset.NewSchema(outFields...)
 	} else {
-		// New column â€” append via SELECT *
+		// New column -- append via SELECT *
 		sql = fmt.Sprintf("SELECT *, (%s) AS `%s` FROM %s", expr, resultName, bqCol.ds.sourceRef()) //nolint:unqueryvet // SELECT * intentional — appending computed columns to lazy SQL.
 		newFields := make([]dataset.Field, len(origFields)+1)
 		copy(newFields, origFields)

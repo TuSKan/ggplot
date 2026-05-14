@@ -36,6 +36,7 @@ const (
 	opGroupBy                   // group-by + summarize (compound)
 	opMutate                    // add/replace column
 	opReplaceCol                // replace column with float64 values
+	opWithColumn                // add/replace a pre-built column
 )
 
 // op holds the parameters for a single lazy operation.
@@ -87,6 +88,9 @@ type op struct {
 	// ReplaceCol
 	replaceCol  string
 	replaceVals []float64
+
+	// WithColumn
+	withCol AnyColumn
 }
 
 // root walks the parent chain to find the root Dataset (the one with a Table).
@@ -218,6 +222,8 @@ func executeOps(ctx context.Context, eng Engine, tbl Table, ops []op) (Table, er
 			cur = cur.execMutate(o.mutName, o.mutFn)
 		case opReplaceCol:
 			cur = cur.execReplaceCol(o.replaceCol, o.replaceVals)
+		case opWithColumn:
+			cur = cur.execWithColumn(o.withCol)
 		default:
 		}
 

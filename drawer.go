@@ -12,14 +12,11 @@ import (
 	"math"
 	"sort"
 
-	"github.com/gogpu/gg"
-
+	"github.com/TuSKan/ggplot/canvas"
 	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/coord"
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/geom"
-	"github.com/TuSKan/ggplot/internal/canvas"
-	"github.com/TuSKan/ggplot/internal/grammar"
 	"github.com/TuSKan/ggplot/theme"
 )
 
@@ -30,7 +27,7 @@ type DrawContext struct {
 	Canvas       canvas.Canvas
 	Coord        coord.Coord
 	Data         dataset.Dataset
-	Mapping      grammar.AesMap
+	Mapping      AesMap
 	Params       geom.Params
 	Theme        theme.Theme     // active theme for default styling
 	ContColorCol string          // continuous color column (empty if none)
@@ -83,39 +80,23 @@ func init() {
 
 // drawLayer dispatches rendering to the registered Drawer for the layer's geom type.
 //
-// groupColor (when non-nil) overrides the layer's Params.Color/Fill — used for
-// categorical color groups where a single color applies to the whole layer.
-//
 // contColorCol (when non-empty) names a numeric column whose values feed into
 // contScale.At(v) to produce a per-datum color (continuous color mapping).
 // contScale must be non-nil if contColorCol is set.
+//
+// Group colors are baked into g.Params.Color during the build phase, so
+// drawLayer does not need a separate groupColor parameter.
 func drawLayer(
 	cv canvas.Canvas,
 	c coord.Coord,
 	ds dataset.Dataset,
 	g geom.Layer,
-	mapping grammar.AesMap,
-	groupColor *gg.RGBA,
+	mapping AesMap,
 	contColorCol string,
 	contScale *colormap.Scale,
 	w, h, xMin, xMax, yMin, yMax float64,
 	th theme.Theme,
 ) {
-	// If a group colour was assigned, override the layer's fixed color.
-	params := g.Params
-
-	if groupColor != nil {
-		hex := fmt.Sprintf("#%02X%02X%02X",
-			uint8(groupColor.R*255+0.5),
-			uint8(groupColor.G*255+0.5),
-			uint8(groupColor.B*255+0.5))
-
-		params.Color = hex
-		if params.Fill == "" {
-			params.Fill = hex
-		}
-	}
-
 	d := LookupDrawer(g.Geom)
 	if d == nil {
 		return // unknown geom type — silently skip (validated at construction)
@@ -126,7 +107,7 @@ func drawLayer(
 		Coord:        c,
 		Data:         ds,
 		Mapping:      mapping,
-		Params:       params,
+		Params:       g.Params,
 		Theme:        th,
 		ContColorCol: contColorCol,
 		ContScale:    contScale,
@@ -316,7 +297,7 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 
 func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, th theme.Theme) {
 	// Collect all points first so we can compute spacing.
-	type barPt struct{ x, y float64 }
+	type barPt struct{ x, y, ymin float64 }
 
 	var pts []barPt
 
@@ -330,13 +311,21 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 		yVals, _ = ds.Float64("count")
 	}
 
+	// Read optional ymin column (injected by stack/fill position adjustments).
+	yMinVals, _ := ds.Float64("ymin")
+
 	for i, x := range xVals {
 		y := 1.0
 		if yVals != nil && i < len(yVals) {
 			y = yVals[i]
 		}
 
-		pts = append(pts, barPt{x, y})
+		ym := 0.0
+		if yMinVals != nil && i < len(yMinVals) {
+			ym = yMinVals[i]
+		}
+
+		pts = append(pts, barPt{x, y, ym})
 	}
 
 	if len(pts) == 0 {
@@ -400,12 +389,10 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 
 	fr, fg, fb := colormap.ParseRGB(p.Fill, 0.2, 0.4, 0.8)
 
-	// Baseline in normalized space (value=0).
-	baseNy := normalize(0, yMin, yMax)
-
 	for _, pt := range pts {
 		nx := normalize(pt.x, xMin, xMax)
 		ny := normalize(pt.y, yMin, yMax)
+		baseNy := normalize(pt.ymin, yMin, yMax)
 
 		// Get center and baseline pixel positions via coord.Transform.
 		// orientedTransform swaps nx/ny when horizontal.
@@ -750,7 +737,7 @@ func drawABLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax fl
 	cv.Stroke()
 }
 
-func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, mapping grammar.AesMap, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
+func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, mapping AesMap, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
 	xVals, errX := ds.Float64(xCol)
 
 	yVals, errY := ds.Float64(yCol)

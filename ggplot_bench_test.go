@@ -91,7 +91,7 @@ func BenchmarkRender_Point_1K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }
 
@@ -104,7 +104,7 @@ func BenchmarkRender_Point_10K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }
 
@@ -117,7 +117,7 @@ func BenchmarkRender_Point_100K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }
 
@@ -130,7 +130,7 @@ func BenchmarkRender_Line_10K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }
 
@@ -143,7 +143,7 @@ func BenchmarkRender_Histogram_10K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }
 
@@ -156,7 +156,7 @@ func BenchmarkRender_Histogram_100K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }
 
@@ -169,7 +169,7 @@ func BenchmarkRender_Smooth_1K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }
 
@@ -182,7 +182,7 @@ func BenchmarkRender_Smooth_10K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }
 
@@ -195,7 +195,7 @@ func BenchmarkRender_ColorGrouped_Point_10K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }
 
@@ -208,7 +208,7 @@ func BenchmarkRender_Density_10K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }
 
@@ -223,6 +223,6 @@ func BenchmarkRender_MultiLayer_10K(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		benchSink, _ = p.Render(ctx, 800, 600)
+		benchSink, _ = drawPlot(ctx, p, 800, 600)
 	}
 }

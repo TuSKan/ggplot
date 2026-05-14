@@ -11,7 +11,7 @@ import (
 	"github.com/gogpu/gg/text"
 	"golang.org/x/image/font/gofont/goregular"
 
-	"github.com/TuSKan/ggplot/internal/fonts"
+	"github.com/TuSKan/ggplot/fonts"
 )
 
 // fontState holds the shared, lazily-initialized font resolver.
@@ -144,7 +144,7 @@ func (c *GGCanvas) DrawLine(x1, y1, x2, y2 float64) { c.ctx.DrawLine(x1, y1, x2,
 // --- Text ---
 
 // SetFontSize resolves the best available font at the given size.
-// Resolution order: system font via internal/fonts resolver → embedded Go Regular fallback.
+// Resolution order: system font via fonts resolver -> embedded Go Regular fallback.
 func (c *GGCanvas) SetFontSize(size float64) {
 	if size <= 0 {
 		size = 12

@@ -97,8 +97,8 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 
 **Pipeline scaffolding:**
 - ✅ `PlotSpec` declarative composition
-- 🔶 Single-pass renderer in `renderTo()` — to be replaced by `Build`/`Draw` in Phase 4
-- ⚠️ Missing: `PANEL` and `group` as first-class system columns
+- ✅ `Plot.Build(ctx)` / `Built.Draw(ctx, canvas)` pipeline — see Phase 4.1
+- ✅ `PANEL` and `group` as first-class system columns — see Phase 4.2
 
 **Engine extensibility:**
 - ✅ `NativeFilterProvider`, `IterableColumn` interfaces
@@ -128,7 +128,7 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 
 **Builder shortcuts:** ✅ `LegendPosition()`, `ScaleX("log10")`, `ScaleY("sqrt")`
 
-> ⚠️ **Known semantic gap:** `geom.Bar` ships with implicit `position.Identity`. True `geom_bar` with default `position.Stack` requires Phase 4. Until then, `geom.Bar` is functionally `geom_col` from ggplot2.
+> ✅ **Resolved:** `geom.Bar` now defaults to `position.Stack`. Position adjustments (stack, dodge, fill) are wired into the build pipeline as of Phase 4.3.
 
 ---
 
@@ -150,29 +150,32 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 
 > **This phase is the gate for everything after.** No new geoms, scales, or themes ship until these contracts are public and frozen.
 
-#### 4.1 — Build / Render Separation
+#### 4.1 — Build / Render Separation ✅
 
-- 🔲 Public `Built` type with `Layers []LayerData`, `Layout`, `Coord`, `Theme`, `Labels`
-- 🔲 `Plot.Build(ctx context.Context) (*Built, error)`
-- 🔲 `Built.Draw(ctx context.Context, c canvas.Canvas) error`
+- ✅ Public `Built` type with panels, layout, coord, theme, labels
+- ✅ `Plot.Build(ctx context.Context) (*Built, error)`
+- ✅ `Built.Draw(ctx context.Context, c canvas.Canvas) error`
 - 🔲 `Built.LayerData(i int) Frame` — introspection for testing & debugging
-- 🔲 Decompose ~600-line `renderTo` into: `resolveLayers`, `trainPositionScales`, `runStats`, `applyPositions`, `retrainPositionScales`, `trainNonPositionScales`, `solveLayout`, `drawPanel`, `drawAxes`, `drawLegend`
+- ✅ Decomposed rendering pipeline: `buildPanel`, `trainPanelScales`, `applyPositionAdjust`, `drawLayer`, `drawXAxis`, `drawYAxis`, etc.
 
-#### 4.2 — System Columns (PANEL, group)
+#### 4.2 — System Columns (PANEL, group) ✅
 
-- 🔲 Add `PanelColumn` (int32) and `GroupColumn` (int64) as reserved system columns
-- 🔲 Coord pre-pass + Facet inspection assigns `PANEL` to every layer's data
-- 🔲 Aesthetic evaluation derives `group` from interaction of non-continuous aesthetics
-- 🔲 Document: PANEL and group are preserved through every transform; stats and positions split on them
+- ✅ `ColPANEL` and `ColGroup` as reserved system column constants in `spec.go`
+- ✅ `Dataset.WithColumn(col)` verb + `ConstInt64Column` / `Int64ColumnFromStrings` helpers
+- ✅ Facet inspection assigns `PANEL` int64 column to every panel's data
+- ✅ Group splitting injects `group` int64 column per group subset
+- ✅ Group colors baked into `Geom.Params.Color` at build time (no runtime override)
 
-#### 4.3 — Position Adjustment Interface (extracted from former Phase 13)
+#### 4.3 — Position Adjustment Interface ✅
 
-- 🔲 `position.Position` interface
-- 🔲 `position.Identity` (default for points/lines)
-- 🔲 `position.Stack` (default for bar/area)
-- 🔲 `position.Dodge` (side-by-side)
-- 🔲 `position.Fill` (proportional 100%)
-- 🔲 Wire `geom.Bar`/`geom.Histogram`/`geom.Area` defaults to `Stack`
+- ✅ `position.Pos` interface with `Adjust(xs, ys, width, groupIdx, nGroups)` + `String()`
+- ✅ `position.Identity` (default for points/lines)
+- ✅ `position.Stack` (stateful, accumulates Y offsets across groups)
+- ✅ `position.Dodge` (side-by-side shifting)
+- ✅ `position.Fill` (100% stacked, two-phase with `FillSetup` interface)
+- ✅ `position.New(name)` factory for pipeline to create fresh per-panel instances
+- ✅ `applyPositionAdjust` wired into `buildPanel()` after stat computation
+- ✅ `geom.Bar`/`geom.Histogram` default to `position.Stack()`
 
 > Jitter, Nudge, JitterDodge remain in Phase 13 — they're refinements, not core grammar.
 

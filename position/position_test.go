@@ -27,7 +27,7 @@ func TestDodge_SingleGroup(t *testing.T) {
 	xs := []float64{1, 2, 3}
 	ys := []float64{4, 5, 6}
 	rx, _ := Dodge().Adjust(xs, ys, 0.8, 0, 1)
-	// Single group → no adjustment
+	// Single group -> no adjustment
 	if &rx[0] != &xs[0] {
 		t.Error("Dodge with 1 group should return same slice")
 	}
@@ -54,28 +54,111 @@ func TestDodge_MultiGroup(t *testing.T) {
 	}
 }
 
-func TestStack_GroupZero_Passthrough(t *testing.T) {
+func TestStack_Accumulates(t *testing.T) {
 	t.Parallel()
 
-	xs := []float64{1, 2}
-	ys := []float64{3, 4}
+	s := Stack()
 
-	rx, ry := Stack().Adjust(xs, ys, 1, 0, 2)
-	if &rx[0] != &xs[0] || &ry[0] != &ys[0] {
-		t.Error("Stack groupIdx=0 should return same slices")
+	// Group 0: x=1 -> y=10, x=2 -> y=20
+	_, ry0 := s.Adjust([]float64{1, 2}, []float64{10, 20}, 1, 0, 2)
+
+	// Group 0 sees no prior offset.
+	if ry0[0] != 10 {
+		t.Errorf("Stack group0 x=1: got %f, want 10", ry0[0])
+	}
+
+	if ry0[1] != 20 {
+		t.Errorf("Stack group0 x=2: got %f, want 20", ry0[1])
+	}
+
+	// Group 1: x=1 -> y=5, x=2 -> y=8
+	_, ry1 := s.Adjust([]float64{1, 2}, []float64{5, 8}, 1, 1, 2)
+
+	// Group 1 should be stacked on top of group 0.
+	if ry1[0] != 15 { // 10 + 5
+		t.Errorf("Stack group1 x=1: got %f, want 15", ry1[0])
+	}
+
+	if ry1[1] != 28 { // 20 + 8
+		t.Errorf("Stack group1 x=2: got %f, want 28", ry1[1])
 	}
 }
 
-func TestStack_GroupNonZero_Panics(t *testing.T) {
+func TestStack_FreshPerPanel(t *testing.T) {
 	t.Parallel()
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Stack with groupIdx > 0 should panic")
-		}
-	}()
+	// Two separate Stack instances should be independent.
+	s1 := Stack()
+	s2 := Stack()
 
-	Stack().Adjust([]float64{1}, []float64{2}, 1, 1, 2)
+	s1.Adjust([]float64{1}, []float64{100}, 1, 0, 1)
+	_, ry := s2.Adjust([]float64{1}, []float64{5}, 1, 0, 1)
+
+	// s2 should NOT see s1's offsets.
+	if ry[0] != 5 {
+		t.Errorf("Fresh Stack contaminated: got %f, want 5", ry[0])
+	}
+}
+
+func TestFill_Normalization(t *testing.T) {
+	t.Parallel()
+
+	f := Fill()
+
+	// Setup with all groups.
+	allXs := [][]float64{{1, 2}, {1, 2}}
+	allYs := [][]float64{{30, 40}, {70, 60}}
+
+	fs, ok := f.(FillSetup)
+	if !ok {
+		t.Fatal("Fill does not implement FillSetup")
+	}
+
+	fs.Setup(allXs, allYs)
+
+	// Group 0: x=1 -> 30/100=0.3, x=2 -> 40/100=0.4
+	_, ry0 := f.Adjust([]float64{1, 2}, []float64{30, 40}, 1, 0, 2)
+
+	if math.Abs(ry0[0]-0.3) > 1e-9 {
+		t.Errorf("Fill group0 x=1: got %f, want 0.3", ry0[0])
+	}
+
+	if math.Abs(ry0[1]-0.4) > 1e-9 {
+		t.Errorf("Fill group0 x=2: got %f, want 0.4", ry0[1])
+	}
+
+	// Group 1: x=1 -> 0.3 + 70/100 = 1.0, x=2 -> 0.4 + 60/100 = 1.0
+	_, ry1 := f.Adjust([]float64{1, 2}, []float64{70, 60}, 1, 1, 2)
+
+	if math.Abs(ry1[0]-1.0) > 1e-9 {
+		t.Errorf("Fill group1 x=1: got %f, want 1.0", ry1[0])
+	}
+
+	if math.Abs(ry1[1]-1.0) > 1e-9 {
+		t.Errorf("Fill group1 x=2: got %f, want 1.0", ry1[1])
+	}
+}
+
+func TestNew_Factory(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name Name
+		want string
+	}{
+		{NameIdentity, "identity"},
+		{NameDodge, "dodge"},
+		{NameStack, "stack"},
+		{NameFill, "fill"},
+		{"", "identity"},
+		{"unknown", "identity"},
+	}
+
+	for _, tt := range tests {
+		if got := New(tt.name).String(); got != tt.want {
+			t.Errorf("New(%q).String() = %q, want %q", tt.name, got, tt.want)
+		}
+	}
 }
 
 func TestJitter_Distribution(t *testing.T) {

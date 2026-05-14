@@ -3,6 +3,7 @@ package ggplot_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -12,12 +13,28 @@ import (
 
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
+	"github.com/TuSKan/ggplot/canvas"
 	"github.com/TuSKan/ggplot/coord"
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
 )
+
+// drawPlot is a test helper: Build() + DrawCanvas().
+func drawPlot(ctx context.Context, p *ggplot.Plot, width, height int) (*canvas.GGCanvas, error) {
+	built, err := p.Build(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("drawPlot build: %w", err)
+	}
+
+	cv, err := built.DrawCanvas(ctx, width, height)
+	if err != nil {
+		return nil, fmt.Errorf("drawPlot draw: %w", err)
+	}
+
+	return cv, nil
+}
 
 func testDataset(t *testing.T) dataset.Dataset {
 	t.Helper()
@@ -72,24 +89,24 @@ func TestPlot_Aes_DoesNotMutateParent(t *testing.T) {
 	childA := base.Aes(aes.Color("x"))
 	childB := base.Aes(aes.Color("y"))
 
-	// Render all three — none should affect the others.
-	_, err := base.Render(context.Background(), 200, 150)
+	// Render all three -- none should affect the others.
+	_, err := drawPlot(context.Background(), base, 200, 150)
 	if err != nil {
 		t.Fatalf("base render failed: %v", err)
 	}
 
-	_, err = childA.Render(context.Background(), 200, 150)
+	_, err = drawPlot(context.Background(), childA, 200, 150)
 	if err != nil {
 		t.Fatalf("childA render failed: %v", err)
 	}
 
-	_, err = childB.Render(context.Background(), 200, 150)
+	_, err = drawPlot(context.Background(), childB, 200, 150)
 	if err != nil {
 		t.Fatalf("childB render failed: %v", err)
 	}
 
 	// Re-render base to prove it wasn't corrupted.
-	_, err = base.Render(context.Background(), 200, 150)
+	_, err = drawPlot(context.Background(), base, 200, 150)
 	if err != nil {
 		t.Fatalf("base re-render failed (mutation detected): %v", err)
 	}
@@ -115,7 +132,7 @@ func TestPlot_Clone_Independence(t *testing.T) {
 		"withScale": withScale,
 		"withLim":   withLim,
 	} {
-		_, err := p.Render(context.Background(), 200, 150)
+		_, err := drawPlot(context.Background(), p, 200, 150)
 		if err != nil {
 			t.Fatalf("%s render failed: %v", name, err)
 		}
@@ -128,7 +145,7 @@ func TestPlot_NoLayers_Error(t *testing.T) {
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err == nil {
 		t.Fatal("expected error for plot with no layers")
 	}
@@ -140,7 +157,7 @@ func TestPlot_NilDataset_Error(t *testing.T) {
 	p := ggplot.New(dataset.Dataset{}, aes.X("x")).
 		Layer(geom.Point())
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err == nil {
 		t.Fatal("expected error for nil dataset")
 	}
@@ -155,7 +172,7 @@ func TestRender_Point(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(4), geom.WithColor("#FF0000")))
 
-	cv, err := p.Render(context.Background(), 400, 300)
+	cv, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Point render failed: %v", err)
 	}
@@ -172,7 +189,7 @@ func TestRender_Line(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#0000FF"), geom.WithLineWidth(3)))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Line render failed: %v", err)
 	}
@@ -189,7 +206,7 @@ func TestRender_Bar(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("count")).
 		Layer(geom.Bar(geom.WithFill("#336699"), geom.WithWidth(0.7)))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Bar render failed: %v", err)
 	}
@@ -209,7 +226,7 @@ func TestRender_Histogram(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Histogram(geom.WithBins(30), geom.WithFill("#3498DB")))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Histogram render failed: %v", err)
 	}
@@ -231,7 +248,7 @@ func TestRender_Histogram_StatTransform(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Histogram(geom.WithBins(10)))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Histogram stat transform failed: %v", err)
 	}
@@ -244,7 +261,7 @@ func TestRender_Area(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Area(geom.WithFill("#2ecc71"), geom.WithAlpha(0.6)))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Area render failed: %v", err)
 	}
@@ -257,7 +274,7 @@ func TestRender_Smooth(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Smooth(geom.WithMethod("lm"), geom.WithColor("#E74C3C")))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Smooth render failed: %v", err)
 	}
@@ -277,7 +294,7 @@ func TestRender_Density(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Density(geom.WithFill("#9b59b6"), geom.WithAlpha(0.5)))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Density render failed: %v", err)
 	}
@@ -290,7 +307,7 @@ func TestRender_Step(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Step(geom.WithColor("#1abc9c")))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Step render failed: %v", err)
 	}
@@ -306,7 +323,7 @@ func TestRender_MultiLayer_PointAndLine(t *testing.T) {
 		Layer(geom.Point(geom.WithColor("#FF0000"))).
 		Layer(geom.Line(geom.WithColor("#0000FF")))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("MultiLayer render failed: %v", err)
 	}
@@ -320,7 +337,7 @@ func TestRender_MultiLayer_PointAndSmooth(t *testing.T) {
 		Layer(geom.Point(geom.WithSize(3))).
 		Layer(geom.Smooth())
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Point+Smooth render failed: %v", err)
 	}
@@ -335,7 +352,7 @@ func TestRender_MultiLayer_ThreeLayers(t *testing.T) {
 		Layer(geom.Line(geom.WithColor("#0000FF"))).
 		Layer(geom.Smooth())
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("ThreeLayers render failed: %v", err)
 	}
@@ -357,7 +374,7 @@ func TestRender_Labels(t *testing.T) {
 			ggplot.Caption("Source: test data"),
 		)
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Labels render failed: %v", err)
 	}
@@ -373,7 +390,7 @@ func TestRender_CoordFlip(t *testing.T) {
 		Layer(geom.Point()).
 		CoordFlip()
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("CoordFlip render failed: %v", err)
 	}
@@ -532,7 +549,7 @@ func TestRender_SingleDataPoint(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point())
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Single point render failed: %v", err)
 	}
@@ -549,7 +566,7 @@ func TestRender_TwoDataPoints(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line())
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Two point line render failed: %v", err)
 	}
@@ -573,7 +590,7 @@ func TestRender_LargeDataset(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line())
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Large dataset render failed: %v", err)
 	}
@@ -591,7 +608,7 @@ func TestRender_NegativeValues(t *testing.T) {
 		Layer(geom.Point()).
 		Layer(geom.Line())
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Negative values render failed: %v", err)
 	}
@@ -608,7 +625,7 @@ func TestRender_ConstantY(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point())
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Constant Y render failed: %v", err)
 	}
@@ -640,7 +657,7 @@ func TestRender_ColorMapping_Point(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Point(geom.WithSize(5)))
 
-	cv, err := p.Render(context.Background(), 600, 400)
+	cv, err := drawPlot(context.Background(), p, 600, 400)
 	if err != nil {
 		t.Fatalf("Color mapping point render failed: %v", err)
 	}
@@ -657,7 +674,7 @@ func TestRender_ColorMapping_Line(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Line())
 
-	_, err := p.Render(context.Background(), 600, 400)
+	_, err := drawPlot(context.Background(), p, 600, 400)
 	if err != nil {
 		t.Fatalf("Color mapping line render failed: %v", err)
 	}
@@ -671,7 +688,7 @@ func TestRender_ColorMapping_WithLegend(t *testing.T) {
 		Layer(geom.Point()).
 		Labs(ggplot.Title("Grouped Scatter"))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Color mapping with legend render failed: %v", err)
 	}
@@ -702,7 +719,7 @@ func TestRender_ColorMapping_ManyGroups(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("g")).
 		Layer(geom.Point())
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Many groups render failed: %v", err)
 	}
@@ -718,7 +735,7 @@ func TestRender_XLim(t *testing.T) {
 		Layer(geom.Point()).
 		XLim(0, 20)
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("XLim render failed: %v", err)
 	}
@@ -732,7 +749,7 @@ func TestRender_YLim(t *testing.T) {
 		Layer(geom.Point()).
 		YLim(-5, 15)
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("YLim render failed: %v", err)
 	}
@@ -747,7 +764,7 @@ func TestRender_XLim_YLim_Combined(t *testing.T) {
 		XLim(2, 8).
 		YLim(0, 12)
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Combined XLim/YLim render failed: %v", err)
 	}
@@ -762,7 +779,7 @@ func TestRender_XLim_NaN_PartialOverride(t *testing.T) {
 		Layer(geom.Point()).
 		XLim(0, math.NaN())
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Partial XLim render failed: %v", err)
 	}
@@ -778,7 +795,7 @@ func TestRender_CoordFlip_Point(t *testing.T) {
 		Layer(geom.Point()).
 		CoordFlip()
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("CoordFlip render failed: %v", err)
 	}
@@ -796,7 +813,7 @@ func TestRender_CoordFlip_Bar(t *testing.T) {
 		Layer(geom.Bar()).
 		CoordFlip()
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("CoordFlip bar render failed: %v", err)
 	}
@@ -814,7 +831,7 @@ func TestOrientation_HorizontalBar(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Bar(geom.WithOrientation(geom.Horizontal)))
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Horizontal bar render failed: %v", err)
 	}
@@ -839,7 +856,7 @@ func TestOrientation_HorizontalBoxplot(t *testing.T) {
 	p := ggplot.New(ds, aes.X("g"), aes.Y("v")).
 		Layer(geom.Boxplot(geom.WithOrientation(geom.Horizontal)))
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Horizontal boxplot render failed: %v", err)
 	}
@@ -858,7 +875,7 @@ func TestRender_StepGeom(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Step(geom.WithColor("#336699")))
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Step render failed: %v", err)
 	}
@@ -871,7 +888,7 @@ func TestRender_Step_ColorMapping(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Step())
 
-	_, err := p.Render(context.Background(), 600, 400)
+	_, err := drawPlot(context.Background(), p, 600, 400)
 	if err != nil {
 		t.Fatalf("Step with color mapping failed: %v", err)
 	}
@@ -887,7 +904,7 @@ func TestRender_Rug(t *testing.T) {
 		Layer(geom.Point()).
 		Layer(geom.Rug())
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Rug render failed: %v", err)
 	}
@@ -912,7 +929,7 @@ func TestRender_AllNewFeatures(t *testing.T) {
 		YLim(0, 12).
 		Theme("minimal")
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Combined features render failed: %v", err)
 	}
@@ -995,7 +1012,7 @@ func TestRender_HLine(t *testing.T) {
 		Layer(geom.Line()).
 		Layer(geom.HLine(geom.WithIntercept(5), geom.WithColor("#CC0000")))
 
-	_, err := p.Render(context.Background(), 600, 400)
+	_, err := drawPlot(context.Background(), p, 600, 400)
 	if err != nil {
 		t.Fatalf("HLine render failed: %v", err)
 	}
@@ -1009,7 +1026,7 @@ func TestRender_VLine(t *testing.T) {
 		Layer(geom.Point()).
 		Layer(geom.VLine(geom.WithIntercept(5), geom.WithColor("#006600")))
 
-	_, err := p.Render(context.Background(), 600, 400)
+	_, err := drawPlot(context.Background(), p, 600, 400)
 	if err != nil {
 		t.Fatalf("VLine render failed: %v", err)
 	}
@@ -1024,7 +1041,7 @@ func TestRender_HLine_VLine_Combined(t *testing.T) {
 		Layer(geom.HLine(geom.WithIntercept(0), geom.WithColor("#999999"), geom.WithLabel("baseline"))).
 		Layer(geom.VLine(geom.WithIntercept(5), geom.WithColor("#2ECC71"), geom.WithLabel("x=5")))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("Combined HLine/VLine render failed: %v", err)
 	}
@@ -1034,12 +1051,12 @@ func TestRender_HLine_OutOfRange(t *testing.T) {
 	t.Parallel()
 
 	ds := testDataset(t)
-	// Intercept way outside the Y range — should not crash.
+	// Intercept way outside the Y range -- should not crash.
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
 		Layer(geom.HLine(geom.WithIntercept(999)))
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("HLine out-of-range render failed: %v", err)
 	}
@@ -1060,7 +1077,7 @@ func TestRender_Text(t *testing.T) {
 		Layer(geom.Point()).
 		Layer(geom.Text(geom.WithColor("#333333"), geom.WithFontSize(12)))
 
-	_, err := p.Render(context.Background(), 600, 400)
+	_, err := drawPlot(context.Background(), p, 600, 400)
 	if err != nil {
 		t.Fatalf("Text render failed: %v", err)
 	}
@@ -1069,12 +1086,12 @@ func TestRender_Text(t *testing.T) {
 func TestRender_Text_NoLabelColumn(t *testing.T) {
 	t.Parallel()
 
-	// No "label" column — should fall back to Y values.
+	// No "label" column -- should fall back to Y values.
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Text())
 
-	_, err := p.Render(context.Background(), 400, 300)
+	_, err := drawPlot(context.Background(), p, 400, 300)
 	if err != nil {
 		t.Fatalf("Text without label column failed: %v", err)
 	}
@@ -1093,7 +1110,7 @@ func TestRender_Col(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Col())
 
-	_, err := p.Render(context.Background(), 600, 400)
+	_, err := drawPlot(context.Background(), p, 600, 400)
 	if err != nil {
 		t.Fatalf("Col render failed: %v", err)
 	}
@@ -1115,7 +1132,7 @@ func TestRender_WithLabel_Legend(t *testing.T) {
 		Layer(geom.Line(geom.WithColor("#FF7F0E"), geom.WithLabel("cos")), aes.Y("cos")).
 		Labs(ggplot.Title("Wide Format Legend"))
 
-	_, err := p.Render(context.Background(), 800, 600)
+	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
 		t.Fatalf("WithLabel legend render failed: %v", err)
 	}
@@ -1134,7 +1151,7 @@ func TestRender_CategoricalBars(t *testing.T) {
 	p := ggplot.New(ds, aes.X("city"), aes.Y("value")).
 		Layer(geom.Col())
 
-	_, err := p.Render(context.Background(), 600, 400)
+	_, err := drawPlot(context.Background(), p, 600, 400)
 	if err != nil {
 		t.Fatalf("Categorical bars render failed: %v", err)
 	}
@@ -1158,7 +1175,7 @@ func TestRender_CategoricalBars_ManyCategories(t *testing.T) {
 	p := ggplot.New(ds, aes.X("city"), aes.Y("pop")).
 		Layer(geom.Col())
 
-	_, err := p.Render(context.Background(), 800, 400)
+	_, err := drawPlot(context.Background(), p, 800, 400)
 	if err != nil {
 		t.Fatalf("Many categories render failed: %v", err)
 	}
@@ -1183,7 +1200,7 @@ func TestRender_Boxplot(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Boxplot())
 
-	_, err := p.Render(context.Background(), 600, 400)
+	_, err := drawPlot(context.Background(), p, 600, 400)
 	if err != nil {
 		t.Fatalf("Boxplot render failed: %v", err)
 	}
@@ -1204,7 +1221,7 @@ func TestRender_Boxplot_SingleGroup(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Boxplot())
 
-	_, err := p.Render(context.Background(), 400, 400)
+	_, err := drawPlot(context.Background(), p, 400, 400)
 	if err != nil {
 		t.Fatalf("Single-group boxplot render failed: %v", err)
 	}

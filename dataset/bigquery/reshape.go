@@ -94,7 +94,7 @@ func (e *Engine) PivotWider(ds dataset.Table, spec dataset.PivotWiderSpec) (data
 	}
 
 	// PivotWider needs to know the distinct values of NamesFrom.
-	// This requires a query â€” but we keep the result lazy.
+	// This requires a query -- but we keep the result lazy.
 	// For now, materialize to get distinct names, then build the pivot SQL.
 	mat, err := bq.materialize()
 	if err != nil {

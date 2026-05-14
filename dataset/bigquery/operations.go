@@ -148,7 +148,7 @@ func (e *Engine) Join(left, right dataset.Table, spec dataset.JoinSpec) (dataset
 		return nil, fmt.Errorf("Join requires both datasets to be BigQuery datasets: %w", ErrUnsupportedType)
 	}
 
-	// Map JoinType â†’ SQL
+	// Map JoinType -> SQL
 	switch spec.Type { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case dataset.JoinSemi:
 		return e.lazySemiAntiJoin(leftBQ, rightBQ, spec, true)
@@ -254,7 +254,7 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 		return nil, fmt.Errorf("Combine requires at least one dataset: %w", ErrUnsupportedType)
 	}
 
-	// Column bind â€” download and delegate to arrow engine
+	// Column bind -- download and delegate to arrow engine
 	localDS := make([]dataset.Table, len(datasets))
 	for i, ds := range datasets {
 		bq, ok := ds.(*bqDataset)
@@ -289,7 +289,7 @@ func (e *Engine) Combine(datasets ...dataset.Table) (dataset.Table, error) {
 
 // Fill forward- or backward-fills null values (downloads then delegates).
 func (e *Engine) Fill(col dataset.AnyColumn, dir dataset.FillDirection) (dataset.AnyColumn, error) {
-	// Window-based fill is complex â€” download and delegate
+	// Window-based fill is complex -- download and delegate
 	if bqCol, ok := col.(*bqColumn); ok {
 		ds, err := bqCol.ds.download()
 		if err != nil {
@@ -320,7 +320,7 @@ func (e *Engine) Fill(col dataset.AnyColumn, dir dataset.FillDirection) (dataset
 // DropNA returns a dataset with rows filtered by IS NOT NULL.
 func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error) {
 	if bq, ok := ds.(*bqDataset); ok {
-		// Pure RowRestriction â€” fully lazy
+		// Pure RowRestriction -- fully lazy
 		parts := make([]string, len(cols))
 		for i, c := range cols {
 			parts[i] = fmt.Sprintf("`%s` IS NOT NULL", c)
@@ -340,7 +340,7 @@ func (e *Engine) DropNA(ds dataset.Table, cols ...string) (dataset.Table, error)
 // ReplaceNA replaces null values with a default via SQL COALESCE.
 func (e *Engine) ReplaceNA(col dataset.AnyColumn, defaultVal float64) (dataset.AnyColumn, error) {
 	if bqCol, ok := col.(*bqColumn); ok {
-		// COALESCE â€” lazy SQL
+		// COALESCE -- lazy SQL
 		sql := fmt.Sprintf(
 			"SELECT COALESCE(`%s`, %v) AS `%s` FROM %s",
 			bqCol.name, defaultVal, bqCol.name, bqCol.ds.sourceRef(),

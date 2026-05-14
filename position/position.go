@@ -18,6 +18,47 @@ type Pos interface {
 	String() string
 }
 
+// Stacker is optionally implemented by positions that produce stacked output.
+// When implemented, AdjustStack returns (adjustedXs, yMin, yMax) where yMin is
+// the bottom of each bar and yMax is the top. The pipeline uses yMin to set
+// the bar's base coordinate.
+type Stacker interface {
+	AdjustStack(xs, ys []float64, width float64, groupIdx, nGroups int) (adjXs, yMin, yMax []float64)
+}
+
+// Name identifies a position adjustment type for factory lookup.
+type Name string
+
+// Position adjustment names.
+const (
+	NameIdentity Name = "identity"
+	NameDodge    Name = "dodge"
+	NameStack    Name = "stack"
+	NameFill     Name = "fill"
+	NameJitter   Name = "jitter"
+	NameNudge    Name = "nudge"
+)
+
+// New creates a fresh Pos instance by name. This is used by the build
+// pipeline to create per-panel-layer position instances (avoiding shared
+// state across panels). Returns Identity for unknown names.
+func New(name Name) Pos {
+	switch name {
+	case NameIdentity, "":
+		return Identity()
+	case NameDodge:
+		return Dodge()
+	case NameStack:
+		return Stack()
+	case NameFill:
+		return Fill()
+	case NameJitter, NameNudge:
+		return Identity() // Jitter/Nudge require parameters; pipeline uses layer's instance directly
+	default:
+		return Identity()
+	}
+}
+
 // Identity returns the identity position (no adjustment).
 func Identity() Pos { return identity{} }
 
@@ -26,7 +67,7 @@ type identity struct{}
 func (identity) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []float64) {
 	return xs, ys
 }
-func (identity) String() string { return "identity" }
+func (identity) String() string { return string(NameIdentity) }
 
 // Dodge returns a position that shifts groups side by side within each bin.
 // This is the standard adjustment for grouped bar charts.
@@ -49,27 +90,103 @@ func (dodge) Adjust(xs, ys []float64, width float64, groupIdx, nGroups int) ([]f
 
 	return adjusted, ys
 }
-func (dodge) String() string { return "dodge" }
+func (dodge) String() string { return string(NameDodge) }
 
 // Stack returns a position that stacks groups vertically.
-// Each group's y-values are offset by the cumulative sum of prior groups.
+// Each group's y-values are offset by the cumulative sum of prior groups
+// at the same x-value.
 //
-// NOTE: Real stacking requires the pipeline coordinator to accumulate
-// offsets across groups. This is not yet implemented — calling Stack()
-// with groupIdx > 0 will panic. Use [Dodge] or [Identity] instead.
-func Stack() Pos { return stack{} }
+// Stack is stateful: it accumulates offsets across successive Adjust calls.
+// The build pipeline must create a fresh Stack() instance per panel-layer
+// to avoid cross-panel contamination.
+func Stack() Pos { return &stack{offsets: make(map[float64]float64)} }
 
-type stack struct{}
+type stack struct {
+	offsets map[float64]float64 // x-value -> cumulative Y offset
+}
 
-func (stack) Adjust(xs, ys []float64, _ float64, groupIdx, _ int) ([]float64, []float64) {
-	if groupIdx == 0 {
-		return xs, ys
+func (s *stack) Adjust(xs, ys []float64, w float64, gi, ng int) ([]float64, []float64) {
+	_, _, yMax := s.AdjustStack(xs, ys, w, gi, ng)
+	return xs, yMax
+}
+
+func (s *stack) AdjustStack(xs, ys []float64, _ float64, _, _ int) (adjXs, yMin, yMax []float64) {
+	yMin = make([]float64, len(ys))
+	yMax = make([]float64, len(ys))
+
+	for i, x := range xs {
+		base := s.offsets[x]
+		yMin[i] = base
+		yMax[i] = base + ys[i]
+		s.offsets[x] = base + ys[i]
 	}
 
-	panic("position.Stack: stacking for groupIdx > 0 is not yet implemented; " +
-		"use position.Dodge() or position.Identity() instead")
+	return xs, yMin, yMax
 }
-func (stack) String() string { return "stack" }
+
+func (s *stack) String() string { return string(NameStack) }
+
+// Fill returns a position that stacks groups and normalizes each x-bin
+// to a total of 1.0 (100% stacked bar chart).
+//
+// Fill is a two-phase adjustment:
+//  1. Setup phase: call [FillSetup] with all groups' (xs, ys) to compute totals.
+//  2. Adjust phase: call Adjust for each group in order.
+//
+// If Setup is not called, Fill behaves like Stack (no normalization).
+func Fill() Pos { return &fill{offsets: make(map[float64]float64)} }
+
+type fill struct {
+	totals  map[float64]float64 // x-value -> total Y across all groups
+	offsets map[float64]float64 // x-value -> cumulative Y offset (normalized)
+}
+
+// FillSetup is optionally implemented by position adjustments that need
+// a pre-pass over all groups before per-group Adjust calls.
+type FillSetup interface {
+	Setup(allXs, allYs [][]float64)
+}
+
+// Setup computes the total Y for each x-bin across all groups.
+func (f *fill) Setup(allXs, allYs [][]float64) {
+	f.totals = make(map[float64]float64)
+
+	for gi := range allXs {
+		for i, x := range allXs[gi] {
+			if i < len(allYs[gi]) {
+				f.totals[x] += allYs[gi][i]
+			}
+		}
+	}
+}
+
+func (f *fill) Adjust(xs, ys []float64, w float64, gi, ng int) ([]float64, []float64) {
+	_, _, yMax := f.AdjustStack(xs, ys, w, gi, ng)
+	return xs, yMax
+}
+
+func (f *fill) AdjustStack(xs, ys []float64, _ float64, _, _ int) (adjXs, yMin, yMax []float64) {
+	yMin = make([]float64, len(ys))
+	yMax = make([]float64, len(ys))
+
+	for i, x := range xs {
+		total := f.totals[x]
+		base := f.offsets[x]
+
+		if total > 0 {
+			normalized := ys[i] / total
+			yMin[i] = base
+			yMax[i] = base + normalized
+			f.offsets[x] = base + normalized
+		} else {
+			yMin[i] = base
+			yMax[i] = base
+		}
+	}
+
+	return xs, yMin, yMax
+}
+func (f *fill) String() string { return string(NameFill) }
 
 // Jitter returns a position that adds random noise to (x, y) to reduce overplotting.
 // The jitter is reproducible: same data length produces same offsets.
@@ -94,7 +211,7 @@ func (j jitter) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []floa
 
 	return adjX, adjY
 }
-func (j jitter) String() string { return "jitter" }
+func (j jitter) String() string { return string(NameJitter) }
 
 // Nudge returns a position that shifts all points by a fixed offset.
 func Nudge(dx, dy float64) Pos {
@@ -114,4 +231,4 @@ func (n nudge) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []float
 
 	return adjX, adjY
 }
-func (n nudge) String() string { return "nudge" }
+func (n nudge) String() string { return string(NameNudge) }

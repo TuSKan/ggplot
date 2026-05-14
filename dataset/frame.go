@@ -981,6 +981,13 @@ func (f Dataset) Mutate(name string, fn MutateFunc) Dataset {
 	return Dataset{eng: f.eng, parent: &f, op: op{kind: opMutate, mutName: name, mutFn: fn}}
 }
 
+// WithColumn appends or replaces a pre-built column in the dataset.
+// This is the simplest way to inject a column that was constructed externally
+// (e.g., via [ColumnFactory.NewInt64Column]).
+func (f Dataset) WithColumn(col AnyColumn) Dataset {
+	return Dataset{eng: f.eng, parent: &f, op: op{kind: opWithColumn, withCol: col}}
+}
+
 // applyTake applies a Take operation to all columns in a dataset using the engine's Selector.
 func applySelect(sel Selector, factory ColumnFactory, ds Table, indices []int) (Table, error) {
 	schema := ds.Schema()
@@ -1324,4 +1331,108 @@ func (f Dataset) execReplaceCol(colName string, values []float64) Dataset {
 	newCol := factory.NewFloat64Column(colName, values)
 
 	return f.replaceColumn(factory, colName, newCol)
+}
+
+// --- exec: WithColumn ---
+
+func (f Dataset) execWithColumn(col AnyColumn) Dataset {
+	eng, fr := f.requireEngine()
+	if fr.err != nil {
+		return fr
+	}
+
+	factory, ok := eng.(ColumnFactory)
+	if !ok {
+		return f.withError(fmt.Errorf("engine %q: ColumnFactory: %w", eng.Name(), ErrUnsupportedEngine))
+	}
+
+	name := col.Name()
+	schema := f.tbl.Schema()
+
+	if schema.HasField(name) {
+		return f.replaceColumn(factory, name, col)
+	}
+
+	fields := schema.Fields()
+	fields = append(fields, Field{Name: name, Dtype: col.DType()})
+	newSchema := NewSchema(fields...)
+
+	columns := make([]AnyColumn, schema.NumFields()+1)
+	for i := range schema.NumFields() {
+		c, err := f.tbl.Column(schema.Field(i).Name)
+		if err != nil {
+			return f.withError(err)
+		}
+
+		columns[i] = c
+	}
+
+	columns[schema.NumFields()] = col
+
+	ds, err := factory.FromColumns(newSchema, columns...)
+	if err != nil {
+		return f.withError(err)
+	}
+
+	return Dataset{eng: eng, tbl: ds}
+}
+
+// ConstInt64Column creates a constant int64 column with the given name and value,
+// repeated n times. Useful for injecting system columns like PANEL.
+func ConstInt64Column(eng Engine, name string, val int64, n int) AnyColumn {
+	factory, ok := eng.(ColumnFactory)
+	if !ok {
+		return nil
+	}
+
+	data := make([]int64, n)
+	for i := range data {
+		data[i] = val
+	}
+
+	return factory.NewInt64Column(name, data)
+}
+
+// ConstStringColumn creates a constant string column with the given name and value,
+// repeated n times.
+func ConstStringColumn(eng Engine, name string, val string, n int) AnyColumn {
+	factory, ok := eng.(ColumnFactory)
+	if !ok {
+		return nil
+	}
+
+	data := make([]string, n)
+	for i := range data {
+		data[i] = val
+	}
+
+	return factory.NewStringColumn(name, data)
+}
+
+// Int64ColumnFromStrings creates an int64 column by mapping distinct string values
+// to 0-based indices, preserving first-occurrence order. Returns the column and the
+// ordered list of distinct values.
+func Int64ColumnFromStrings(eng Engine, name string, values []string) (AnyColumn, []string) {
+	factory, ok := eng.(ColumnFactory)
+	if !ok {
+		return nil, nil
+	}
+
+	seen := make(map[string]int64)
+
+	var order []string
+
+	indices := make([]int64, len(values))
+	for i, v := range values {
+		idx, exists := seen[v]
+		if !exists {
+			idx = int64(len(order))
+			seen[v] = idx
+			order = append(order, v)
+		}
+
+		indices[i] = idx
+	}
+
+	return factory.NewInt64Column(name, indices), order
 }

@@ -24,18 +24,18 @@ import (
 //     store a SQL query string. Execution is deferred until materialize()
 //     or download() is called.
 //
-// Data only reaches local memory when download() runs â€” triggered by Values().
+// Data only reaches local memory when download() runs -- triggered by Values().
 type bqDataset struct {
 	engine  *Engine
 	schema  *dataset.Schema
 	table   tableRef
 	numRows int64
 
-	// Tier 1 â€” applied via Storage Read API params (zero-cost)
+	// Tier 1 -- applied via Storage Read API params (zero-cost)
 	selectedFields []string // column projection (nil = all)
 	rowRestriction string   // WHERE predicate
 
-	// Tier 2 â€” deferred SQL query (executed on materialize/download)
+	// Tier 2 -- deferred SQL query (executed on materialize/download)
 	pendingSQL string // if set, replaces table + Tier 1 params
 
 	// Cached materialized result
@@ -53,7 +53,7 @@ func (d *bqDataset) NumCols() int64          { return int64(d.schema.NumFields()
 // Engine returns the BigQuery engine.
 func (d *bqDataset) Engine() dataset.Engine { return d.engine }
 
-// Column returns a lazy bqColumn â€” no download happens here.
+// Column returns a lazy bqColumn -- no download happens here.
 func (d *bqDataset) Column(name string) (dataset.AnyColumn, error) {
 	idx := d.schema.FieldIndex(name)
 	if idx < 0 {
@@ -90,7 +90,7 @@ func (d *bqDataset) materialize() (*bqDataset, error) {
 	return d.matDS, d.matErr
 }
 
-// executeMaterialize runs the SQL Job â†’ temp table.
+// executeMaterialize runs the SQL Job -> temp table.
 func (d *bqDataset) executeMaterialize() (*bqDataset, error) {
 	sql := d.resolveSQL()
 
@@ -246,7 +246,7 @@ func (d *bqDataset) withFields(fields []string) *bqDataset {
 }
 
 // withSQL returns a new bqDataset backed by pending SQL (Tier 2 lazy).
-// No execution happens â€” the SQL runs only when materialize() or download() is called.
+// No execution happens -- the SQL runs only when materialize() or download() is called.
 func (d *bqDataset) withSQL(sql string, schema *dataset.Schema, estimatedRows int64) *bqDataset {
 	return &bqDataset{
 		engine:     d.engine,
@@ -300,7 +300,7 @@ func (d *bqDataset) download() (dataset.Table, error) {
 			src.numRows, src.engine.quota.MaxDownloadRows)
 	}
 
-	// Storage Read API â€” src is a clean table (no pending state)
+	// Storage Read API -- src is a clean table (no pending state)
 	readSession := &storagepb.ReadSession{
 		Table:      src.table.StoragePath(),
 		DataFormat: storagepb.DataFormat_ARROW,

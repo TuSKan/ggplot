@@ -1,4 +1,4 @@
-package grammar
+package ggplot
 
 import (
 	"maps"
@@ -11,6 +11,13 @@ import (
 	"github.com/TuSKan/ggplot/geom"
 	"github.com/TuSKan/ggplot/scale"
 	"github.com/TuSKan/ggplot/theme"
+)
+
+// System column names reserved by the build pipeline.
+// These columns are injected into every layer's dataset during Build.
+const (
+	ColPANEL = "PANEL" // int64 -- facet panel index (0-based)
+	ColGroup = "group" // int64 -- group index within a panel (0-based)
 )
 
 // PlotSpec is the fully declarative specification of a plot, produced by the

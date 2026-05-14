@@ -6,7 +6,7 @@ import (
 
 	"github.com/gogpu/gg/recording"
 
-	"github.com/TuSKan/ggplot/internal/fonts"
+	"github.com/TuSKan/ggplot/fonts"
 )
 
 // RecordingCanvas wraps a recording.Recorder to implement the [Canvas] interface.
