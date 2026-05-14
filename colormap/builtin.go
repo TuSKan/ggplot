@@ -86,6 +86,8 @@ var (
 	Dark2 Cmap
 	// OkabeIto is a colorblind-safe qualitative palette.
 	OkabeIto Cmap
+	// Observable10 is a qualitative palette optimized for online displays.
+	Observable10 Cmap
 )
 
 func init() {
@@ -162,6 +164,7 @@ func init() {
 	Accent = NewListed("accent", Qualitative, accentData)
 	Dark2 = NewListed("dark2", Qualitative, dark2Data)
 	OkabeIto = NewListed("okabe_ito", Qualitative, okabeItoData)
+	Observable10 = NewListed("observable10", Qualitative, observable10Colors)
 
 	// Register everything in the global registry.
 	for _, c := range []Cmap{
@@ -169,7 +172,7 @@ func init() {
 		Greys, Blues, Greens, Oranges, Reds, Purples, YlGn, YlGnBu, YlOrBr, YlOrRd,
 		RdBu, RdYlBu, RdYlGn, Spectral, BrBG, PiYG, PRGn, PuOr, RdGy, Coolwarm, Bwr,
 		Tab10, Tab20, Tab20b, Tab20c, Set1, Set2, Set3, Paired, Pastel1, Pastel2,
-		Accent, Dark2, OkabeIto,
+		Accent, Dark2, OkabeIto, Observable10,
 	} {
 		MustRegister(c)
 	}

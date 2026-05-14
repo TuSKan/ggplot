@@ -4,51 +4,30 @@ import "image/color"
 
 func init() { MustRegister(Classic, newClassic) }
 
-// newClassic mirrors matplotlib's classic.mplstyle (the matplotlib 1.x
-// defaults): white panel, black axes, no grid, primary-color cycle.
-//
-// Source: matplotlib/lib/matplotlib/mpl-data/stylelib/classic.mplstyle
+// newClassic mirrors matplotlib's classic.mplstyle (the matplotlib 1.x defaults).
 func newClassic() Theme {
 	t := baseTheme("classic")
+	t.Elements["text"] = ElementText{Family: "sans-serif", Size: 12, Color: color.Black}
+	t.Elements["plot.title"] = ElementText{Size: 14, Bold: true}
+	t.Elements["plot.background"] = ElementRect{Fill: gray(192)}
+	t.Elements["panel.background"] = ElementRect{Fill: color.White}
+	t.Elements["panel.border"] = ElementRect{Color: color.Black, Size: 1}
+	t.Elements["panel.grid.major"] = ElementBlank{}
+	t.Elements["panel.grid.minor"] = ElementBlank{}
+	t.Elements["axis.ticks"] = ElementLine{Color: color.Black, Size: 1}
 
-	// figure.facecolor: 0.75 (light gray)
-	t.Background = gray(192)
-
-	t.Panel.Background = color.White
-	t.Panel.Border = color.Black
-	t.Panel.BorderWidth = 1
-
-	// axes.grid: False — keep dashed, very subtle so users that turn the
-	// grid on still get something readable.
-	t.Grid.MajorColor = color.Transparent
-	t.Grid.MajorWidth = 0
-	t.Grid.MinorColor = color.Transparent
-	t.Grid.MinorWidth = 0
-	t.Grid.DashPattern = []float64{1, 3}
-
-	t.Text.Title = FontConfig{Family: "sans-serif", Size: 14, Color: color.Black, Bold: true}
-	t.Text.Subtitle = FontConfig{Family: "sans-serif", Size: 12, Color: color.Black}
-	t.Text.AxisTitle = FontConfig{Family: "sans-serif", Size: 12, Color: color.Black}
-	t.Text.TickLabel = FontConfig{Family: "sans-serif", Size: 12, Color: color.Black}
-	t.Text.Legend = FontConfig{Family: "sans-serif", Size: 12, Color: color.Black}
-	t.Text.Annotation = FontConfig{Family: "sans-serif", Size: 12, Color: color.Black}
-
-	t.Ticks.Color = color.Black
-
-	// Classic: white panel, black axis border → black edges match axes style.
 	t.Geom.PatchEdgeColor = color.Black
 	t.Geom.PatchEdgeWidth = 0.5
 	t.Geom.PatchAlpha = 1.0
 
-	// axes.prop_cycle: 'bgrcmyk'
 	t.Palette = []color.Color{
-		hex("0000FF"), // b — blue
-		hex("008000"), // g — green
-		hex("FF0000"), // r — red
-		hex("00BFBF"), // c — cyan
-		hex("BF00BF"), // m — magenta
-		hex("BFBF00"), // y — yellow
-		hex("000000"), // k — black
+		hex("0000FF"), // blue
+		hex("008000"), // green
+		hex("FF0000"), // red
+		hex("00BFBF"), // cyan
+		hex("BF00BF"), // magenta
+		hex("BFBF00"), // yellow
+		hex("000000"), // black
 	}
 
 	return t

@@ -155,7 +155,7 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 - ✅ Public `Built` type with panels, layout, coord, theme, labels
 - ✅ `Plot.Build(ctx context.Context) (*Built, error)`
 - ✅ `Built.Draw(ctx context.Context, c canvas.Canvas) error`
-- 🔲 `Built.LayerData(i int) Frame` — introspection for testing & debugging
+- ✅ `Built.LayerData(panel, layer int) Dataset` + `NumPanels()` / `NumLayers(panel)` — introspection for testing & debugging
 - ✅ Decomposed rendering pipeline: `buildPanel`, `trainPanelScales`, `applyPositionAdjust`, `drawLayer`, `drawXAxis`, `drawYAxis`, etc.
 
 #### 4.2 — System Columns (PANEL, group) ✅
@@ -179,16 +179,21 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 
 > Jitter, Nudge, JitterDodge remain in Phase 13 — they're refinements, not core grammar.
 
-#### 4.4 — Theme Element System (foundation, formerly Phase 12)
+#### 4.4 — Theme Element System ✅ (foundation, formerly Phase 12)
 
-- 🔲 `theme.Element` interface
-- 🔲 `theme.ElementText{Family, Face, Size, Color, Hjust, Vjust, Angle, Margin, LineHeight}`
-- 🔲 `theme.ElementLine{Color, Size, Linetype, Lineend}`
-- 🔲 `theme.ElementRect{Fill, Color, Size, Linetype}`
-- 🔲 `theme.ElementBlank{}`
-- 🔲 Inheritance hierarchy (`axis.title.x` ← `axis.title` ← `text` ← root)
-- 🔲 Re-implement `Default`, `Classic`, `Minimal`, `Dark`, `BW` as compositions of Elements
-- 🔲 All guide drawers consume Elements (no hard-coded font/color in `guide/`)
+- ✅ `theme.Element` sealed interface (`element()` unexported marker)
+- ✅ `theme.ElementText{Family, Size, Color, Bold, Italic, Hjust, Vjust, Angle, Margin, LineHeight}`
+- ✅ `theme.ElementLine{Color, Size, Linetype, Lineend}`
+- ✅ `theme.ElementRect{Fill, Color, Size, Linetype}`
+- ✅ `theme.ElementBlank{}` — suppresses drawing
+- ✅ `MergeText`, `MergeLine`, `MergeRect` — zero-value-aware field merge for inheritance
+- ✅ `IsBlank(Element) bool` helper
+- ✅ Inheritance hierarchy via `Elements map[string]Element` + `parentOf` tree (`axis.title.x` ← `axis.title` ← `text` ← root)
+- ✅ Typed resolver methods: `PlotTitle()`, `AxisTextElem()`, `PanelBackground()`, `PanelGridMajor()`, `AxisTicks()`, etc.
+- ✅ All 45 themes migrated to Element compositions (no backward compat — old `TextStyles`/`GridStyle`/`PanelStyle`/`TickStyle`/`FontConfig` removed)
+- ✅ Rendering pipeline (`ggplot.go`) consumes Elements via typed accessors (70+ call sites migrated)
+- ✅ `neutralPaletteTheme()` helper for palette-only themes
+- ✅ New themes: `Observable` (Observable10 palette), `Tableau` (Tab10 palette, previously unregistered)
 
 > Granular `theme()` overrides and `theme.New(base, ...)` user composition stay in Phase 12; this phase establishes the substrate.
 

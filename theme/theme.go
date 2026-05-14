@@ -3,11 +3,30 @@
 // grid lines, tick marks, spacing, and the discrete color palette
 // used when no explicit color scale is set.
 //
-// The preset catalog mirrors matplotlib's stylelib
-// (https://matplotlib.org/stable/gallery/style_sheets/style_sheets_reference.html)
-// and the curated set from raybuhr/pyplot-themes
-// (https://github.com/raybuhr/pyplot-themes), with values lifted directly
-// from the upstream .mplstyle files where they overlap.
+// Elements follow ggplot2's inheritance hierarchy:
+//
+//	text                 → root text defaults
+//	├── plot.title
+//	├── plot.subtitle
+//	├── axis.title       → axis.title.x, axis.title.y
+//	├── axis.text        → axis.text.x, axis.text.y
+//	├── legend.title
+//	├── legend.text
+//	└── strip.text
+//
+//	line                 → root line defaults
+//	├── axis.line        → axis.line.x, axis.line.y
+//	├── axis.ticks       → axis.ticks.x, axis.ticks.y
+//	├── panel.grid.major
+//	└── panel.grid.minor
+//
+//	rect                 → root rect defaults
+//	├── plot.background
+//	├── panel.background
+//	├── panel.border
+//	├── legend.background
+//	├── legend.key
+//	└── strip.background
 package theme
 
 import (
@@ -144,7 +163,11 @@ const (
 	// UCBerkeley is the ucberkeley theme.
 	UCBerkeley Name = "uc_berkeley"
 
-	// Tableau is the tableau theme.
+	// Tableau is the tableau theme (Tableau10 palette, white panel).
+	Tableau Name = "tableau"
+
+	// Observable is the Observable modern theme (Observable10 palette).
+	Observable Name = "observable"
 
 	// Colorblind-safe theme (Wong 2011, 8 colors).
 	Colorblind Name = "colorblind"
@@ -168,28 +191,25 @@ const (
 )
 
 // Theme encapsulates the complete visual styling for a plot.
+// Elements follow ggplot2's inheritance hierarchy, keyed by dotted path
+// names (e.g. "text", "axis.title.x", "panel.background").
 type Theme struct {
-	// Name is the name of the theme.
+	// Name is the theme's display name.
 	Name string
-	// Background is the background color of the plot.
-	Background color.Color
-	// Panel is the style of the plot panel.
-	Panel PanelStyle
-	// Grid is the style of the plot grid.
-	Grid GridStyle
-	// Text is the style of the plot text.
-	Text TextStyles
-	// Ticks is the style of the plot ticks.
-	Ticks TickStyle
-	// Spacing is the spacing of the plot.
-	Spacing Spacing
+
 	// Palette is the discrete color cycle used when the plot has no
-	// explicit color scale set. Mirrors matplotlib's axes.prop_cycle.
-	// May be nil; callers fall back to colormap.Tab10.
+	// explicit color scale. May be nil; callers fall back to colormap.Tab10.
 	Palette []color.Color
+
+	// Spacing controls margins and inter-element spacing.
+	Spacing Spacing
+
 	// Geom holds default visual properties for geometry primitives.
-	// Individual geom options (WithColor, WithFill, etc.) always take precedence.
 	Geom GeomDefaults
+
+	// Elements maps ggplot2-style dotted paths to Element values.
+	// The resolver walks the inheritance chain to fill missing fields.
+	Elements map[string]Element
 }
 
 // GeomDefaults holds theme-level visual defaults for geometry primitives
@@ -197,7 +217,6 @@ type Theme struct {
 // has not explicitly overridden a property with a geom option.
 type GeomDefaults struct {
 	// PatchEdgeColor is the stroke color drawn around filled geoms.
-	// Mirrors matplotlib's patch.edgecolor.
 	// A nil value means "darken the fill color" (legacy behaviour).
 	PatchEdgeColor color.Color
 	// PatchEdgeWidth is the stroke line width for filled geoms (pixels).
@@ -205,70 +224,6 @@ type GeomDefaults struct {
 	// PatchAlpha is the default fill opacity for filled geoms [0,1].
 	// Zero is treated as "use geom's built-in default" (typically 0.85).
 	PatchAlpha float64
-}
-
-// PanelStyle controls the data panel appearance.
-type PanelStyle struct {
-	// Background is the background color of the panel.
-	Background color.Color
-	// Border is the border color of the panel.
-	Border color.Color
-	// BorderWidth is the border width of the panel.
-	BorderWidth float64
-}
-
-// GridStyle controls major and minor grid lines.
-type GridStyle struct {
-	// MajorColor is the color of the major grid lines.
-	MajorColor color.Color
-	// MajorWidth is the width of the major grid lines.
-	MajorWidth float64
-	// MinorColor is the color of the minor grid lines.
-	MinorColor color.Color
-	// MinorWidth is the width of the minor grid lines.
-	MinorWidth float64
-	// MajorLineCount is the number of major grid lines.
-	MajorLineCount int       // 0 = auto
-	DashPattern    []float64 // nil = solid, e.g. {4,4} = dashed, {2,3} = dotted
-}
-
-// TextStyles holds font configurations for different text roles.
-type TextStyles struct {
-	// Title is the font configuration for the title.
-	Title FontConfig
-	// Subtitle is the font configuration for the subtitle.
-	Subtitle FontConfig
-	// AxisTitle is the font configuration for the axis titles.
-	AxisTitle FontConfig
-	// TickLabel is the font configuration for the tick labels.
-	TickLabel FontConfig
-	// Legend is the font configuration for the legend.
-	Legend     FontConfig
-	Annotation FontConfig
-}
-
-// FontConfig encapsulates text rendering parameters.
-type FontConfig struct {
-	// Family is the font family.
-	Family string
-	// Size is the font size.
-	Size float64
-	// Color is the font color.
-	Color color.Color
-	// Bold is whether the font is bold.
-	Bold bool
-	// Italic is whether the font is italic.
-	Italic bool
-}
-
-// TickStyle controls axis tick mark appearance.
-type TickStyle struct {
-	// Length is the length of the tick marks.
-	Length float64
-	// Width is the width of the tick marks.
-	Width float64
-	// Color is the color of the tick marks.
-	Color color.Color
 }
 
 // Spacing controls margins and inter-element spacing.
@@ -283,11 +238,193 @@ type Spacing struct {
 	MarginLeft float64
 	// PanelSpacing is the spacing between panels.
 	PanelSpacing float64
+	// TickLength is the length of axis tick marks in pixels.
+	TickLength float64
+	// GridLineCount is the number of major grid lines (0 = auto).
+	GridLineCount int
+	// GridDashPattern is the dash pattern for grid lines (nil = solid).
+	GridDashPattern []float64
 }
 
-// Factory builds a Theme on demand. Each preset is registered as a
-// Factory so Resolve can return a fresh value per call (callers mutate
-// the result via the Plot builder).
+// --- Inheritance tree ---
+
+// parentOf maps each element path to its parent in the inheritance chain.
+// Root elements ("text", "line", "rect") have no parent.
+var parentOf = map[string]string{
+	"plot.title":        "text",
+	"plot.subtitle":     "text",
+	"axis.title":        "text",
+	"axis.title.x":      "axis.title",
+	"axis.title.y":      "axis.title",
+	"axis.text":         "text",
+	"axis.text.x":       "axis.text",
+	"axis.text.y":       "axis.text",
+	"legend.title":      "text",
+	"legend.text":       "text",
+	"strip.text":        "text",
+	"annotation.text":   "text",
+	"axis.line":         "line",
+	"axis.line.x":       "axis.line",
+	"axis.line.y":       "axis.line",
+	"axis.ticks":        "line",
+	"axis.ticks.x":      "axis.ticks",
+	"axis.ticks.y":      "axis.ticks",
+	"panel.grid.major":  "line",
+	"panel.grid.minor":  "line",
+	"plot.background":   "rect",
+	"panel.background":  "rect",
+	"panel.border":      "rect",
+	"legend.background": "rect",
+	"legend.key":        "rect",
+	"strip.background":  "rect",
+}
+
+// --- Typed resolvers ---
+
+// resolveText walks the inheritance chain for a text element path,
+// merging child fields over parent defaults.
+func (t Theme) resolveText(path string) ElementText {
+	e, ok := t.Elements[path]
+	if ok {
+		if IsBlank(e) {
+			return ElementText{}
+		}
+
+		if et, ok2 := e.(ElementText); ok2 {
+			parent, hasParent := parentOf[path]
+			if hasParent {
+				return MergeText(et, t.resolveText(parent))
+			}
+
+			return et
+		}
+	}
+
+	// No override at this path — inherit from parent.
+	if parent, hasParent := parentOf[path]; hasParent {
+		return t.resolveText(parent)
+	}
+
+	// Root "text" — return zero value (should be set by every preset).
+	return ElementText{}
+}
+
+// resolveLine walks the inheritance chain for a line element path.
+func (t Theme) resolveLine(path string) ElementLine {
+	e, ok := t.Elements[path]
+	if ok {
+		if IsBlank(e) {
+			return ElementLine{}
+		}
+
+		if el, ok2 := e.(ElementLine); ok2 {
+			parent, hasParent := parentOf[path]
+			if hasParent {
+				return MergeLine(el, t.resolveLine(parent))
+			}
+
+			return el
+		}
+	}
+
+	if parent, hasParent := parentOf[path]; hasParent {
+		return t.resolveLine(parent)
+	}
+
+	return ElementLine{}
+}
+
+// resolveRect walks the inheritance chain for a rect element path.
+func (t Theme) resolveRect(path string) ElementRect {
+	e, ok := t.Elements[path]
+	if ok {
+		if IsBlank(e) {
+			return ElementRect{}
+		}
+
+		if er, ok2 := e.(ElementRect); ok2 {
+			parent, hasParent := parentOf[path]
+			if hasParent {
+				return MergeRect(er, t.resolveRect(parent))
+			}
+
+			return er
+		}
+	}
+
+	if parent, hasParent := parentOf[path]; hasParent {
+		return t.resolveRect(parent)
+	}
+
+	return ElementRect{}
+}
+
+// --- Public accessors ---
+// These are the primary API for the rendering pipeline.
+
+// PlotTitle returns the resolved plot title text element.
+func (t Theme) PlotTitle() ElementText { return t.resolveText("plot.title") }
+
+// PlotSubtitle returns the resolved plot subtitle text element.
+func (t Theme) PlotSubtitle() ElementText { return t.resolveText("plot.subtitle") }
+
+// AxisTitle returns the resolved axis title text element.
+func (t Theme) AxisTitle() ElementText { return t.resolveText("axis.title") }
+
+// AxisTitleX returns the resolved X-axis title text element.
+func (t Theme) AxisTitleX() ElementText { return t.resolveText("axis.title.x") }
+
+// AxisTitleY returns the resolved Y-axis title text element.
+func (t Theme) AxisTitleY() ElementText { return t.resolveText("axis.title.y") }
+
+// AxisTextElem returns the resolved axis tick-label text element.
+func (t Theme) AxisTextElem() ElementText { return t.resolveText("axis.text") }
+
+// LegendTitle returns the resolved legend title text element.
+func (t Theme) LegendTitle() ElementText { return t.resolveText("legend.title") }
+
+// LegendTextElem returns the resolved legend text element.
+func (t Theme) LegendTextElem() ElementText { return t.resolveText("legend.text") }
+
+// StripText returns the resolved facet strip text element.
+func (t Theme) StripText() ElementText { return t.resolveText("strip.text") }
+
+// AnnotationText returns the resolved annotation text element.
+func (t Theme) AnnotationText() ElementText { return t.resolveText("annotation.text") }
+
+// PlotBackground returns the resolved plot background rect element.
+func (t Theme) PlotBackground() ElementRect { return t.resolveRect("plot.background") }
+
+// PanelBackground returns the resolved panel background rect element.
+func (t Theme) PanelBackground() ElementRect { return t.resolveRect("panel.background") }
+
+// PanelBorder returns the resolved panel border rect element.
+func (t Theme) PanelBorder() ElementRect { return t.resolveRect("panel.border") }
+
+// PanelGridMajor returns the resolved major grid line element.
+func (t Theme) PanelGridMajor() ElementLine { return t.resolveLine("panel.grid.major") }
+
+// PanelGridMinor returns the resolved minor grid line element.
+func (t Theme) PanelGridMinor() ElementLine { return t.resolveLine("panel.grid.minor") }
+
+// AxisLine returns the resolved axis line element.
+func (t Theme) AxisLine() ElementLine { return t.resolveLine("axis.line") }
+
+// AxisTicks returns the resolved axis ticks line element.
+func (t Theme) AxisTicks() ElementLine { return t.resolveLine("axis.ticks") }
+
+// LegendBackground returns the resolved legend background rect element.
+func (t Theme) LegendBackground() ElementRect { return t.resolveRect("legend.background") }
+
+// LegendKey returns the resolved legend key rect element.
+func (t Theme) LegendKey() ElementRect { return t.resolveRect("legend.key") }
+
+// StripBackground returns the resolved facet strip background rect.
+func (t Theme) StripBackground() ElementRect { return t.resolveRect("strip.background") }
+
+// --- Registry ---
+
+// Factory builds a Theme on demand.
 type Factory func() Theme
 
 var (
@@ -296,12 +433,6 @@ var (
 )
 
 // Register adds a named theme factory to the global registry.
-// Returns an error if name is already taken; use [MustRegister] for
-// init-time registration where a duplicate is a programmer error.
-//
-// Intended both for built-in presets (registered via init() in their
-// own files) and for user code that wants to add custom themes
-// resolvable by name.
 func Register(name Name, f Factory) error {
 	if name == "" {
 		return ErrEmptyName
@@ -330,9 +461,7 @@ func MustRegister(name Name, f Factory) {
 	}
 }
 
-// Resolve returns a Theme for the given name. Empty name resolves to
-// the default (the matplotlib ggplot preset). Unknown names return an
-// error.
+// Resolve returns a Theme for the given name.
 func Resolve(name Name) (Theme, error) {
 	if name == "" {
 		name = Default
@@ -363,57 +492,82 @@ func AllNames() []Name {
 	return out
 }
 
+// --- Base theme builder ---
+
 // baseTheme returns a neutral starting Theme that preset factories can
-// patch. It carries no palette and no opinionated chrome — every
-// preset is expected to override the fields it cares about.
+// patch. It carries the default inheritance root elements.
 func baseTheme(name string) Theme {
 	return Theme{
-		Name:       name,
-		Background: color.White,
-		Panel: PanelStyle{
-			Background:  color.White,
-			Border:      color.RGBA{R: 200, G: 200, B: 200, A: 255},
-			BorderWidth: 1,
-		},
-		Grid: GridStyle{
-			MajorColor:  color.RGBA{R: 200, G: 200, B: 200, A: 180},
-			MajorWidth:  0.5,
-			MinorColor:  color.RGBA{R: 230, G: 230, B: 230, A: 120},
-			MinorWidth:  0.3,
-			DashPattern: nil,
-		},
-		Text: TextStyles{
-			Title:      FontConfig{Family: "sans-serif", Size: 14, Color: color.Black, Bold: true},
-			Subtitle:   FontConfig{Family: "sans-serif", Size: 11, Color: gray(80)},
-			AxisTitle:  FontConfig{Family: "sans-serif", Size: 11, Color: gray(40)},
-			TickLabel:  FontConfig{Family: "sans-serif", Size: 10, Color: gray(60)},
-			Legend:     FontConfig{Family: "sans-serif", Size: 10, Color: gray(40)},
-			Annotation: FontConfig{Family: "sans-serif", Size: 10, Color: gray(60)},
-		},
-		Ticks: TickStyle{
-			Length: 5, Width: 1, Color: gray(60),
-		},
+		Name: name,
 		Spacing: Spacing{
 			MarginTop: 10, MarginRight: 10, MarginBottom: 10, MarginLeft: 10,
 			PanelSpacing: 10,
+			TickLength:   5,
 		},
-		// GeomDefaults: nil PatchEdgeColor → legacy "darken fill" stroke.
 		Geom: GeomDefaults{
 			PatchEdgeColor: nil,
 			PatchEdgeWidth: 0.5,
 			PatchAlpha:     0,
 		},
+		Elements: map[string]Element{
+			// Root text defaults.
+			"text": ElementText{Family: "sans-serif", Size: 11, Color: color.Black},
+			// Root line defaults.
+			"line": ElementLine{Color: gray(60), Size: 0.5},
+			// Root rect defaults.
+			"rect": ElementRect{Fill: color.White, Color: color.RGBA{R: 200, G: 200, B: 200, A: 255}, Size: 1},
+
+			// Plot-level.
+			"plot.title":      ElementText{Size: 14, Bold: true},
+			"plot.subtitle":   ElementText{Size: 11, Color: gray(80)},
+			"plot.background": ElementRect{Fill: color.White},
+
+			// Panel.
+			"panel.background": ElementRect{Fill: color.White},
+			"panel.border":     ElementRect{Color: color.RGBA{R: 200, G: 200, B: 200, A: 255}, Size: 1},
+			"panel.grid.major": ElementLine{Color: color.RGBA{R: 200, G: 200, B: 200, A: 180}, Size: 0.5},
+			"panel.grid.minor": ElementLine{Color: color.RGBA{R: 230, G: 230, B: 230, A: 120}, Size: 0.3},
+
+			// Axis text (tick labels).
+			"axis.title": ElementText{Size: 11, Color: gray(40)},
+			"axis.text":  ElementText{Size: 10, Color: gray(60)},
+
+			// Axis ticks.
+			"axis.ticks": ElementLine{Color: gray(60), Size: 1},
+
+			// Legend.
+			"legend.text": ElementText{Size: 10, Color: gray(40)},
+
+			// Annotation.
+			"annotation.text": ElementText{Size: 10, Color: gray(60)},
+		},
 	}
 }
+
+// neutralPaletteTheme returns a neutral white-panel theme that only sets a
+// custom color palette. Used for themes that differ only in their color cycle.
+func neutralPaletteTheme(name string, colors ...color.Color) Theme {
+	t := baseTheme(name)
+	t.Elements["panel.border"] = ElementRect{Color: gray(180), Size: 1}
+	t.Elements["panel.grid.major"] = ElementLine{Color: gray(220), Size: 0.5}
+	t.Elements["panel.grid.minor"] = ElementLine{Color: gray(240), Size: 0.3}
+	t.Elements["axis.ticks"] = ElementLine{Color: gray(60), Size: 1}
+	t.Geom.PatchEdgeColor = gray(220)
+	t.Geom.PatchEdgeWidth = 0.5
+	t.Geom.PatchAlpha = 1.0
+	t.Palette = colors
+
+	return t
+}
+
+// --- Helpers ---
 
 // gray builds an opaque gray of the given level (0–255).
 func gray(v uint8) color.Color {
 	return color.RGBA{R: v, G: v, B: v, A: 255}
 }
 
-// hex parses a 6-character hex color (with optional leading '#') into an
-// opaque RGBA. Panics on malformed input — preset files supply literals
-// from upstream stylesheets, not user data.
+// hex parses a 6-character hex color into an opaque RGBA.
 func hex(s string) color.RGBA {
 	s = strings.TrimPrefix(s, "#")
 	if len(s) != 6 {

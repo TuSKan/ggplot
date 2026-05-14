@@ -1533,7 +1533,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 	}
 
 	th := b.theme
-	cv.Clear(th.Background)
+	cv.Clear(th.PlotBackground().Fill)
 
 	rows := b.layout.Rows
 	cols := b.layout.Cols
@@ -1557,7 +1557,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 
 		yTicks := leftAxisScale.Ticks(6)
 
-		cv.SetFontSize(th.Text.TickLabel.Size)
+		cv.SetFontSize(th.AxisTextElem().Size)
 
 		maxTickW := 0.0
 
@@ -1577,32 +1577,32 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		if pi == 0 || len(b.panels) == 1 {
 			mTop = 15.0
 			mRight = 20.0
-			mBottom = 15.0 + th.Text.TickLabel.Size + th.Ticks.Length + 14
-			mLeft = 15.0 + maxTickW + th.Ticks.Length + 10
+			mBottom = 15.0 + th.AxisTextElem().Size + th.Spacing.TickLength + 14
+			mLeft = 15.0 + maxTickW + th.Spacing.TickLength + 10
 
 			if b.labels.Title != "" {
-				mTop += th.Text.Title.Size + 8
+				mTop += th.PlotTitle().Size + 8
 			}
 
 			if b.labels.Subtitle != "" {
-				mTop += th.Text.Subtitle.Size + 4
+				mTop += th.PlotSubtitle().Size + 4
 			}
 
 			if b.labels.X != "" {
-				mBottom += th.Text.AxisTitle.Size + 8
+				mBottom += th.AxisTitle().Size + 8
 			}
 
 			if b.labels.Y != "" {
-				titleGap := 5 + maxTickW + th.Text.AxisTitle.Size + 8
-				if titleGap < 30+th.Text.AxisTitle.Size/2 {
-					titleGap = 30 + th.Text.AxisTitle.Size/2
+				titleGap := 5 + maxTickW + th.AxisTitle().Size + 8
+				if titleGap < 30+th.AxisTitle().Size/2 {
+					titleGap = 30 + th.AxisTitle().Size/2
 				}
 
-				mLeft = 15.0 + titleGap + th.Ticks.Length
+				mLeft = 15.0 + titleGap + th.Spacing.TickLength
 			}
 
 			if b.labels.Caption != "" {
-				mBottom += th.Text.TickLabel.Size + 4
+				mBottom += th.AxisTextElem().Size + 4
 			}
 
 			legendPos = b.legendPos
@@ -1616,7 +1616,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 
 			if hasLegend && (legendPos == "right" || legendPos == "left") {
 				if len(bp.LegendEntries) > 0 {
-					cv.SetFontSize(th.Text.Legend.Size)
+					cv.SetFontSize(th.LegendTextElem().Size)
 
 					maxLabelW := 0.0
 
@@ -1631,7 +1631,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 				}
 
 				if bp.ColorBarSpec != nil {
-					cv.SetFontSize(th.Text.Legend.Size * 0.9)
+					cv.SetFontSize(th.LegendTextElem().Size * 0.9)
 
 					vmin, vmax := 0.0, 1.0
 					if bp.ColorBarSpec.Norm != nil {
@@ -1698,13 +1698,13 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		// Facet strip label above each panel.
 		stripH := 0.0
 		if bp.Label != "" {
-			stripH = th.Text.TickLabel.Size + 8
-			sr, sg, sb, _ := th.Panel.Border.RGBA()
+			stripH = th.AxisTextElem().Size + 8
+			sr, sg, sb, _ := th.PanelBorder().Color.RGBA()
 			cv.SetRGBA(float64(sr)/65535.0, float64(sg)/65535.0, float64(sb)/65535.0, 0.25)
 			cv.DrawRectangle(dataX, dataY, cellW, stripH)
 			cv.Fill()
-			cv.SetColor(th.Text.AxisTitle.Color)
-			cv.SetFontSize(th.Text.TickLabel.Size)
+			cv.SetColor(th.AxisTitle().Color)
+			cv.SetFontSize(th.AxisTextElem().Size)
 			cv.DrawStringAnchored(bp.Label, dataX+cellW/2, dataY+stripH/2, 0.5, 0.5)
 		}
 
@@ -1727,9 +1727,9 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		drawGrid(cv, renderXScale, renderYScale, dataX, dataY, cellW, cellH, th)
 
 		// Panel border.
-		if th.Panel.BorderWidth > 0 {
-			cv.SetColor(th.Panel.Border)
-			cv.SetLineWidth(th.Panel.BorderWidth)
+		if th.PanelBorder().Size > 0 {
+			cv.SetColor(th.PanelBorder().Color)
+			cv.SetLineWidth(th.PanelBorder().Size)
 			cv.DrawRectangle(dataX, dataY, cellW, cellH)
 			cv.Stroke()
 		}
@@ -1836,21 +1836,21 @@ func (b *Built) drawTitles(cv canvas.Canvas, width, height int, th theme.Theme) 
 	titleY := 10.0
 
 	if b.labels.Title != "" {
-		cv.SetColor(th.Text.Title.Color)
-		cv.SetFontSize(th.Text.Title.Size)
-		cv.DrawStringAnchored(b.labels.Title, centerX, titleY+th.Text.Title.Size/2, 0.5, 0.5)
-		titleY += th.Text.Title.Size + 8
+		cv.SetColor(th.PlotTitle().Color)
+		cv.SetFontSize(th.PlotTitle().Size)
+		cv.DrawStringAnchored(b.labels.Title, centerX, titleY+th.PlotTitle().Size/2, 0.5, 0.5)
+		titleY += th.PlotTitle().Size + 8
 	}
 
 	if b.labels.Subtitle != "" {
-		cv.SetColor(th.Text.Subtitle.Color)
-		cv.SetFontSize(th.Text.Subtitle.Size)
-		cv.DrawStringAnchored(b.labels.Subtitle, centerX, titleY+th.Text.Subtitle.Size/2, 0.5, 0.5)
+		cv.SetColor(th.PlotSubtitle().Color)
+		cv.SetFontSize(th.PlotSubtitle().Size)
+		cv.DrawStringAnchored(b.labels.Subtitle, centerX, titleY+th.PlotSubtitle().Size/2, 0.5, 0.5)
 	}
 
 	if b.labels.Caption != "" {
-		cv.SetColor(th.Text.TickLabel.Color)
-		cv.SetFontSize(th.Text.TickLabel.Size)
+		cv.SetColor(th.AxisTextElem().Color)
+		cv.SetFontSize(th.AxisTextElem().Size)
 		cv.DrawStringAnchored(b.labels.Caption, float64(width)-40, float64(height)-4, 1.0, 1.0)
 	}
 }
@@ -1871,13 +1871,13 @@ func builtLayersToLayerSpecs(layers []BuiltLayer) []LayerSpec {
 // ---------------------------------------------------------------------------
 func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, th theme.Theme) {
 	ticks := sc.Ticks(5)
-	tickLen := th.Ticks.Length
-	r, g, b, _ := rgbaOf(th.Ticks.Color)
-	tr, tg, tb, _ := rgbaOf(th.Text.TickLabel.Color)
+	tickLen := th.Spacing.TickLength
+	r, g, b, _ := rgbaOf(th.AxisTicks().Color)
+	tr, tg, tb, _ := rgbaOf(th.AxisTextElem().Color)
 
 	// Baseline.
 	cv.SetRGBA(r, g, b, 1)
-	cv.SetLineWidth(th.Ticks.Width)
+	cv.SetLineWidth(th.AxisTicks().Size)
 	cv.DrawLine(x, y, x+w, y)
 	cv.Stroke()
 
@@ -1897,15 +1897,15 @@ func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, 
 
 		// Label.
 		cv.SetRGBA(tr, tg, tb, 1)
-		cv.SetFontSize(th.Text.TickLabel.Size)
+		cv.SetFontSize(th.AxisTextElem().Size)
 		cv.DrawStringAnchored(sc.Format(v), px, y+tickLen+12, 0.5, 0.5)
 	}
 
 	// Axis title.
 	if label != "" {
-		lr, lg, lb, _ := rgbaOf(th.Text.AxisTitle.Color)
+		lr, lg, lb, _ := rgbaOf(th.AxisTitle().Color)
 		cv.SetRGBA(lr, lg, lb, 1)
-		cv.SetFontSize(th.Text.AxisTitle.Size)
+		cv.SetFontSize(th.AxisTitle().Size)
 		cv.DrawStringAnchored(label, x+w/2, y+tickLen+28, 0.5, 0.5)
 	}
 }
@@ -1913,23 +1913,23 @@ func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, 
 // drawYAxis renders a vertical axis at the left of the data area.
 func drawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, th theme.Theme) {
 	ticks := sc.Ticks(5)
-	tickLen := th.Ticks.Length
-	r, g, b, _ := rgbaOf(th.Ticks.Color)
-	tr, tg, tb, _ := rgbaOf(th.Text.TickLabel.Color)
+	tickLen := th.Spacing.TickLength
+	r, g, b, _ := rgbaOf(th.AxisTicks().Color)
+	tr, tg, tb, _ := rgbaOf(th.AxisTextElem().Color)
 
 	// Baseline.
 	cv.SetRGBA(r, g, b, 1)
-	cv.SetLineWidth(th.Ticks.Width)
+	cv.SetLineWidth(th.AxisTicks().Size)
 	cv.DrawLine(x, y, x, y+h)
 	cv.Stroke()
 
 	yMin, yMax := sc.Bounds()
-	minSpacing := th.Text.TickLabel.Size + 4 // minimum px between labels
+	minSpacing := th.AxisTextElem().Size + 4 // minimum px between labels
 	lastPy := -1000.0                        // track last drawn label position
 	maxLabelW := 0.0                         // track widest drawn label
 
 	// Measure + draw tick labels.
-	cv.SetFontSize(th.Text.TickLabel.Size)
+	cv.SetFontSize(th.AxisTextElem().Size)
 
 	for _, v := range ticks {
 		frac := (v - yMin) / (yMax - yMin)
@@ -1954,7 +1954,7 @@ func drawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 			}
 
 			cv.SetRGBA(tr, tg, tb, 1)
-			cv.SetFontSize(th.Text.TickLabel.Size)
+			cv.SetFontSize(th.AxisTextElem().Size)
 			cv.DrawStringAnchored(lbl, x-tickLen-5, py, 1.0, 0.5)
 			lastPy = py
 		}
@@ -1962,15 +1962,15 @@ func drawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 
 	// Axis title (rotated), positioned to the left of the widest tick label.
 	if label != "" {
-		lr, lg, lb, _ := rgbaOf(th.Text.AxisTitle.Color)
+		lr, lg, lb, _ := rgbaOf(th.AxisTitle().Color)
 		cv.SetRGBA(lr, lg, lb, 1)
-		cv.SetFontSize(th.Text.AxisTitle.Size)
+		cv.SetFontSize(th.AxisTitle().Size)
 		cv.Save()
 		// The rotated title's horizontal extent equals its font size,
 		// centred on the translate point. To avoid overlapping tick labels
 		// (which extend left from x-tickLen-5 by maxLabelW) we offset by:
 		//   5 (label gap) + maxLabelW + fontSize/2 + 8 (padding)
-		titleOffset := 5 + maxLabelW + th.Text.AxisTitle.Size/2 + 8
+		titleOffset := 5 + maxLabelW + th.AxisTitle().Size/2 + 8
 		if titleOffset < 30 {
 			titleOffset = 30 // minimum offset for short labels
 		}
@@ -1989,17 +1989,17 @@ func drawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 // between the major ones using the theme's MinorColor / MinorWidth.
 func drawGrid(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h float64, th theme.Theme) {
 	// Fill panel background first so it appears behind all grid lines and data.
-	cv.SetColor(th.Panel.Background)
+	cv.SetColor(th.PanelBackground().Fill)
 	cv.DrawRectangle(x, y, w, h)
 	cv.Fill()
 
-	mr, mg, mb, ma := rgbaOf(th.Grid.MajorColor)
+	mr, mg, mb, ma := rgbaOf(th.PanelGridMajor().Color)
 	cv.SetRGBA(mr, mg, mb, ma)
-	cv.SetLineWidth(th.Grid.MajorWidth)
+	cv.SetLineWidth(th.PanelGridMajor().Size)
 
 	// Apply dash pattern from theme.
-	if len(th.Grid.DashPattern) > 0 {
-		cv.SetLineDash(th.Grid.DashPattern...)
+	if len(th.Spacing.GridDashPattern) > 0 {
+		cv.SetLineDash(th.Spacing.GridDashPattern...)
 	}
 
 	// Vertical grid lines (from x ticks).
@@ -2038,13 +2038,13 @@ func drawGrid(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h float64, 
 // drawMinorLines renders minor grid lines for scales that implement
 // [scale.MinorTicker]. Minor lines use the theme's MinorColor/MinorWidth.
 func drawMinorLines(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h float64, th theme.Theme) {
-	if th.Grid.MinorColor == nil {
+	if th.PanelGridMinor().Color == nil {
 		return
 	}
 
-	mr, mg, mb, ma := rgbaOf(th.Grid.MinorColor)
+	mr, mg, mb, ma := rgbaOf(th.PanelGridMinor().Color)
 	cv.SetRGBA(mr, mg, mb, ma)
-	cv.SetLineWidth(th.Grid.MinorWidth)
+	cv.SetLineWidth(th.PanelGridMinor().Size)
 
 	xMin, xMax := xScale.Bounds()
 	yMin, yMax := yScale.Bounds()
@@ -2097,9 +2097,9 @@ func drawLegendVertical(cv canvas.Canvas, title string, entries []LegendEntry, x
 	curY := y
 
 	if title != "" {
-		r, g, b, _ := rgbaOf(th.Text.Legend.Color)
+		r, g, b, _ := rgbaOf(th.LegendTextElem().Color)
 		cv.SetRGBA(r, g, b, 1)
-		cv.SetFontSize(th.Text.Legend.Size)
+		cv.SetFontSize(th.LegendTextElem().Size)
 		cv.DrawStringAnchored(title, x+swatchSize+5, curY, 0, 0.5)
 		curY += spacing
 	}
@@ -2109,9 +2109,9 @@ func drawLegendVertical(cv canvas.Canvas, title string, entries []LegendEntry, x
 		cv.DrawRectangle(x, curY-swatchSize/2, swatchSize, swatchSize)
 		cv.Fill()
 
-		r, g, b, _ := rgbaOf(th.Text.Legend.Color)
+		r, g, b, _ := rgbaOf(th.LegendTextElem().Color)
 		cv.SetRGBA(r, g, b, 1)
-		cv.SetFontSize(th.Text.Legend.Size)
+		cv.SetFontSize(th.LegendTextElem().Size)
 		cv.DrawStringAnchored(e.Label, x+swatchSize+5, curY, 0, 0.5)
 
 		curY += spacing
@@ -2135,12 +2135,12 @@ func drawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th th
 	barW := 12.0
 
 	// Title above the bar.
-	tr, tg, tb, _ := rgbaOf(th.Text.Legend.Color)
+	tr, tg, tb, _ := rgbaOf(th.LegendTextElem().Color)
 	if spec.Title != "" {
 		cv.SetRGBA(tr, tg, tb, 1)
-		cv.SetFontSize(th.Text.Legend.Size)
+		cv.SetFontSize(th.LegendTextElem().Size)
 		cv.DrawStringAnchored(spec.Title, x+barW/2, y, 0.5, 1.0)
-		y += th.Text.Legend.Size + 6
+		y += th.LegendTextElem().Size + 6
 	}
 
 	cm := spec.Cmap
@@ -2170,7 +2170,7 @@ func drawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th th
 	// Max label (top) and Min label (bottom). Use the Norm's data-space
 	// bounds when available; otherwise fall back to "high" / "low".
 	cv.SetRGBA(tr, tg, tb, 1)
-	cv.SetFontSize(th.Text.Legend.Size * 0.9)
+	cv.SetFontSize(th.LegendTextElem().Size * 0.9)
 
 	labelX := x + barW + 4
 	hi, lo := "high", "low"
@@ -2202,11 +2202,11 @@ func drawLegendHorizontal(cv canvas.Canvas, title string, entries []LegendEntry,
 	swatchSize := 10.0
 	gap := 8.0
 	curX := x
-	tr, tg, tb, _ := rgbaOf(th.Text.Legend.Color)
+	tr, tg, tb, _ := rgbaOf(th.LegendTextElem().Color)
 
 	if title != "" {
 		cv.SetRGBA(tr, tg, tb, 1)
-		cv.SetFontSize(th.Text.Legend.Size)
+		cv.SetFontSize(th.LegendTextElem().Size)
 		cv.DrawStringAnchored(title, curX, y, 0, 0.5)
 		tw, _ := cv.MeasureString(title)
 		curX += tw + gap*2
@@ -2222,7 +2222,7 @@ func drawLegendHorizontal(cv canvas.Canvas, title string, entries []LegendEntry,
 		cv.Fill()
 
 		cv.SetRGBA(tr, tg, tb, 1)
-		cv.SetFontSize(th.Text.Legend.Size * 0.9)
+		cv.SetFontSize(th.LegendTextElem().Size * 0.9)
 		cv.DrawStringAnchored(e.Label, curX+swatchSize+3, y, 0, 0.5)
 		tw, _ := cv.MeasureString(e.Label)
 		curX += swatchSize + 3 + tw + gap
@@ -2233,14 +2233,14 @@ func drawLegendHorizontal(cv canvas.Canvas, title string, entries []LegendEntry,
 func drawColorBarHorizontal(cv canvas.Canvas, spec ColorBarSpec, x, y, barW float64, th theme.Theme) {
 	barH := 10.0
 
-	tr, tg, tb, _ := rgbaOf(th.Text.Legend.Color)
+	tr, tg, tb, _ := rgbaOf(th.LegendTextElem().Color)
 
 	// Title to the left.
 	startX := x
 
 	if spec.Title != "" {
 		cv.SetRGBA(tr, tg, tb, 1)
-		cv.SetFontSize(th.Text.Legend.Size)
+		cv.SetFontSize(th.LegendTextElem().Size)
 		cv.DrawStringAnchored(spec.Title, startX, y+barH/2, 0, 0.5)
 		tw, _ := cv.MeasureString(spec.Title)
 		startX += tw + 8
@@ -2276,7 +2276,7 @@ func drawColorBarHorizontal(cv canvas.Canvas, spec ColorBarSpec, x, y, barW floa
 
 	// Min / Max labels.
 	cv.SetRGBA(tr, tg, tb, 1)
-	cv.SetFontSize(th.Text.Legend.Size * 0.85)
+	cv.SetFontSize(th.LegendTextElem().Size * 0.85)
 
 	lo, hi := "low", "high"
 

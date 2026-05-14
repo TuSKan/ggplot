@@ -6,7 +6,7 @@ func init() {
 	MustRegister(PaulTol, newPaulTol)
 	MustRegister(Few, newFew)
 	MustRegister(UCBerkeley, newUCBerkeley)
-	// Seasonal / contextual palette variants (pyplot-themes originals).
+	MustRegister(Tableau, newTableau)
 	MustRegister(Autumn1, newAutumn1)
 	MustRegister(Autumn2, newAutumn2)
 	MustRegister(Canyon, newCanyon)
@@ -14,63 +14,24 @@ func init() {
 	MustRegister(Tomato, newTomato)
 }
 
-// Themes contributed by raybuhr/pyplot-themes that don't overlap with
-// matplotlib's stylelib.
-//
-// Source: github.com/raybuhr/pyplot-themes/blob/master/pyplot_themes/palettes.py
-
-// newPaulTol uses Paul Tol's qualitative scheme (12 colors), white panel,
-// light grid.
 func newPaulTol() Theme {
-	t := baseTheme("paul_tol")
-	t.Background = color.White
-	t.Panel.Background = color.White
-	t.Panel.Border = gray(180)
-	t.Panel.BorderWidth = 1
-	t.Grid.MajorColor = gray(220)
-	t.Grid.MajorWidth = 0.5
-	t.Grid.DashPattern = nil
-	t.Ticks.Color = gray(60)
-
-	// paul_tol: white panel + gray (#EEEEEE) grid → light gray edge.
-	t.Geom.PatchEdgeColor = gray(220)
-	t.Geom.PatchEdgeWidth = 0.5
-	t.Geom.PatchAlpha = 1.0
-
-	t.Palette = []color.Color{
+	return neutralPaletteTheme("paul_tol",
 		hex("332288"), hex("6699CC"), hex("88CCEE"), hex("44AA99"),
 		hex("117733"), hex("999933"), hex("DDCC77"), hex("661100"),
 		hex("CC6677"), hex("AA4466"), hex("882255"), hex("AA4499"),
-	}
-
-	return t
+	)
 }
 
-// newFew uses the "Few medium" palette (Stephen Few's recommended
-// categorical colors), white panel, no grid by default.
 func newFew() Theme {
 	t := baseTheme("few")
-	t.Background = color.White
-	t.Panel.Background = color.White
-	t.Panel.Border = color.Black
-	t.Panel.BorderWidth = 1
-	t.Grid.MajorColor = color.Transparent
-	t.Grid.MajorWidth = 0
-	t.Grid.MinorColor = color.Transparent
-	t.Grid.MinorWidth = 0
-	t.Ticks.Color = color.Black
-
-	t.Text.Title.Color = color.Black
-	t.Text.Subtitle.Color = color.Black
-	t.Text.AxisTitle.Color = color.Black
-	t.Text.TickLabel.Color = color.Black
-	t.Text.Legend.Color = color.Black
-
-	// few: white panel, no grid, black border → black edges match the axis style.
+	t.Elements["text"] = ElementText{Family: "sans-serif", Size: 11, Color: color.Black}
+	t.Elements["panel.border"] = ElementRect{Color: color.Black, Size: 1}
+	t.Elements["panel.grid.major"] = ElementBlank{}
+	t.Elements["panel.grid.minor"] = ElementBlank{}
+	t.Elements["axis.ticks"] = ElementLine{Color: color.Black, Size: 1}
 	t.Geom.PatchEdgeColor = color.Black
 	t.Geom.PatchEdgeWidth = 0.5
 	t.Geom.PatchAlpha = 1.0
-
 	t.Palette = []color.Color{
 		hex("4D4D4D"), hex("5DA5DA"), hex("FAA43A"),
 		hex("60BD68"), hex("F17CB0"), hex("B2912F"),
@@ -80,24 +41,14 @@ func newFew() Theme {
 	return t
 }
 
-// newUCBerkeley uses UC Berkeley's official palette, white panel, very
-// light gray edges.
 func newUCBerkeley() Theme {
 	t := baseTheme("uc_berkeley")
-	t.Background = color.White
-	t.Panel.Background = color.White
-	t.Panel.Border = hex("EEEEEE")
-	t.Panel.BorderWidth = 1
-	t.Grid.MajorColor = hex("EEEEEE")
-	t.Grid.MajorWidth = 0.5
-	t.Grid.DashPattern = nil
-	t.Ticks.Color = gray(60)
-
-	// uc_berkeley: white panel + very light (#EEEEEE) grid → same grid color as edge.
+	t.Elements["panel.border"] = ElementRect{Color: hex("EEEEEE"), Size: 1}
+	t.Elements["panel.grid.major"] = ElementLine{Color: hex("EEEEEE"), Size: 0.5}
+	t.Elements["axis.ticks"] = ElementLine{Color: gray(60), Size: 1}
 	t.Geom.PatchEdgeColor = hex("EEEEEE")
 	t.Geom.PatchEdgeWidth = 0.5
 	t.Geom.PatchAlpha = 1.0
-
 	t.Palette = []color.Color{
 		hex("003262"), hex("3B7EA1"), hex("FDB515"), hex("C4820E"),
 		hex("D9661F"), hex("EE1F60"), hex("ED4E33"), hex("6C3302"),
@@ -108,37 +59,16 @@ func newUCBerkeley() Theme {
 	return t
 }
 
-// newTableau uses matplotlib's classic Tableau10 palette (the upstream
-// default cycle, identical to colormap.Tab10) on a white canvas.
+// newTableau uses classic Tableau10 palette on a neutral white canvas.
 func newTableau() Theme {
-	t := baseTheme("tableau")
-	t.Background = color.White
-	t.Panel.Background = color.White
-	t.Panel.Border = gray(180)
-	t.Panel.BorderWidth = 1
-	t.Grid.MajorColor = gray(220)
-	t.Grid.MajorWidth = 0.5
-	t.Grid.DashPattern = nil
-	t.Ticks.Color = gray(60)
-
-	// tableau: white panel + gray (#DDDDDD) grid → light gray edge.
-	t.Geom.PatchEdgeColor = gray(220)
-	t.Geom.PatchEdgeWidth = 0.5
-	t.Geom.PatchAlpha = 1.0
-
-	t.Palette = []color.Color{
+	return neutralPaletteTheme("tableau",
 		hex("1F77B4"), hex("FF7F0E"), hex("2CA02C"), hex("D62728"),
 		hex("9467BD"), hex("8C564B"), hex("E377C2"), hex("7F7F7F"),
 		hex("BCBD22"), hex("17BECF"),
-	}
-
-	return t
+	)
 }
 
-// ── Seasonal / contextual palette variants ──────────────────────────────────
-// All five share the tableau chrome (white panel, light gray grid).
-// Palettes verbatim from: raybuhr/pyplot-themes palettes.py
-// https://duoparadigms.com/2013/10/11/10-color-palettes-perfect-autumnfall-season/
+// ── Seasonal / contextual palette variants ──
 
 func seasonalTheme(name Name, palette []color.Color) Theme {
 	t := newTableau()

@@ -118,3 +118,17 @@ var okabeItoData = []gg.RGBA{
 	rgb(213, 94, 0),    // vermillion
 	rgb(204, 121, 167), // reddish purple
 }
+
+// In colormap/data_qualitative.go
+var observable10Colors = []gg.RGBA{
+	{R: 0x42 / 255.0, G: 0x69 / 255.0, B: 0xd0 / 255.0, A: 1}, // #4269d0
+	{R: 0xef / 255.0, G: 0xb1 / 255.0, B: 0x18 / 255.0, A: 1}, // #efb118
+	{R: 0xff / 255.0, G: 0x72 / 255.0, B: 0x5c / 255.0, A: 1}, // #ff725c
+	{R: 0x6c / 255.0, G: 0xc5 / 255.0, B: 0xb0 / 255.0, A: 1}, // #6cc5b0
+	{R: 0x3c / 255.0, G: 0xa9 / 255.0, B: 0x51 / 255.0, A: 1}, // #3ca951
+	{R: 0xff / 255.0, G: 0x8a / 255.0, B: 0xb7 / 255.0, A: 1}, // #ff8ab7
+	{R: 0xa4 / 255.0, G: 0x63 / 255.0, B: 0xf2 / 255.0, A: 1}, // #a463f2
+	{R: 0x97 / 255.0, G: 0xbb / 255.0, B: 0xf5 / 255.0, A: 1}, // #97bbf5
+	{R: 0x9c / 255.0, G: 0x6b / 255.0, B: 0x4e / 255.0, A: 1}, // #9c6b4e
+	{R: 0x94 / 255.0, G: 0x98 / 255.0, B: 0xa0 / 255.0, A: 1}, // #9498a0
+}

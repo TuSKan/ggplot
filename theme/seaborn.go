@@ -4,7 +4,7 @@ import "image/color"
 
 func init() {
 	MustRegister(SeabornDarkgrid, newSeabornDarkgrid)
-	MustRegister(Seaborn, newSeabornDarkgrid) // Seaborn is an alias for SeabornDarkgrid.
+	MustRegister(Seaborn, newSeabornDarkgrid)
 	MustRegister(SeabornWhitegrid, newSeabornWhitegrid)
 	MustRegister(SeabornDark, newSeabornDark)
 	MustRegister(SeabornWhite, newSeabornWhite)
@@ -21,47 +21,30 @@ func init() {
 	MustRegister(SeabornPoster, newSeabornPoster)
 }
 
-// Seaborn family. Sources:
-//   matplotlib/lib/matplotlib/mpl-data/stylelib/seaborn-v0_8*.mplstyle
-//
-// Seaborn's grid variants share a common palette and typography; only
-// the panel background, axes edge, and grid visibility differ. The
-// palette variants share the chrome of seaborn-darkgrid (the seaborn
-// default) and only swap the color cycle. The font-size variants share
-// chrome and palette and only scale text sizes.
-
-// seabornBase returns the chrome shared by all seaborn presets,
-// patched per-variant by the factories below. Palette defaults to the
-// seaborn "deep" cycle (the upstream default), which palette variants
-// override.
+// seabornBase returns the chrome shared by all seaborn presets.
 func seabornBase(name string) Theme {
-	t := baseTheme(name)
-
-	t.Background = color.White
-
-	// xtick.color / ytick.color: .15 (38/255)
 	tickAndText := gray(38)
 
-	t.Text.Title = FontConfig{Family: "sans-serif", Size: 12, Color: tickAndText, Bold: true}
-	t.Text.Subtitle = FontConfig{Family: "sans-serif", Size: 11, Color: tickAndText}
-	t.Text.AxisTitle = FontConfig{Family: "sans-serif", Size: 11, Color: tickAndText}
-	t.Text.TickLabel = FontConfig{Family: "sans-serif", Size: 10, Color: tickAndText}
-	t.Text.Legend = FontConfig{Family: "sans-serif", Size: 10, Color: tickAndText}
-	t.Text.Annotation = FontConfig{Family: "sans-serif", Size: 10, Color: tickAndText}
-
-	t.Ticks.Color = tickAndText
-	t.Ticks.Length = 4
-	t.Ticks.Width = 1
-
-	// seaborn uses patch.edgecolor: .15 (barely visible on white).
-	// Chrome variants may override this.
-	t.Geom.PatchEdgeColor = nil // default: darken fill
-	t.Geom.PatchEdgeWidth = 0.5
-	t.Geom.PatchAlpha = 0.8
-
-	t.Palette = seabornDeepPalette()
-
-	return t
+	return Theme{
+		Name: name,
+		Spacing: Spacing{
+			MarginTop: 10, MarginRight: 10, MarginBottom: 10, MarginLeft: 10,
+			PanelSpacing: 10,
+		},
+		Geom: GeomDefaults{
+			PatchEdgeColor: nil,
+			PatchEdgeWidth: 0.5,
+			PatchAlpha:     0.8,
+		},
+		Palette: seabornDeepPalette(),
+		Elements: map[string]Element{
+			"text":       ElementText{Family: "sans-serif", Size: 10, Color: tickAndText},
+			"line":       ElementLine{Color: tickAndText, Size: 1},
+			"rect":       ElementRect{Fill: color.White},
+			"plot.title": ElementText{Size: 12, Bold: true},
+			"axis.ticks": ElementLine{Color: tickAndText, Size: 1},
+		},
+	}
 }
 
 func seabornDeepPalette() []color.Color {
@@ -73,85 +56,60 @@ func seabornDeepPalette() []color.Color {
 
 // --- chrome variants ---
 
-// newSeabornDarkgrid: gray panel (#EAEAF2), white grid, white edges.
-// This is seaborn's default style and what `Seaborn` resolves to.
 func newSeabornDarkgrid() Theme {
 	t := seabornBase("seaborn_darkgrid")
-	t.Panel.Background = hex("EAEAF2")
-	t.Panel.Border = color.White
-	t.Panel.BorderWidth = 0
-	t.Grid.MajorColor = color.White
-	t.Grid.MajorWidth = 1
-	t.Grid.MinorColor = hexA("FFFFFF", 160)
-	t.Grid.MinorWidth = 0.5
-	t.Grid.DashPattern = nil
-	// Gray panel + white grid → white patch edges (same as ggplot logic).
+	t.Elements["panel.background"] = ElementRect{Fill: hex("EAEAF2")}
+	t.Elements["panel.border"] = ElementBlank{}
+	t.Elements["panel.grid.major"] = ElementLine{Color: color.White, Size: 1}
+	t.Elements["panel.grid.minor"] = ElementLine{Color: hexA("FFFFFF", 160), Size: 0.5}
 	t.Geom.PatchEdgeColor = color.White
 	t.Geom.PatchAlpha = 0.8
 
 	return t
 }
 
-// newSeabornWhitegrid: white panel, light gray (.8) grid + edges.
 func newSeabornWhitegrid() Theme {
 	t := seabornBase("seaborn_whitegrid")
-	t.Panel.Background = color.White
-	t.Panel.Border = gray(204)
-	t.Panel.BorderWidth = 1
-	t.Grid.MajorColor = gray(204)
-	t.Grid.MajorWidth = 0.5
-	t.Grid.MinorColor = gray(230)
-	t.Grid.MinorWidth = 0.3
-	t.Grid.DashPattern = nil
-	// White panel + gray grid → gray patch edge (subtle outline).
+	t.Elements["panel.border"] = ElementRect{Color: gray(204), Size: 1}
+	t.Elements["panel.grid.major"] = ElementLine{Color: gray(204), Size: 0.5}
+	t.Elements["panel.grid.minor"] = ElementLine{Color: gray(230), Size: 0.3}
 	t.Geom.PatchEdgeColor = gray(204)
 	t.Geom.PatchAlpha = 0.8
 
 	return t
 }
 
-// newSeabornDark: gray panel, no grid by default, dark edges.
 func newSeabornDark() Theme {
 	t := seabornBase("seaborn_dark")
-	t.Panel.Background = hex("EAEAF2")
-	t.Panel.Border = color.White
-	t.Panel.BorderWidth = 0
-	t.Grid.MajorColor = color.Transparent
-	t.Grid.MajorWidth = 0
-	t.Grid.MinorColor = color.Transparent
-	t.Grid.MinorWidth = 0
-	// Same gray panel as darkgrid → white edges.
+	t.Elements["panel.background"] = ElementRect{Fill: hex("EAEAF2")}
+	t.Elements["panel.border"] = ElementBlank{}
+	t.Elements["panel.grid.major"] = ElementBlank{}
+	t.Elements["panel.grid.minor"] = ElementBlank{}
 	t.Geom.PatchEdgeColor = color.White
 	t.Geom.PatchAlpha = 0.8
 
 	return t
 }
 
-// newSeabornWhite: white panel, no grid, dark (.15) spines.
 func newSeabornWhite() Theme {
 	t := seabornBase("seaborn_white")
-	t.Panel.Background = color.White
-	t.Panel.Border = gray(38)
-	t.Panel.BorderWidth = 1
-	t.Grid.MajorColor = color.Transparent
-	t.Grid.MajorWidth = 0
-	t.Grid.MinorColor = color.Transparent
-	t.Grid.MinorWidth = 0
+	t.Elements["panel.border"] = ElementRect{Color: gray(38), Size: 1}
+	t.Elements["panel.grid.major"] = ElementBlank{}
+	t.Elements["panel.grid.minor"] = ElementBlank{}
 
 	return t
 }
 
-// newSeabornTicks: like white but ticks point outward and are visible.
 func newSeabornTicks() Theme {
 	t := newSeabornWhite()
 	t.Name = "seaborn_ticks"
-	t.Ticks.Length = 6
-	t.Ticks.Width = 1
+	// Ticks point outward and are visible — override with larger size.
+	t.Elements["axis.ticks"] = ElementLine{Color: gray(38), Size: 1}
 
 	return t
 }
 
-// --- palette variants (chrome = seaborn-darkgrid) ---
+// --- palette variants ---
 
 func newSeabornDeep() Theme {
 	t := newSeabornDarkgrid()
@@ -216,15 +174,15 @@ func newSeabornDarkPalette() Theme {
 	return t
 }
 
-// --- font-size variants (chrome = seaborn-darkgrid, palette = deep) ---
+// --- font-size variants ---
 
-func scaleSeabornFonts(t Theme, base, label float64) Theme {
-	t.Text.Title.Size = base + 2
-	t.Text.Subtitle.Size = base
-	t.Text.AxisTitle.Size = label
-	t.Text.TickLabel.Size = label - 1
-	t.Text.Legend.Size = label - 1
-	t.Text.Annotation.Size = label - 1
+func scaleSeabornFonts(t Theme, title, label float64) Theme {
+	t.Elements["plot.title"] = ElementText{Size: title, Bold: true}
+	t.Elements["plot.subtitle"] = ElementText{Size: title - 2}
+	t.Elements["axis.title"] = ElementText{Size: label}
+	t.Elements["axis.text"] = ElementText{Size: label - 1}
+	t.Elements["legend.text"] = ElementText{Size: label - 1}
+	t.Elements["annotation.text"] = ElementText{Size: label - 1}
 
 	return t
 }
@@ -233,26 +191,26 @@ func newSeabornPaper() Theme {
 	t := newSeabornDarkgrid()
 	t.Name = "seaborn_paper"
 
-	return scaleSeabornFonts(t, 9, 8.4)
+	return scaleSeabornFonts(t, 11, 8.4)
 }
 
 func newSeabornNotebook() Theme {
 	t := newSeabornDarkgrid()
 	t.Name = "seaborn_notebook"
 
-	return scaleSeabornFonts(t, 12, 11)
+	return scaleSeabornFonts(t, 14, 11)
 }
 
 func newSeabornTalk() Theme {
 	t := newSeabornDarkgrid()
 	t.Name = "seaborn_talk"
 
-	return scaleSeabornFonts(t, 15, 13.5)
+	return scaleSeabornFonts(t, 17, 13.5)
 }
 
 func newSeabornPoster() Theme {
 	t := newSeabornDarkgrid()
 	t.Name = "seaborn_poster"
 
-	return scaleSeabornFonts(t, 18, 16.5)
+	return scaleSeabornFonts(t, 20, 16.5)
 }
