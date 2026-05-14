@@ -188,6 +188,72 @@ const (
 
 	// Petroff10 (new in matplotlib 3.10).
 	Petroff10 Name = "petroff10"
+
+	// ObservableDark is the dark variant of the Observable modern theme.
+	ObservableDark Name = "observable_dark"
+	// Dashboard is a clean card-style dashboard theme.
+	Dashboard Name = "dashboard"
+	// Quartz is an Apple-inspired minimal theme.
+	Quartz Name = "quartz"
+	// Air is a minimal, airy theme with hidden axes.
+	Air Name = "air"
+	// Ink is a slate-dark theme with bright accents.
+	Ink Name = "ink"
+
+	// Tufte is a Tufte-inspired minimal theme (serif, no grid).
+	Tufte Name = "tufte"
+	// Academic is a journal-ready theme with serif type.
+	Academic Name = "academic"
+	// Newsroom is a bold headline-first editorial theme.
+	Newsroom Name = "newsroom"
+	// Editorial is a warm serif editorial theme.
+	Editorial Name = "editorial"
+	// Monochrome is a strict black-and-white theme.
+	Monochrome Name = "monochrome"
+
+	// GitHubLight is GitHub's light color scheme.
+	GitHubLight Name = "github_light"
+	// GitHubDark is GitHub's dark color scheme.
+	GitHubDark Name = "github_dark"
+	// Nord is the Nord color palette theme.
+	Nord Name = "nord"
+	// Dracula is the Dracula color palette theme.
+	Dracula Name = "dracula"
+	// GruvboxLight is the Gruvbox light color scheme.
+	GruvboxLight Name = "gruvbox_light"
+	// GruvboxDark is the Gruvbox dark color scheme.
+	GruvboxDark Name = "gruvbox_dark"
+
+	// AstronomyDark is a deep-space dark theme with pastel accents.
+	AstronomyDark Name = "astronomy_dark"
+	// NASA is a NASA-blue institutional theme.
+	NASA Name = "nasa"
+	// Ocean is a blue-gradient ocean-inspired theme.
+	Ocean Name = "ocean"
+	// Earth is a warm earthy-tone theme.
+	Earth Name = "earth"
+	// Forest is a green nature-inspired theme.
+	Forest Name = "forest"
+	// Desert is a warm sand-toned theme.
+	Desert Name = "desert"
+
+	// HighContrast is a maximum-contrast accessibility theme.
+	HighContrast Name = "high_contrast"
+	// OkabeIto is the Okabe-Ito colorblind-safe palette theme.
+	OkabeIto Name = "okabe_ito"
+	// Viridis is a theme using the viridis perceptual colormap.
+	Viridis Name = "viridis"
+	// Cividis is a theme using the cividis colorblind-safe colormap.
+	Cividis Name = "cividis"
+
+	// Cyberpunk is a neon-on-dark cyberpunk theme.
+	Cyberpunk Name = "cyberpunk"
+	// Blueprint is a blueprint-paper theme with white-on-blue.
+	Blueprint Name = "blueprint"
+	// Terminal is a code-terminal theme with monospace type.
+	Terminal Name = "terminal"
+	// Retro is a vintage parchment-toned theme.
+	Retro Name = "retro"
 )
 
 // Theme encapsulates the complete visual styling for a plot.
