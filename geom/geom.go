@@ -15,17 +15,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/TuSKan/ggplot/position"
 	"github.com/TuSKan/ggplot/stat"
 )
 
 // Layer represents a declarative layer specification produced by a geom
-// constructor. It carries the geometry type, optional stat/position overrides,
-// per-layer aesthetic mappings, and visual parameters.
+// constructor. It carries the geometry type, an ordered transform pipeline,
+// position adjustment, per-layer aesthetic mappings, and visual parameters.
 type Layer struct {
 	Geom     Type              // geometry type (point, line, bar, etc.)
-	StatName stat.Name         // stat name (stat.Identity, stat.Bin, stat.Count, etc.)
-	Position position.Pos      // position adjustment
+	Pipeline []stat.Transform  // ordered chain of transforms; nil = identity
+	Position Pos               // position adjustment
 	Params   Params            // visual parameters specific to this geometry
 	Mapping  map[string]string // per-layer aesthetic overrides (channel → column)
 
@@ -33,6 +32,7 @@ type Layer struct {
 	// Used by Validate() to emit warnings for irrelevant options.
 	setFlags OptFlag
 	warnings []string // validation warnings from applyOpts
+	statCfg  statConfig
 }
 
 // Warnings returns any validation warnings generated during construction.
@@ -75,6 +75,9 @@ const (
 // Params holds visual parameters for geometries. Not all fields apply to
 // every geometry type; unused fields are ignored during rendering but
 // [Layer.Validate] will emit warnings for irrelevant options.
+//
+// Note: stat-specific parameters (bins, method, bandwidth, whisker, notch)
+// are owned by their respective [stat.Transform] options, not by Params.
 type Params struct {
 	// Common
 	Color     string  // hex color override (e.g., "#4C72B0")
@@ -89,21 +92,11 @@ type Params struct {
 	// Bar/Histogram-specific
 	Width float64 // relative bar width [0, 1] (default = 0.8)
 	Gap   float64 // gap between bars [0, 1] (0 = touching, 1 = invisible; default = 0.2)
-	Bins  int     // number of bins (histogram, default = 30)
 
 	// Text-specific
 	FontSize   float64 // text font size in points
 	FontFamily string  // font family name
 	Angle      float64 // rotation angle in degrees
-
-	// Smooth-specific
-	Method string  // "lm", "loess"
-	Span   float64 // loess span
-	Points int     // number of interpolation points
-
-	// Boxplot-specific
-	Whisker string // whisker rule: "tukey" (default, 1.5×IQR), "range" (min-max)
-	Notch   bool   // if true, compute notch confidence interval around median
 
 	// Orientation
 	Orientation Orientation // "v" (default) or "h" — controls axis extension direction
@@ -125,23 +118,24 @@ type OptFlag uint32
 
 // OptColor tracks whether WithColor was set.
 const (
-	OptColor       OptFlag = 1 << iota // common
-	OptFill                            // common
-	OptAlpha                           // common
-	OptLineWidth                       // common
-	OptSize                            // point, (also sets LineWidth)
-	OptShape                           // point
-	OptWidth                           // bar, histogram
-	OptBins                            // histogram
-	OptFontSize                        // text
-	OptFontFamily                      // text
-	OptAngle                           // text
-	OptMethod                          // smooth
-	OptSpan                            // smooth
-	OptPoints                          // smooth, density
-	OptWhisker                         // boxplot
-	OptNotch                           // boxplot
-	OptOrientation                     // bar, histogram, boxplot, area, density, rug
+	OptColor         OptFlag = 1 << iota // common
+	OptFill                              // common
+	OptAlpha                             // common
+	OptLineWidth                         // common
+	OptSize                              // point, (also sets LineWidth)
+	OptShape                             // point
+	OptWidth                             // bar, histogram
+	OptFontSize                          // text
+	OptFontFamily                        // text
+	OptAngle                             // text
+	OptOrientation                       // bar, histogram, boxplot, area, density, rug
+	OptBins                              // histogram
+	OptMethod                            // smooth
+	OptSmoothPoints                      // smooth
+	OptBandwidth                         // density
+	OptDensityPoints                     // density
+	OptWhisker                           // boxplot
+	OptNotch                             // boxplot
 )
 
 // paramRelevance maps geometry types to what parameters are meaningful for them.
@@ -149,15 +143,15 @@ var paramRelevance = map[Type]OptFlag{
 	TypePoint:     OptColor | OptFill | OptAlpha | OptSize | OptShape,
 	TypeLine:      OptColor | OptAlpha | OptLineWidth | OptSize, // Size → LineWidth
 	TypeBar:       OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation,
-	TypeHistogram: OptColor | OptFill | OptAlpha | OptWidth | OptBins | OptLineWidth | OptOrientation,
+	TypeHistogram: OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptBins,
 	TypeArea:      OptColor | OptFill | OptAlpha | OptLineWidth | OptOrientation,
 	TypePolygon:   OptColor | OptFill | OptAlpha | OptLineWidth,
-	TypeSmooth:    OptColor | OptAlpha | OptLineWidth | OptSize | OptMethod | OptSpan | OptPoints,
-	TypeDensity:   OptColor | OptFill | OptAlpha | OptLineWidth | OptPoints | OptOrientation,
+	TypeSmooth:    OptColor | OptAlpha | OptLineWidth | OptSize | OptMethod | OptSmoothPoints,
+	TypeDensity:   OptColor | OptFill | OptAlpha | OptLineWidth | OptOrientation | OptBandwidth | OptDensityPoints,
 	TypeText:      OptColor | OptAlpha | OptFontSize | OptFontFamily | OptAngle,
 	TypeStep:      OptColor | OptAlpha | OptLineWidth | OptSize,
 	TypeRug:       OptColor | OptAlpha | OptLineWidth | OptOrientation,
-	TypeBoxPlot:   OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptWhisker | OptNotch | OptOrientation,
+	TypeBoxPlot:   OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptWhisker | OptNotch,
 	TypeErrorBar:  OptColor | OptAlpha | OptLineWidth | OptWidth,
 	TypeSegment:   OptColor | OptAlpha | OptLineWidth,
 	TypeTile:      OptColor | OptFill | OptAlpha,
@@ -182,21 +176,24 @@ func RegisterGeomType(t Type, relevantOpts OptFlag) {
 
 // optName maps flags to human-readable names.
 var optName = map[OptFlag]string{
-	OptColor:       "WithColor",
-	OptFill:        "WithFill",
-	OptAlpha:       "WithAlpha",
-	OptLineWidth:   "WithLineWidth",
-	OptSize:        "WithSize",
-	OptShape:       "WithShape",
-	OptWidth:       "WithWidth",
-	OptBins:        "WithBins",
-	OptFontSize:    "WithFontSize",
-	OptFontFamily:  "WithFontFamily",
-	OptAngle:       "WithAngle",
-	OptMethod:      "WithMethod",
-	OptSpan:        "WithSpan",
-	OptPoints:      "WithPoints",
-	OptOrientation: "WithOrientation",
+	OptColor:         "WithColor",
+	OptFill:          "WithFill",
+	OptAlpha:         "WithAlpha",
+	OptLineWidth:     "WithLineWidth",
+	OptSize:          "WithSize",
+	OptShape:         "WithShape",
+	OptWidth:         "WithWidth",
+	OptFontSize:      "WithFontSize",
+	OptFontFamily:    "WithFontFamily",
+	OptAngle:         "WithAngle",
+	OptOrientation:   "WithOrientation",
+	OptBins:          "WithBins",
+	OptMethod:        "WithMethod",
+	OptSmoothPoints:  "WithSmoothPoints",
+	OptBandwidth:     "WithBandwidth",
+	OptDensityPoints: "WithDensityPoints",
+	OptWhisker:       "WithWhisker",
+	OptNotch:         "WithNotch",
 }
 
 // Validate checks if the configured params are meaningful for this geometry
@@ -204,9 +201,9 @@ var optName = map[OptFlag]string{
 //
 // Example:
 //
-//	layer := geom.Point(geom.WithBins(30))  // bins are for histograms, not points
+//	layer := geom.Point(geom.WithWidth(0.5))  // width is for bars, not points
 //	warnings := layer.Validate()
-//	// warnings = ["geom_point: WithBins has no effect (relevant for: histogram)"]
+//	// warnings = ["geom_point: WithWidth has no effect (relevant for: bar, histogram)"]
 func (l *Layer) Validate() []string {
 	if l.setFlags == 0 {
 		return nil
@@ -224,7 +221,7 @@ func (l *Layer) Validate() []string {
 
 	var warnings []string
 
-	for flag := OptFlag(1); flag <= OptPoints; flag <<= 1 {
+	for flag := OptFlag(1); flag <= OptNotch; flag <<= 1 {
 		if irrelevant&flag == 0 {
 			continue
 		}
@@ -253,11 +250,131 @@ func (l *Layer) Validate() []string {
 // Opt is a functional option for configuring geometry layers.
 type Opt func(*Layer)
 
-// WithStat sets the statistical transform for this layer.
-func WithStat(name stat.Name) Opt { return func(l *Layer) { l.StatName = name } }
+// Stat sets an explicit transform pipeline for this layer, overriding
+// any defaults from sugar options (WithBins, WithMethod, etc.).
+// Use this for advanced composition when the sugar options are insufficient.
+//
+//	geom.Histogram(geom.Stat(stat.BinX(stat.WithBins(50)), stat.Normalize()))
+func Stat(transforms ...stat.Transform) Opt {
+	return func(l *Layer) {
+		l.Pipeline = transforms
+		l.statCfg.explicit = true
+	}
+}
 
 // WithPosition sets the position adjustment for this layer.
-func WithPosition(p position.Pos) Opt { return func(l *Layer) { l.Position = p } }
+func WithPosition(p Pos) Opt { return func(l *Layer) { l.Position = p } }
+
+// --- Stat-forwarding sugar options ---
+// These configure the default pipeline for geometry types that have built-in
+// statistical transforms. They are ignored if Stat() is used explicitly.
+
+// WithBins sets the number of histogram bins. Relevant for [Histogram].
+func WithBins(n int) Opt {
+	return func(l *Layer) { l.statCfg.bins = n; l.statCfg.dirty = true; l.setFlags |= OptBins }
+}
+
+// WithMethod sets the smoothing method ("lm" or "loess"). Relevant for [Smooth].
+func WithMethod(m string) Opt {
+	return func(l *Layer) { l.statCfg.method = m; l.statCfg.dirty = true; l.setFlags |= OptMethod }
+}
+
+// WithSmoothPoints sets the output point count for smoothing. Relevant for [Smooth].
+func WithSmoothPoints(n int) Opt {
+	return func(l *Layer) { l.statCfg.smoothPoints = n; l.statCfg.dirty = true; l.setFlags |= OptSmoothPoints }
+}
+
+// WithBandwidth sets the KDE bandwidth. Relevant for [Density].
+func WithBandwidth(bw float64) Opt {
+	return func(l *Layer) { l.statCfg.bandwidth = bw; l.statCfg.dirty = true; l.setFlags |= OptBandwidth }
+}
+
+// WithDensityPoints sets the output point count for KDE. Relevant for [Density].
+func WithDensityPoints(n int) Opt {
+	return func(l *Layer) { l.statCfg.densityPoints = n; l.statCfg.dirty = true; l.setFlags |= OptDensityPoints }
+}
+
+// WithWhisker sets the whisker extent type (e.g. "tukey"). Relevant for [Boxplot].
+func WithWhisker(w string) Opt {
+	return func(l *Layer) { l.statCfg.whisker = w; l.statCfg.dirty = true; l.setFlags |= OptWhisker }
+}
+
+// WithNotch enables notched boxplot display. Relevant for [Boxplot].
+func WithNotch(b bool) Opt {
+	return func(l *Layer) { l.statCfg.notch = b; l.statCfg.dirty = true; l.setFlags |= OptNotch }
+}
+
+// statConfig holds stat parameter overrides set via sugar options.
+// After all Opt functions run, finalizePipeline rebuilds the pipeline
+// from these values (unless Stat() was used explicitly).
+type statConfig struct {
+	bins          int
+	method        string
+	smoothPoints  int
+	bandwidth     float64
+	densityPoints int
+	whisker       string
+	notch         bool
+	dirty         bool // true if any sugar option was set
+	explicit      bool // true if Stat() was called (overrides sugar)
+}
+
+// finalizePipeline rebuilds the layer's pipeline from statCfg if sugar
+// options were set and Stat() was not called explicitly.
+func finalizePipeline(l *Layer) {
+	if l.statCfg.explicit || !l.statCfg.dirty {
+		return
+	}
+
+	switch l.Geom { //nolint:exhaustive // Only histogram, smooth, density, and boxplot have stat pipelines.
+	case TypeHistogram:
+		var opts []stat.BinOption
+		if l.statCfg.bins > 0 {
+			opts = append(opts, stat.WithBins(l.statCfg.bins))
+		}
+
+		l.Pipeline = []stat.Transform{stat.BinX(opts...)}
+
+	case TypeSmooth:
+		var opts []stat.SmoothOption
+		if l.statCfg.method != "" {
+			opts = append(opts, stat.WithMethod(l.statCfg.method))
+		}
+
+		if l.statCfg.smoothPoints > 0 {
+			opts = append(opts, stat.WithSmoothPoints(l.statCfg.smoothPoints))
+		}
+
+		l.Pipeline = []stat.Transform{stat.SmoothXY(opts...)}
+
+	case TypeDensity:
+		var opts []stat.DensityOption
+		if l.statCfg.bandwidth > 0 {
+			opts = append(opts, stat.WithBandwidth(l.statCfg.bandwidth))
+		}
+
+		if l.statCfg.densityPoints > 0 {
+			opts = append(opts, stat.WithDensityPoints(l.statCfg.densityPoints))
+		}
+
+		l.Pipeline = []stat.Transform{stat.DensityX(opts...)}
+
+	case TypeBoxPlot:
+		var opts []stat.BoxplotOption
+		if l.statCfg.whisker != "" {
+			opts = append(opts, stat.WithWhisker(l.statCfg.whisker))
+		}
+
+		if l.statCfg.notch {
+			opts = append(opts, stat.WithNotch(l.statCfg.notch))
+		}
+
+		l.Pipeline = []stat.Transform{stat.BoxplotY(opts...)}
+
+	default:
+		// Other geom types have no stat pipeline to rebuild from sugar options.
+	}
+}
 
 // WithColor sets a fixed color override.
 func WithColor(hex string) Opt {
@@ -316,26 +433,6 @@ func WithGap(g float64) Opt {
 	}
 }
 
-// WithBins sets the number of bins for histograms.
-func WithBins(n int) Opt {
-	return func(l *Layer) { l.Params.Bins = n; l.setFlags |= OptBins }
-}
-
-// WithMethod sets the smoothing method.
-func WithMethod(m string) Opt {
-	return func(l *Layer) { l.Params.Method = m; l.setFlags |= OptMethod }
-}
-
-// WithSpan sets the loess smoothing span.
-func WithSpan(s float64) Opt {
-	return func(l *Layer) { l.Params.Span = s; l.setFlags |= OptSpan }
-}
-
-// WithPoints sets the interpolation point count.
-func WithPoints(n int) Opt {
-	return func(l *Layer) { l.Params.Points = n; l.setFlags |= OptPoints }
-}
-
 // WithFontSize sets the text font size.
 func WithFontSize(size float64) Opt {
 	return func(l *Layer) { l.Params.FontSize = size; l.setFlags |= OptFontSize }
@@ -349,16 +446,6 @@ func WithFontFamily(family string) Opt {
 // WithAngle sets the text rotation angle in degrees.
 func WithAngle(deg float64) Opt {
 	return func(l *Layer) { l.Params.Angle = deg; l.setFlags |= OptAngle }
-}
-
-// WithWhisker sets the boxplot whisker rule: "tukey" (1.5×IQR, default) or "range" (min-max).
-func WithWhisker(rule string) Opt {
-	return func(l *Layer) { l.Params.Whisker = rule; l.setFlags |= OptWhisker }
-}
-
-// WithNotch enables notched boxplots that show the 95% confidence interval around the median.
-func WithNotch(enabled bool) Opt {
-	return func(l *Layer) { l.Params.Notch = enabled; l.setFlags |= OptNotch }
 }
 
 // WithOrientation sets the axis extension direction for directional geoms.
@@ -380,12 +467,14 @@ func WithIntercept(v float64) Opt {
 	return func(l *Layer) { l.Params.Intercept = v }
 }
 
-// applyOpts applies options and stores validation warnings on the layer.
+// applyOpts applies options, finalizes the pipeline from sugar config,
+// and stores validation warnings on the layer.
 func applyOpts(l *Layer, opts []Opt) {
 	for _, o := range opts {
 		o(l)
 	}
 
+	finalizePipeline(l)
 	l.warnings = l.Validate()
 }
 
@@ -396,8 +485,7 @@ func applyOpts(l *Layer, opts []Opt) {
 func Point(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypePoint,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{Size: 3, Alpha: 1.0, Shape: "circle"},
 	}
 	applyOpts(&l, opts)
@@ -411,8 +499,7 @@ func Point(opts ...Opt) Layer {
 func Line(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeLine,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{LineWidth: 2, Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
@@ -427,8 +514,8 @@ func Line(opts ...Opt) Layer {
 func Bar(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeBar,
-		StatName: stat.Count,
-		Position: position.Stack(),
+		Pipeline: []stat.Transform{stat.Count()},
+		Position: Stack(),
 		Params:   Params{Width: 0.8, Alpha: 0.8},
 	}
 	applyOpts(&l, opts)
@@ -446,8 +533,7 @@ func Bar(opts ...Opt) Layer {
 func Col(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeBar,
-		StatName: stat.Identity,
-		Position: position.Stack(),
+		Position: Stack(),
 		Params:   Params{Width: 0.7},
 	}
 	applyOpts(&l, opts)
@@ -456,15 +542,15 @@ func Col(opts ...Opt) Layer {
 }
 
 // Histogram creates a binned histogram geometry layer.
-// Default stat: bin. Default position: stack.
+// Default transform: BinX(WithBins(30)). Default position: stack.
 //
-// Relevant options: WithColor, WithFill, WithAlpha, WithWidth, WithBins, WithLineWidth.
+// Relevant options: WithColor, WithFill, WithAlpha, WithWidth, WithLineWidth.
 func Histogram(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeHistogram,
-		StatName: stat.Bin,
-		Position: position.Stack(),
-		Params:   Params{Bins: 30, Alpha: 1.0},
+		Pipeline: []stat.Transform{stat.BinX(stat.WithBins(30))},
+		Position: Stack(),
+		Params:   Params{Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
 
@@ -477,8 +563,7 @@ func Histogram(opts ...Opt) Layer {
 func Area(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeArea,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{Alpha: 0.6},
 	}
 	applyOpts(&l, opts)
@@ -492,8 +577,7 @@ func Area(opts ...Opt) Layer {
 func Polygon(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypePolygon,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{Alpha: 0.6, LineWidth: 2},
 	}
 	applyOpts(&l, opts)
@@ -502,15 +586,15 @@ func Polygon(opts ...Opt) Layer {
 }
 
 // Smooth creates a smoothed trendline geometry layer.
-// Default stat: smooth. Default method: lm.
+// Default transform: SmoothXY with method "lm".
 //
-// Relevant options: WithColor, WithAlpha, WithLineWidth, WithSize, WithMethod, WithSpan, WithPoints.
+// Relevant options: WithColor, WithAlpha, WithLineWidth, WithSize.
 func Smooth(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeSmooth,
-		StatName: stat.Smooth,
-		Position: position.Identity(),
-		Params:   Params{LineWidth: 3, Alpha: 1.0, Method: "lm", Points: 80},
+		Pipeline: []stat.Transform{stat.SmoothXY(stat.WithMethod("lm"), stat.WithSmoothPoints(80))},
+		Position: IdentityPos(),
+		Params:   Params{LineWidth: 3, Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
 
@@ -519,13 +603,13 @@ func Smooth(opts ...Opt) Layer {
 
 // Density creates a kernel density estimation geometry layer.
 //
-// Relevant options: WithColor, WithFill, WithAlpha, WithLineWidth, WithPoints.
+// Relevant options: WithColor, WithFill, WithAlpha, WithLineWidth.
 func Density(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeDensity,
-		StatName: stat.Density,
-		Position: position.Identity(),
-		Params:   Params{Alpha: 0.6, Points: 512},
+		Pipeline: []stat.Transform{stat.DensityX()},
+		Position: IdentityPos(),
+		Params:   Params{Alpha: 0.6},
 	}
 	applyOpts(&l, opts)
 
@@ -538,8 +622,7 @@ func Density(opts ...Opt) Layer {
 func Text(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeText,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{FontSize: 10, Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
@@ -553,8 +636,7 @@ func Text(opts ...Opt) Layer {
 func Step(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeStep,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{LineWidth: 2, Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
@@ -563,15 +645,14 @@ func Step(opts ...Opt) Layer {
 }
 
 // Boxplot creates a box-and-whisker geometry layer.
-// It uses stat "boxplot" which computes the five-number summary
-// (min, Q1, median, Q3, max) for each unique X group.
+// Default transform: BoxplotY with Tukey whiskers.
 //
 // Relevant options: WithColor, WithFill, WithAlpha, WithWidth, WithLineWidth.
 func Boxplot(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeBoxPlot,
-		StatName: stat.Boxplot,
-		Position: position.Identity(),
+		Pipeline: []stat.Transform{stat.BoxplotY()},
+		Position: IdentityPos(),
 		Params:   Params{Width: 0.5, Alpha: 0.8, LineWidth: 1.5},
 	}
 	applyOpts(&l, opts)
@@ -585,8 +666,7 @@ func Boxplot(opts ...Opt) Layer {
 func Rug(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeRug,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{LineWidth: 1, Alpha: 0.5},
 	}
 	applyOpts(&l, opts)
@@ -604,8 +684,7 @@ func Rug(opts ...Opt) Layer {
 func HLine(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeHLine,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{LineWidth: 1, Alpha: 0.8},
 	}
 	applyOpts(&l, opts)
@@ -623,8 +702,7 @@ func HLine(opts ...Opt) Layer {
 func VLine(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeVLine,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{LineWidth: 1, Alpha: 0.8},
 	}
 	applyOpts(&l, opts)
@@ -648,8 +726,7 @@ func WithSlope(s float64) Opt {
 func ABLine(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeABLine,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{LineWidth: 1, Alpha: 0.8, Slope: 1},
 	}
 	applyOpts(&l, opts)
@@ -665,8 +742,7 @@ func ABLine(opts ...Opt) Layer {
 func Tile(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeTile,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
@@ -682,8 +758,7 @@ func Tile(opts ...Opt) Layer {
 func Segment(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeSegment,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{LineWidth: 1, Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
@@ -699,9 +774,95 @@ func Segment(opts ...Opt) Layer {
 func ErrorBar(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypeErrorBar,
-		StatName: stat.Identity,
-		Position: position.Identity(),
+		Position: IdentityPos(),
 		Params:   Params{LineWidth: 1, Alpha: 1.0, Width: 0.5},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// --- Observable Plot-style mark constructors ---
+//
+// These constructors take a [stat.Transform] as the first argument,
+// enabling composable stat-mark pipelines:
+//
+//	geom.RectY(stat.BinX(stat.WithBins(40)))          // histogram
+//	geom.RectY(stat.NormalizeY(), stat.BinX(...))     // proportions
+//	geom.LineY(stat.BinX(stat.WithBins(40)))          // frequency polygon
+//	geom.AreaY(stat.DensityX())                       // filled density
+//	geom.PointY(stat.GroupX("mean"))                  // mean scatter
+//
+// Any transform can feed any mark — this is the Observable Plot pattern.
+// For common patterns, prefer the sugar constructors ([Histogram], [Bar],
+// [Smooth], [Density]) which configure defaults automatically.
+
+// RectY creates a rectangle mark anchored at y. The transform defines
+// what data flows into the rectangles. With no transform, it renders
+// pre-computed x/y values (equivalent to [Col]).
+//
+//	geom.RectY(stat.BinX(stat.WithBins(40)))   // histogram
+//	geom.RectY(stat.Count())                    // bar chart
+//	geom.RectY(stat.NormalizeY(), stat.BinX())  // proportions
+func RectY(pipeline []stat.Transform, opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeBar,
+		Pipeline: pipeline,
+		Position: Stack(),
+		Params:   Params{Width: 0.8, Alpha: 0.85},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// LineY creates a connected-line mark with a transform pipeline.
+// With BinX, this becomes a frequency polygon. With SmoothXY, a
+// regression line.
+//
+//	geom.LineY(stat.BinX(stat.WithBins(40)))  // frequency polygon
+//	geom.LineY(stat.SmoothXY())               // regression line
+func LineY(pipeline []stat.Transform, opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeLine,
+		Pipeline: pipeline,
+		Position: IdentityPos(),
+		Params:   Params{LineWidth: 2, Alpha: 1.0},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// AreaY creates a filled-area mark with a transform pipeline.
+// With DensityX, this becomes a filled KDE curve. With BinX, a
+// filled histogram outline.
+//
+//	geom.AreaY(stat.DensityX())               // filled density
+//	geom.AreaY(stat.BinX(stat.WithBins(40)))  // filled histogram
+func AreaY(pipeline []stat.Transform, opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeArea,
+		Pipeline: pipeline,
+		Position: IdentityPos(),
+		Params:   Params{Alpha: 0.6},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// PointY creates a scatter point mark with a transform pipeline.
+// With GroupX, this becomes a grouped aggregate scatter.
+//
+//	geom.PointY(stat.GroupX("mean"))           // mean per x
+//	geom.PointY(stat.BinX(stat.WithBins(40))) // dot plot of bin centers
+func PointY(pipeline []stat.Transform, opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypePoint,
+		Pipeline: pipeline,
+		Position: IdentityPos(),
+		Params:   Params{Size: 3, Alpha: 1.0, Shape: "circle"},
 	}
 	applyOpts(&l, opts)
 

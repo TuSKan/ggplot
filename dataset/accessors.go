@@ -18,6 +18,23 @@ type Int64Opt = func([]int64) []int64
 // StringOpt transforms a string slice.
 type StringOpt = func([]string) []string
 
+// ScalarFloat64 extracts a single float64 from a 1-element aggregate column
+// (e.g. the result of Aggregator.Sum). Returns 0, false if the column is
+// empty, not float64, or has zero value.
+func ScalarFloat64(col AnyColumn) (float64, bool) {
+	fc, ok := col.(Column[float64])
+	if !ok {
+		return 0, false
+	}
+
+	vals := fc.Values()
+	if len(vals) == 0 || vals[0] == 0 {
+		return 0, false
+	}
+
+	return vals[0], true
+}
+
 // Float64 returns the float64 values of the named column, optionally
 // transformed by a chain of Float64Opts. With no opts, the returned slice
 // aliases the underlying column data (zero-copy). Any opt forces a copy

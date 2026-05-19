@@ -1,17 +1,19 @@
-package scale
+package scale_test
 
 import (
 	"fmt"
 	"math"
 	"testing"
+
+	"github.com/TuSKan/ggplot/scale"
 )
 
 // --- helpers ---
 
 // trainLinear creates a trained linear scale with the given bounds.
-func trainLinear(mn, mx float64) Scale {
-	s := NewLinear()
-	s.(*LinearScale).SetBounds(mn, mx) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
+func trainLinear(mn, mx float64) scale.Scale {
+	s := scale.NewLinear()
+	s.(*scale.LinearScale).SetBounds(mn, mx) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 
 	return s
 }
@@ -22,7 +24,7 @@ func TestConfiguredScale_Breaks(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100)
-	cs := Configure(inner, WithBreaks([]float64{10, 30, 50, 70, 90}))
+	cs := scale.Configure(inner, scale.WithBreaks([]float64{10, 30, 50, 70, 90}))
 
 	ticks := cs.Ticks(5)
 
@@ -43,7 +45,7 @@ func TestConfiguredScale_Breaks_NoMutation(t *testing.T) {
 
 	input := []float64{1, 2, 3}
 	inner := trainLinear(0, 10)
-	cs := Configure(inner, WithBreaks(input))
+	cs := scale.Configure(inner, scale.WithBreaks(input))
 
 	// Mutate original slice.
 	input[0] = 999
@@ -60,9 +62,9 @@ func TestConfiguredScale_Labels(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100)
-	cs := Configure(inner,
-		WithBreaks([]float64{0, 25, 50, 75, 100}),
-		WithLabels([]string{"0%", "25%", "50%", "75%", "100%"}),
+	cs := scale.Configure(inner,
+		scale.WithBreaks([]float64{0, 25, 50, 75, 100}),
+		scale.WithLabels([]string{"0%", "25%", "50%", "75%", "100%"}),
 	)
 
 	tests := []struct {
@@ -88,9 +90,9 @@ func TestConfiguredScale_Labels_Fallback(t *testing.T) {
 
 	// Labels shorter than breaks → excess ticks use inner.Format.
 	inner := trainLinear(0, 100)
-	cs := Configure(inner,
-		WithBreaks([]float64{0, 50, 100}),
-		WithLabels([]string{"low", "mid"}), // no label for 100
+	cs := scale.Configure(inner,
+		scale.WithBreaks([]float64{0, 50, 100}),
+		scale.WithLabels([]string{"low", "mid"}), // no label for 100
 	)
 
 	if got := cs.Format(100); got != "100" {
@@ -103,8 +105,8 @@ func TestConfiguredScale_Labels_NoBreaks(t *testing.T) {
 
 	// Labels without explicit breaks → match against auto-generated ticks.
 	inner := trainLinear(0, 10)
-	cs := Configure(inner,
-		WithLabels([]string{"a", "b", "c", "d", "e", "f"}),
+	cs := scale.Configure(inner,
+		scale.WithLabels([]string{"a", "b", "c", "d", "e", "f"}),
 	)
 	// Auto ticks for [0,10] are typically [0, 2, 4, 6, 8, 10].
 	autoTicks := inner.Ticks(5)
@@ -122,8 +124,8 @@ func TestConfiguredScale_Formatter(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 1000)
-	cs := Configure(inner,
-		WithFormatter(func(v float64) string {
+	cs := scale.Configure(inner,
+		scale.WithFormatter(func(v float64) string {
 			return fmt.Sprintf("$%.0f", v)
 		}),
 	)
@@ -139,10 +141,10 @@ func TestConfiguredScale_Formatter_LabelsPriority(t *testing.T) {
 
 	// When both labels and formatter are set, labels win for matching ticks.
 	inner := trainLinear(0, 100)
-	cs := Configure(inner,
-		WithBreaks([]float64{0, 50, 100}),
-		WithLabels([]string{"lo", "mid", "hi"}),
-		WithFormatter(func(v float64) string {
+	cs := scale.Configure(inner,
+		scale.WithBreaks([]float64{0, 50, 100}),
+		scale.WithLabels([]string{"lo", "mid", "hi"}),
+		scale.WithFormatter(func(v float64) string {
 			return fmt.Sprintf("fmt:%.0f", v)
 		}),
 	)
@@ -163,7 +165,7 @@ func TestConfiguredScale_Expand(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100) // range = 100
-	cs := Configure(inner, WithExpand(0.05, 0))
+	cs := scale.Configure(inner, scale.WithExpand(0.05, 0))
 
 	mn, mx := cs.Bounds()
 	// 5% of 100 = 5 on each side → [-5, 105]
@@ -180,7 +182,7 @@ func TestConfiguredScale_Expand_Additive(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(10, 20) // range = 10
-	cs := Configure(inner, WithExpand(0, 2))
+	cs := scale.Configure(inner, scale.WithExpand(0, 2))
 
 	mn, mx := cs.Bounds()
 	// add = 2 on each side → [8, 22]
@@ -197,7 +199,7 @@ func TestConfiguredScale_Expand_Combined(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100) // range = 100
-	cs := Configure(inner, WithExpand(0.1, 5))
+	cs := scale.Configure(inner, scale.WithExpand(0.1, 5))
 
 	mn, mx := cs.Bounds()
 	// mult=0.1*100=10, add=5 → 15 on each side → [-15, 115]
@@ -216,14 +218,14 @@ func TestConfiguredScale_Expand_HasExpand(t *testing.T) {
 	inner := trainLinear(0, 100)
 
 	// Without WithExpand → HasExpand false.
-	cs := Configure(inner, WithBreaks([]float64{0, 50, 100}))
-	if exp, ok := cs.(Expander); ok && exp.HasExpand() {
+	cs := scale.Configure(inner, scale.WithBreaks([]float64{0, 50, 100}))
+	if exp, ok := cs.(scale.Expander); ok && exp.HasExpand() {
 		t.Error("HasExpand should be false when WithExpand not called")
 	}
 
 	// With WithExpand → HasExpand true.
-	cs2 := Configure(inner, WithExpand(0, 0))
-	if exp, ok := cs2.(Expander); !ok || !exp.HasExpand() {
+	cs2 := scale.Configure(inner, scale.WithExpand(0, 0))
+	if exp, ok := cs2.(scale.Expander); !ok || !exp.HasExpand() {
 		t.Error("HasExpand should be true when WithExpand was called")
 	}
 }
@@ -234,9 +236,9 @@ func TestConfiguredScale_MinorBreaks_Explicit(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100)
-	cs := Configure(inner, WithMinorBreaks([]float64{5, 15, 25, 35}))
+	cs := scale.Configure(inner, scale.WithMinorBreaks([]float64{5, 15, 25, 35}))
 
-	mt, ok := cs.(MinorTicker)
+	mt, ok := cs.(scale.MinorTicker)
 	if !ok {
 		t.Fatal("ConfiguredScale does not implement MinorTicker")
 	}
@@ -260,9 +262,9 @@ func TestConfiguredScale_MinorBreaks_Auto(t *testing.T) {
 
 	// Without WithMinorBreaks, auto-generate midpoints.
 	inner := trainLinear(0, 100)
-	cs := Configure(inner, WithBreaks([]float64{0, 20, 40, 60, 80, 100}))
+	cs := scale.Configure(inner, scale.WithBreaks([]float64{0, 20, 40, 60, 80, 100}))
 
-	mt := cs.(MinorTicker) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
+	mt := cs.(scale.MinorTicker) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	minor := mt.MinorTicks()
 	// Midpoints: 10, 30, 50, 70, 90
 	want := []float64{10, 30, 50, 70, 90}
@@ -283,7 +285,7 @@ func TestConfiguredScale_ClipBounds(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100) // data domain [0, 100]
-	cs := Configure(inner, WithClipBounds(20, 80))
+	cs := scale.Configure(inner, scale.WithClipBounds(20, 80))
 
 	mn, mx := cs.Bounds()
 	if mn != 20 || mx != 80 {
@@ -300,7 +302,7 @@ func TestConfiguredScale_ClipBounds_PartialNaN(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100)
-	cs := Configure(inner, WithClipBounds(math.NaN(), 50))
+	cs := scale.Configure(inner, scale.WithClipBounds(math.NaN(), 50))
 
 	mn, mx := cs.Bounds()
 	if mn != 0 {
@@ -316,9 +318,9 @@ func TestConfiguredScale_ClipBounds_OverridesExpand(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100)
-	cs := Configure(inner,
-		WithExpand(0.1, 0),     // would make [-10, 110]
-		WithClipBounds(10, 90), // clip overrides expand
+	cs := scale.Configure(inner,
+		scale.WithExpand(0.1, 0),     // would make [-10, 110]
+		scale.WithClipBounds(10, 90), // clip overrides expand
 	)
 
 	mn, mx := cs.Bounds()
@@ -333,11 +335,11 @@ func TestConfiguredScale_Compose(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100)
-	cs := Configure(inner,
-		WithBreaks([]float64{0, 25, 50, 75, 100}),
-		WithLabels([]string{"0%", "25%", "50%", "75%", "100%"}),
-		WithExpand(0.02, 0),
-		WithMinorBreaks([]float64{12.5, 37.5, 62.5, 87.5}),
+	cs := scale.Configure(inner,
+		scale.WithBreaks([]float64{0, 25, 50, 75, 100}),
+		scale.WithLabels([]string{"0%", "25%", "50%", "75%", "100%"}),
+		scale.WithExpand(0.02, 0),
+		scale.WithMinorBreaks([]float64{12.5, 37.5, 62.5, 87.5}),
 	)
 
 	// Ticks should be the custom breaks.
@@ -358,7 +360,7 @@ func TestConfiguredScale_Compose(t *testing.T) {
 	}
 
 	// Minor ticks should be the explicit ones.
-	mt := cs.(MinorTicker) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
+	mt := cs.(scale.MinorTicker) //nolint:errcheck,forcetypeassert // type guaranteed by test setup.
 	if len(mt.MinorTicks()) != 4 {
 		t.Errorf("expected 4 minor ticks, got %d", len(mt.MinorTicks()))
 	}
@@ -370,9 +372,9 @@ func TestConfiguredScale_BoundsSetter(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100)
-	cs := Configure(inner, WithExpand(0.05, 0))
+	cs := scale.Configure(inner, scale.WithExpand(0.05, 0))
 
-	bs, ok := cs.(BoundsSetter)
+	bs, ok := cs.(scale.BoundsSetter)
 	if !ok {
 		t.Fatal("ConfiguredScale does not implement BoundsSetter")
 	}
@@ -397,7 +399,7 @@ func TestConfigure_NoOpts(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100)
-	got := Configure(inner)
+	got := scale.Configure(inner)
 	// Should return the exact same scale, not a wrapper.
 	if got != inner {
 		t.Error("Configure with no opts should return inner unchanged")
@@ -410,7 +412,7 @@ func TestConfiguredScale_MapInverse_Roundtrip(t *testing.T) {
 	t.Parallel()
 
 	inner := trainLinear(0, 100)
-	cs := Configure(inner, WithExpand(0.1, 5))
+	cs := scale.Configure(inner, scale.WithExpand(0.1, 5))
 
 	for _, v := range []float64{0, 25, 50, 75, 100} {
 		norm := cs.Map(v)
@@ -419,5 +421,44 @@ func TestConfiguredScale_MapInverse_Roundtrip(t *testing.T) {
 		if math.Abs(back-v) > 1e-10 {
 			t.Errorf("roundtrip failed: %v → %v → %v", v, norm, back)
 		}
+	}
+}
+
+func TestFormatNumber(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		v    float64
+		want string
+	}{
+		// Integers.
+		{"zero", 0, "0"},
+		{"positive int", 42, "42"},
+		{"negative int", -7, "-7"},
+		{"large int", 1000000, "1000000"},
+
+		// Year-like integers: must never get thousands separators.
+		{"year 1500", 1500, "1500"},
+		{"year 2025", 2025, "2025"},
+		{"year 2500", 2500, "2500"},
+		{"not year 1499", 1499, "1499"},
+		{"not year 2501", 2501, "2501"},
+
+		// Floats.
+		{"small float", 0.5, "0.5"},
+		{"pi", 3.14159, "3.142"},
+		{"compact notation", 123456.789, "1.235e+05"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := scale.FormatNumber(tt.v)
+			if got != tt.want {
+				t.Errorf("FormatNumber(%v) = %q, want %q", tt.v, got, tt.want)
+			}
+		})
 	}
 }

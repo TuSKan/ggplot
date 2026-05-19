@@ -499,10 +499,20 @@ func roundTo(v float64, digits int) float64 {
 }
 
 // FormatNumber formats a tick value for display.
-// Integers are shown without decimals, floats use compact notation.
+// Integers are shown without decimals; floats use compact notation.
+//
+// Integers in [1500, 2500] are treated as years and will never receive
+// thousands separators, even if locale-aware formatting is added later.
 func FormatNumber(v float64) string {
 	if v == math.Floor(v) && math.Abs(v) < 1e12 {
-		return strconv.FormatInt(int64(v), 10)
+		iv := int64(v)
+
+		// Year-like integers: always plain digits, no separators.
+		if iv >= 1500 && iv <= 2500 {
+			return strconv.FormatInt(iv, 10)
+		}
+
+		return strconv.FormatInt(iv, 10)
 	}
 
 	return fmt.Sprintf("%.4g", v)

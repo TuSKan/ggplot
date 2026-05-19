@@ -163,7 +163,7 @@ func BenchmarkRender_Histogram_100K(b *testing.B) {
 func BenchmarkRender_Smooth_1K(b *testing.B) {
 	ds := benchPointDS(1000)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
-		Layer(geom.Smooth(geom.WithMethod("loess"), geom.WithPoints(80)))
+		Layer(geom.Smooth(geom.WithSmoothPoints(80)))
 	ctx := context.Background()
 
 	b.ResetTimer()
@@ -176,7 +176,7 @@ func BenchmarkRender_Smooth_1K(b *testing.B) {
 func BenchmarkRender_Smooth_10K(b *testing.B) {
 	ds := benchPointDS(10_000)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
-		Layer(geom.Smooth(geom.WithMethod("loess"), geom.WithPoints(200)))
+		Layer(geom.Smooth(geom.WithSmoothPoints(200)))
 	ctx := context.Background()
 
 	b.ResetTimer()
@@ -202,7 +202,7 @@ func BenchmarkRender_ColorGrouped_Point_10K(b *testing.B) {
 func BenchmarkRender_Density_10K(b *testing.B) {
 	ds := benchHistDS(10_000)
 	p := ggplot.New(ds, aes.X("x")).
-		Layer(geom.Density(geom.WithPoints(512)))
+		Layer(geom.Density(geom.WithDensityPoints(512)))
 	ctx := context.Background()
 
 	b.ResetTimer()

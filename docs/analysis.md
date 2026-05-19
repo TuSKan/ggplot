@@ -84,7 +84,7 @@ Plot has been iterated on by a small focused team since 2021 and has absorbed a 
 
 ### 2.1 Beauty: typography and numeric formatting
 
-**Tabular figures on quantitative axes.** Verified absence: I `grep`'d the entire repo for `tabular`, `FontVariant`, `font-variant`, `tnum`, `FontFeature` — zero matches. Your `canvas.Canvas` interface has no font-feature method. The result is that quantitative axis labels (like `100`, `1,000`, `10,000`) have visually mis-aligned digit columns when rendered. Plot enables `font-variant-numeric: tabular-nums` on every quantitative axis since 0.2.2 (October 2021). This is the single biggest "looks amateur vs looks publication-ready" difference.
+**Tabular figures on quantitative axes.** ✅ **RESOLVED.** Full OpenType `tnum` support was implemented across the stack: `gogpu/gg` text shaper now accepts font features via `text.WithFeatures()`, the `Canvas` interface exposes `SetTabularNums(bool)`, and both `drawXAxis`/`drawYAxis` activate tabular figures automatically for tick labels. SVG export emits `font-variant-numeric="tabular-nums"`. See `examples/tabular_figures` and S1 below.
 
 **Default font stack.** Your `baseTheme` uses `Family: "sans-serif"` — a CSS generic that resolves differently on every platform. Plot uses `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`. The Observable theme you already ship hardcodes `"Inter, system-ui, sans-serif"` — better, but Inter isn't guaranteed installed. There's no font fallback chain; if Inter isn't present, the actual font is unpredictable. Your `fonts/` package has a resolver and registry — it could fix this, but I don't see it wired through the theme.
 
@@ -92,7 +92,7 @@ Plot has been iterated on by a small focused team since 2021 and has absorbed a 
 
 ### 2.2 Beauty: defaults and density
 
-**Inset between adjacent bars.** Verified from `drawer.go`: when bars are drawn, `halfBarPx = (minSpacing * pixPerUnit * relW) / 2`, with `relW = 0.8` default. That gives a 20% gap *for categorical* bars, but for histograms (continuous x with no spacing), `minSpacing` is the bin width and bars touch edge-to-edge. Plot adds a 1px inset between every adjacent rectangle (the bin transform sets `inset = 1` by default) so bars never visually merge even at zoom. Your edge-stroke partially compensates via `Geom.PatchEdgeColor` (the Observable theme sets it to white) but the geometry still touches.
+**Inset between adjacent bars.** ✅ **RESOLVED.** Histogram bars now have a 0.5px inset per side (1px total gap) between adjacent bins. The inset is applied automatically in `drawBars` for continuous-x histograms, with a floor to prevent full collapse. See S4 below.
 
 **Default radius for dots.** Your `geom.WithSize` default is 3px when unset. Plot defaults to `r = 3` too — same. No gap here.
 
@@ -100,18 +100,18 @@ Plot has been iterated on by a small focused team since 2021 and has absorbed a 
 
 **Categorical "padding".** Verified from `drawer.go:trainPanelScales`: discrete scales don't add visible padding between categories; bars span their full slot width minus the relative-width factor. Plot adds `paddingInner` and `paddingOuter` defaults of 0.1 (band scale padding) so categorical plots have breathing room.
 
-### 2.3 Architecture: geoms not yet shipped
+### 2.3 Architecture: geoms not yet shipped ✅ RESOLVED
 
-`geom/geom.go` declares Types that the `drawer.go` `init()` doesn't register:
+All four previously-placeholder geoms are now fully implemented with registered drawers and examples:
 
 ```
-TypePolygon  — declared, no drawer
-TypeTile     — declared, no drawer    (the heatmap primitive)
-TypeSegment  — declared, no drawer
-TypeErrorBar — declared, no drawer
+TypePolygon  — implemented, drawer registered, see examples/geometries/polygon
+TypeTile     — implemented, drawer registered, see examples/geometries/tile (heatmap)
+TypeSegment  — implemented, drawer registered, see examples/geometries/segment
+TypeErrorBar — implemented, drawer registered, see examples/geometries/errorbar
 ```
 
-These are placeholder declarations. Plot's mark catalog has `cell` (heatmap), `vector`/`arrow`, `link`, `geo`, `tick`, `tip`, `pointer`, `crosshair`, `tree`. The four declared-but-undrawn geoms above are the minimum visible gap. The bigger architectural gap is interactivity — see §2.5.
+The remaining geom gaps vs. Plot's mark catalog (`vector`/`arrow`, `link`, `geo`, `tick`, `tip`, `pointer`, `crosshair`, `tree`) are interactivity-oriented — see §2.5.
 
 ### 2.4 Architecture: transform composition
 
@@ -207,7 +207,9 @@ Ordered by impact-to-effort ratio. Each item is something I read against your co
 
 **Files touched:** `canvas/canvas.go`, `canvas/gg.go`, `drawer.go` (tick rendering), `fonts/registry.go`.
 
-### S2. Year-aware integer formatting
+### S2. Year-aware integer formatting [IMPLEMENTED ✅]
+
+**Status:** `FormatNumber` in `scale/scale.go` now detects integers in [1500, 2500] and guarantees plain-digit output. Forward-looking guard for when locale-aware thousands formatting is added. Table-driven test in `scale/scale_test.go`.
 
 **Why.** Time-series plots with year labels look unprofessional with thousands separators.
 
@@ -236,7 +238,11 @@ For non-integer continuous tick values, current `%.4g` is fine. The year case is
 
 **Files touched:** `scale/scale.go`. Effort: 10 minutes.
 
-### S3. Auto-compute plot height from width and y-scale type
+### S3. Auto-compute plot height from width and y-scale type [IMPLEMENTED ✅]
+
+**Status:** When `height ≤ 0` is passed to `Plot.Save`, `Built.Save`, `Plot.WriteTo`, or `Built.WriteTo`, the height is automatically inferred:
+  - Continuous Y: `width / φ` (golden ratio ≈ 1.618)
+  - Discrete Y: `18px × categories + 100px padding`, clamped to `[240, width]`
 
 **Why.** Plot's `width: 640` (height inferred) is the single most cited "feels designed" trait. Forcing the user to pick a height is friction and produces wrong aspect ratios.
 
@@ -277,43 +283,23 @@ func (b *Built) autoHeight(width int) int {
 
 **Files touched:** `ggplot.go` (Save/WriteTo). Effort: 1 hour including a few golden tests.
 
-### S4. Inset between adjacent bars in continuous mode
+### S4. Inset between adjacent bars in continuous mode [IMPLEMENTED ✅]
 
-**Why.** Bars currently touch in histograms. Plot's default 1px inset reads as "those are separate bars" even at small sizes.
+**Status:** Implemented in `drawer.go:drawBars`. A 0.5px-per-side inset (1px total gap) is applied automatically for histogram/continuous-x bars. The inset respects orientation and includes a floor to prevent full collapse.
 
-**Implementation.** In `drawer.go:drawBars` (or wherever the rectangle path is built), inset the rect:
+**Why.** Bars previously touched in histograms. Plot's default 1px inset reads as "those are separate bars" even at small sizes. Now ggplot matches this behavior.
 
-```go
-const continuousBarInsetPx = 0.5  // half-pixel each side = 1px total gap
+### S5. Implement the four placeholder geoms [IMPLEMENTED ✅]
 
-// When drawing a histogram or continuous-x bar:
-if p.Orientation == geom.Vertical {
-    rx += continuousBarInsetPx
-    rw -= 2 * continuousBarInsetPx
-} else {
-    ry += continuousBarInsetPx
-    rh -= 2 * continuousBarInsetPx
-}
-if rw < 0.5 { rw = 0.5 } // never collapse fully
-```
+**Status:** All four geoms are fully implemented with registered drawers in `drawer.go` and working examples in `examples/geometries/`.
 
-Gate this on whether the geom is `TypeHistogram` *and* there are no group bars (since group bars use the existing `width/nGroups` narrowing). For very narrow bars (e.g., 200 bins in a 600px-wide plot), the inset can be relaxed.
+**Tile (heatmap).** `drawTileFn` renders color-mapped rectangles. See `examples/geometries/tile`.
 
-**Files touched:** `drawer.go` (drawBars function). Effort: 30 minutes.
+**Segment.** `drawSegmentFn` renders `x`/`y` → `xend`/`yend` line segments. See `examples/geometries/segment`.
 
-### S5. Implement the four placeholder geoms
+**ErrorBar.** `drawErrorBarFn` renders vertical/horizontal error bars with caps. See `examples/geometries/errorbar`.
 
-**Why.** They're already declared in `geom.Type` with option-relevance masks; the drawer init just doesn't register them. Users hitting `geom.Tile` or `geom.ErrorBar` get silent no-render today.
-
-**Tile (heatmap).** Maps to `cv.DrawRectangle` per row, filled with a color from `ContColScale.At(zValue)`. ~50 lines. Required for any heatmap.
-
-**Segment.** Maps `x`/`y`/`xend`/`yend` aesthetics to four cv.MoveTo+LineTo+Stroke calls. ~30 lines. Required for any "from-to" visualization (arrows, dumbbell plots, linked points).
-
-**ErrorBar.** Maps `x`/`ymin`/`ymax` to a vertical line with horizontal caps. ~40 lines. Required for any plot with uncertainty.
-
-**Polygon.** Closed path through `aes.X`/`aes.Y` points within a `group`. ~25 lines. Required for any custom shape (state outlines, density contours, convex hulls).
-
-**Files touched:** new `geom_*.go` files in the root package or `drawer.go`. Effort: 2-3 hours total. These are the lowest-hanging architectural gaps because the geom-Type registry infrastructure already exists.
+**Polygon.** `drawPolygonFn` renders closed paths grouped by the `group` aesthetic. See `examples/geometries/polygon`.
 
 ### S6. Add metadata channels (`title`, `href`, `aria_label`)
 
@@ -433,8 +419,8 @@ The pattern is consistent: I was reading the README's terse capability table (`T
 
 The honest takeaway is that **your project is past the point where high-level "add these features" suggestions are useful.** The features are mostly there. What's left are:
 
-- Polish details (tabular nums, insets, year formatting) — S1–S4
-- The four declared-but-undrawn geoms — S5
+- ~~Polish details (tabular nums, insets, year formatting) — S1–S4~~ → **S1 ✅, S2 ✅, S3 ✅, S4 ✅** all done
+- ~~The four declared-but-undrawn geoms — S5~~ → **S5 ✅** all four implemented with examples
 - Metadata channels for SVG interactivity — S6
 - Stat composition — S7 (optional)
 - SVG output audit — S8
@@ -446,13 +432,18 @@ Almost everything else I was about to propose, you've already built.
 
 ## 6. What to prioritize
 
-If I had to pick three things to ship for v0.5 visual polish, I'd pick:
+The top-three v0.5 visual polish items have been shipped:
 
-1. **S1 (tabular nums)** — biggest beauty payoff, ~1 day for the minimal fix.
-2. **S4 (continuous-bar inset)** — looks-amateur fix, 30 minutes.
-3. **S5 (the four placeholder geoms)** — fills a real capability gap, ~3 hours.
+1. ~~**S1 (tabular nums)**~~ ✅ Full OpenType `tnum` support across shaper → canvas → axis → SVG.
+2. ~~**S4 (continuous-bar inset)**~~ ✅ 0.5px per-side inset in histogram bars.
+3. ~~**S5 (the four placeholder geoms)**~~ ✅ Tile, Segment, ErrorBar, Polygon — all with drawers and examples.
+4. ~~**S2 (year formatting)**~~ ✅ Forward-looking year guard in `FormatNumber`.
+5. ~~**S3 (auto-height)**~~ ✅ Golden-ratio height inference when `height ≤ 0`.
 
-That's 1.5-2 days of work for the most visible upgrades.
+**Remaining high-impact items:**
+
+1. **S8 (SVG audit)** — responsive viewBox, CSS classes, semantic `<text>`.
+2. **S7 (composable transforms)** — see `docs/TRANSFORMS.md` for full design.
 
 For v0.6 if you want to address an architectural gap, **S7 (stat composition)** is the one that matters most. Stat-mark composition is Plot's signature trick and the one capability ggplot2 doesn't have natively either. Adding it would give you a story Plot users can recognize.
 

@@ -1,23 +1,23 @@
-package position
+package geom
 
 import (
 	"math"
 	"testing"
 )
 
-func TestIdentity(t *testing.T) {
+func TestIdentityPos(t *testing.T) {
 	t.Parallel()
 
 	xs := []float64{1, 2, 3}
 	ys := []float64{4, 5, 6}
 
-	rx, ry := Identity().Adjust(xs, ys, 1, 0, 1)
+	rx, ry := IdentityPos().Adjust(xs, ys, 1, 0, 1)
 	if &rx[0] != &xs[0] {
-		t.Error("Identity should return the same slice")
+		t.Error("IdentityPos should return the same slice")
 	}
 
 	if &ry[0] != &ys[0] {
-		t.Error("Identity should return the same slice")
+		t.Error("IdentityPos should return the same slice")
 	}
 }
 
@@ -139,24 +139,24 @@ func TestFill_Normalization(t *testing.T) {
 	}
 }
 
-func TestNew_Factory(t *testing.T) {
+func TestNewPos_Factory(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name Name
+		name PosName
 		want string
 	}{
-		{NameIdentity, "identity"},
-		{NameDodge, "dodge"},
-		{NameStack, "stack"},
-		{NameFill, "fill"},
+		{PosIdentity, "identity"},
+		{PosDodge, "dodge"},
+		{PosStack, "stack"},
+		{PosFill, "fill"},
 		{"", "identity"},
 		{"unknown", "identity"},
 	}
 
 	for _, tt := range tests {
-		if got := New(tt.name).String(); got != tt.want {
-			t.Errorf("New(%q).String() = %q, want %q", tt.name, got, tt.want)
+		if got := NewPos(tt.name).String(); got != tt.want {
+			t.Errorf("NewPos(%q).String() = %q, want %q", tt.name, got, tt.want)
 		}
 	}
 }
@@ -196,6 +196,8 @@ func TestJitter_Distribution(t *testing.T) {
 	if math.Abs(meanDX) > 0.05 {
 		t.Errorf("Jitter mean X displacement = %f, want ~0", meanDX)
 	}
+
+	_ = sumDY // used for range check only
 }
 
 func TestJitter_Reproducible(t *testing.T) {

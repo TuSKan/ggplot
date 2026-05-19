@@ -2,9 +2,9 @@
 //
 // This example demonstrates:
 //  1. Faceted grouped scatter — PANEL + group columns are injected into data
-//  2. Stacked bar chart — position.Stack accumulates Y offsets
-//  3. Dodged grouped bars — position.Dodge shifts groups side by side
-//  4. 100% stacked (fill) bars — position.Fill normalizes to [0,1]
+//  2. Stacked bar chart — geom.Stack accumulates Y offsets
+//  3. Dodged grouped bars — geom.Dodge shifts groups side by side
+//  4. 100% stacked (fill) bars — geom.Fill normalizes to [0,1]
 package main
 
 import (
@@ -20,7 +20,6 @@ import (
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
-	"github.com/TuSKan/ggplot/position"
 	"github.com/TuSKan/ggplot/theme"
 )
 
@@ -119,7 +118,7 @@ func facetedGrouped(dir string) {
 	save(p, dir, "01_faceted_grouped", 1000)
 }
 
-// positionBars demonstrates position.Stack, position.Dodge, and position.Fill.
+// positionBars demonstrates geom.Stack, geom.Dodge, and geom.Fill.
 func positionBars(dir string) {
 	ds := revenueDataset()
 
@@ -128,7 +127,7 @@ func positionBars(dir string) {
 		Layer(geom.Col()).
 		Labs(
 			ggplot.Title("Phase 4.3: Stacked Bars"),
-			ggplot.Subtitle("position.Stack() — cumulative Y offsets"),
+			ggplot.Subtitle("Stack() — cumulative Y offsets"),
 			ggplot.XLab("Quarter"),
 			ggplot.YLab("Revenue ($K)"),
 		).
@@ -137,10 +136,10 @@ func positionBars(dir string) {
 
 	// Dodged bars.
 	p2 := ggplot.New(ds, aes.X("quarter"), aes.Y("revenue"), aes.Color("product")).
-		Layer(geom.Col(geom.WithPosition(position.Dodge()))).
+		Layer(geom.Col(geom.WithPosition(geom.Dodge()))).
 		Labs(
 			ggplot.Title("Phase 4.3: Dodged Bars"),
-			ggplot.Subtitle("position.Dodge() — side-by-side groups"),
+			ggplot.Subtitle("Dodge() — side-by-side groups"),
 			ggplot.XLab("Quarter"),
 			ggplot.YLab("Revenue ($K)"),
 		).
@@ -149,10 +148,10 @@ func positionBars(dir string) {
 
 	// Filled (100% stacked) bars.
 	p3 := ggplot.New(ds, aes.X("quarter"), aes.Y("revenue"), aes.Color("product")).
-		Layer(geom.Col(geom.WithPosition(position.Fill()))).
+		Layer(geom.Col(geom.WithPosition(geom.Fill()))).
 		Labs(
 			ggplot.Title("Phase 4.3: Filled Bars (100% Stacked)"),
-			ggplot.Subtitle("position.Fill() — proportional stacking"),
+			ggplot.Subtitle("Fill() — proportional stacking"),
 			ggplot.XLab("Quarter"),
 			ggplot.YLab("Proportion"),
 		).

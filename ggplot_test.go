@@ -272,7 +272,7 @@ func TestRender_Smooth(t *testing.T) {
 
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
-		Layer(geom.Smooth(geom.WithMethod("lm"), geom.WithColor("#E74C3C")))
+		Layer(geom.Smooth(geom.WithColor("#E74C3C")))
 
 	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {

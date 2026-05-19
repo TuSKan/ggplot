@@ -1,7 +1,8 @@
-// Package position defines position adjustments that control how overlapping
-// geometries are arranged. In ggplot2's grammar, position adjustments are
-// applied after statistical transforms and before final rendering.
-package position
+// Position adjustments control how overlapping geometries are arranged.
+// In the grammar of graphics, position adjustments are applied after
+// statistical transforms and before final rendering.
+
+package geom
 
 import "math/rand/v2"
 
@@ -26,48 +27,54 @@ type Stacker interface {
 	AdjustStack(xs, ys []float64, width float64, groupIdx, nGroups int) (adjXs, yMin, yMax []float64)
 }
 
-// Name identifies a position adjustment type for factory lookup.
-type Name string
+// FillSetup is optionally implemented by position adjustments that need
+// a pre-pass over all groups before per-group Adjust calls.
+type FillSetup interface {
+	Setup(allXs, allYs [][]float64)
+}
+
+// PosName identifies a position adjustment type for factory lookup.
+type PosName string
 
 // Position adjustment names.
 const (
-	NameIdentity Name = "identity"
-	NameDodge    Name = "dodge"
-	NameStack    Name = "stack"
-	NameFill     Name = "fill"
-	NameJitter   Name = "jitter"
-	NameNudge    Name = "nudge"
+	PosIdentity PosName = "identity"
+	PosDodge    PosName = "dodge"
+	PosStack    PosName = "stack"
+	PosFill     PosName = "fill"
+	PosJitter   PosName = "jitter"
+	PosNudge    PosName = "nudge"
 )
 
-// New creates a fresh Pos instance by name. This is used by the build
+// NewPos creates a fresh Pos instance by name. This is used by the build
 // pipeline to create per-panel-layer position instances (avoiding shared
-// state across panels). Returns Identity for unknown names.
-func New(name Name) Pos {
+// state across panels). Returns IdentityPos for unknown names.
+func NewPos(name PosName) Pos {
 	switch name {
-	case NameIdentity, "":
-		return Identity()
-	case NameDodge:
+	case PosIdentity, "":
+		return IdentityPos()
+	case PosDodge:
 		return Dodge()
-	case NameStack:
+	case PosStack:
 		return Stack()
-	case NameFill:
+	case PosFill:
 		return Fill()
-	case NameJitter, NameNudge:
-		return Identity() // Jitter/Nudge require parameters; pipeline uses layer's instance directly
+	case PosJitter, PosNudge:
+		return IdentityPos() // Jitter/Nudge require parameters; pipeline uses layer's instance directly
 	default:
-		return Identity()
+		return IdentityPos()
 	}
 }
 
-// Identity returns the identity position (no adjustment).
-func Identity() Pos { return identity{} }
+// IdentityPos returns the identity position (no adjustment).
+func IdentityPos() Pos { return identityPos{} }
 
-type identity struct{}
+type identityPos struct{}
 
-func (identity) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []float64) {
+func (identityPos) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []float64) {
 	return xs, ys
 }
-func (identity) String() string { return string(NameIdentity) }
+func (identityPos) String() string { return string(PosIdentity) }
 
 // Dodge returns a position that shifts groups side by side within each bin.
 // This is the standard adjustment for grouped bar charts.
@@ -90,7 +97,7 @@ func (dodge) Adjust(xs, ys []float64, width float64, groupIdx, nGroups int) ([]f
 
 	return adjusted, ys
 }
-func (dodge) String() string { return string(NameDodge) }
+func (dodge) String() string { return string(PosDodge) }
 
 // Stack returns a position that stacks groups vertically.
 // Each group's y-values are offset by the cumulative sum of prior groups
@@ -124,13 +131,13 @@ func (s *stack) AdjustStack(xs, ys []float64, _ float64, _, _ int) (adjXs, yMin,
 	return xs, yMin, yMax
 }
 
-func (s *stack) String() string { return string(NameStack) }
+func (s *stack) String() string { return string(PosStack) }
 
 // Fill returns a position that stacks groups and normalizes each x-bin
 // to a total of 1.0 (100% stacked bar chart).
 //
 // Fill is a two-phase adjustment:
-//  1. Setup phase: call [FillSetup] with all groups' (xs, ys) to compute totals.
+//  1. Setup phase: call [FillSetup.Setup] with all groups' (xs, ys) to compute totals.
 //  2. Adjust phase: call Adjust for each group in order.
 //
 // If Setup is not called, Fill behaves like Stack (no normalization).
@@ -139,12 +146,6 @@ func Fill() Pos { return &fill{offsets: make(map[float64]float64)} }
 type fill struct {
 	totals  map[float64]float64 // x-value -> total Y across all groups
 	offsets map[float64]float64 // x-value -> cumulative Y offset (normalized)
-}
-
-// FillSetup is optionally implemented by position adjustments that need
-// a pre-pass over all groups before per-group Adjust calls.
-type FillSetup interface {
-	Setup(allXs, allYs [][]float64)
 }
 
 // Setup computes the total Y for each x-bin across all groups.
@@ -186,7 +187,7 @@ func (f *fill) AdjustStack(xs, ys []float64, _ float64, _, _ int) (adjXs, yMin, 
 
 	return xs, yMin, yMax
 }
-func (f *fill) String() string { return string(NameFill) }
+func (f *fill) String() string { return string(PosFill) }
 
 // Jitter returns a position that adds random noise to (x, y) to reduce overplotting.
 // The jitter is reproducible: same data length produces same offsets.
@@ -211,7 +212,7 @@ func (j jitter) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []floa
 
 	return adjX, adjY
 }
-func (j jitter) String() string { return string(NameJitter) }
+func (j jitter) String() string { return string(PosJitter) }
 
 // Nudge returns a position that shifts all points by a fixed offset.
 func Nudge(dx, dy float64) Pos {
@@ -231,4 +232,4 @@ func (n nudge) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []float
 
 	return adjX, adjY
 }
-func (n nudge) String() string { return string(NameNudge) }
+func (n nudge) String() string { return string(PosNudge) }

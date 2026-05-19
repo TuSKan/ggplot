@@ -23,7 +23,7 @@ func main() {
 
 func tabularFiguresExample(dir string) {
 	eng := memory.NewEngine(context.Background())
-	
+
 	// Large values with varying digit structures like 111 vs 888 to demonstrate
 	// monospaced digit columns provided by font-variant-numeric: tabular-nums
 	ds, _ := dataset.NewDataset(eng,
@@ -46,6 +46,7 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 	if err := p.Save(context.Background(), outPNG, w, h); err != nil {
 		log.Fatalln(err)
 	}
+
 	if err := p.Save(context.Background(), outSVG, w, h); err != nil {
 		log.Fatalln(err)
 	}

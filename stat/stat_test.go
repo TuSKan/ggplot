@@ -9,29 +9,29 @@ import (
 	"github.com/TuSKan/ggplot/stat"
 )
 
-func TestLookup_Identity(t *testing.T) {
+func TestIdentityTransform(t *testing.T) {
 	t.Parallel()
 
-	s, err := stat.Lookup(stat.Identity)
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng, eng.NewFloat64Column("x", []float64{1, 2, 3}))
+
+	tf := stat.IdentityTransform()
+
+	if tf.Name() != "identity" {
+		t.Errorf("expected identity, got %s", tf.Name())
+	}
+
+	result, err := tf.Apply(context.Background(), stat.TransformInput{Data: ds, Mapping: nil})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if s.Name() != stat.Identity {
-		t.Errorf("expected identity, got %s", s.Name())
+	if result.Data.Table() != ds.Table() {
+		t.Error("identity transform should return the same dataset")
 	}
 }
 
-func TestLookup_Unknown_ReturnsError(t *testing.T) {
-	t.Parallel()
-
-	_, err := stat.Lookup("nonexistent")
-	if err == nil {
-		t.Fatal("expected error for unknown stat name")
-	}
-}
-
-func TestBinStat(t *testing.T) {
+func TestBinX(t *testing.T) {
 	t.Parallel()
 
 	eng := memory.NewEngine(context.Background())
@@ -43,36 +43,18 @@ func TestBinStat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := stat.Lookup(stat.Bin)
+	tf := stat.BinX()
+
+	result, err := tf.Apply(context.Background(), stat.TransformInput{
+		Data:    ds,
+		Mapping: map[string]string{"x": "x"},
+	})
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x"}, stat.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Bin stat produces "x" (centers) and "count" columns.
-	cols := []string{"x", "count"}
-	hasX, hasCount := false, false
-
-	for _, c := range cols {
-		if c == "x" {
-			hasX = true
-		}
-
-		if c == "count" {
-			hasCount = true
-		}
-	}
-
-	if !hasX || !hasCount {
-		t.Errorf("bin stat should produce x and count columns, got %v", cols)
 	}
 
 	// Total counts should equal input length.
-	vals := getFloat64Values(t, result, "count")
+	vals := getFloat64Values(t, result.Data, "count")
 
 	sum := 0.0
 	for _, v := range vals {
@@ -84,53 +66,53 @@ func TestBinStat(t *testing.T) {
 	}
 }
 
-func TestBinStat_MissingX(t *testing.T) {
+func TestBinX_MissingX(t *testing.T) {
 	t.Parallel()
 
-	eng2 := memory.NewEngine(context.Background())
-	ds, _ := dataset.NewDataset(eng2, eng2.NewFloat64Column("y", []float64{1}))
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng, eng.NewFloat64Column("y", []float64{1}))
 
-	s, err := stat.Lookup(stat.Bin)
-	if err != nil {
-		t.Fatal(err)
-	}
+	tf := stat.BinX()
 
-	_, err = s.Compute(context.Background(), ds, map[string]string{}, stat.Options{})
+	_, err := tf.Apply(context.Background(), stat.TransformInput{
+		Data:    ds,
+		Mapping: map[string]string{},
+	})
 	if err == nil {
 		t.Fatal("expected error for missing x aesthetic")
 	}
 }
 
-func TestCountStat(t *testing.T) {
+func TestCount(t *testing.T) {
 	t.Parallel()
 
-	eng3 := memory.NewEngine(context.Background())
-	ds, _ := dataset.NewDataset(eng3,
-		eng3.NewFloat64Column("x", []float64{1, 2, 2, 3, 3, 3}),
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{1, 2, 2, 3, 3, 3}),
 	)
 
-	s, err := stat.Lookup(stat.Count)
+	tf := stat.Count()
+
+	result, err := tf.Apply(context.Background(), stat.TransformInput{
+		Data:    ds,
+		Mapping: map[string]string{"x": "x"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x"}, stat.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	counts := getFloat64Values(t, result, "count")
+	counts := getFloat64Values(t, result.Data, "count")
 	// x=1→1, x=2→2, x=3→3
 	if len(counts) != 3 {
 		t.Fatalf("expected 3 unique values, got %d", len(counts))
 	}
 
 	if counts[0] != 1 || counts[1] != 2 || counts[2] != 3 {
-		t.Errorf("count stat: got %v", counts)
+		t.Errorf("count: got %v", counts)
 	}
 }
 
-func TestDensityStat(t *testing.T) {
+func TestDensityX(t *testing.T) {
 	t.Parallel()
 
 	xs := make([]float64, 100)
@@ -138,26 +120,31 @@ func TestDensityStat(t *testing.T) {
 		xs[i] = float64(i)
 	}
 
-	eng4 := memory.NewEngine(context.Background())
-	ds, _ := dataset.NewDataset(eng4, eng4.NewFloat64Column("x", xs))
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs))
 
-	s, err := stat.Lookup(stat.Density)
+	tf := stat.DensityX()
+
+	result, err := tf.Apply(context.Background(), stat.TransformInput{
+		Data:    ds,
+		Mapping: map[string]string{"x": "x"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x"}, stat.Options{})
+	// Collect lazy result before checking.
+	result.Data, err = result.Data.Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if result.NumRows() == 0 {
-		t.Fatal("density stat produced empty dataset")
+	if result.Data.NumRows() == 0 {
+		t.Fatal("density produced empty dataset")
 	}
 
 	// Density values should be non-negative.
-
-	vals := getFloat64Values(t, result, "density")
+	vals := getFloat64Values(t, result.Data, "density")
 	for i, v := range vals {
 		if v < 0 {
 			t.Errorf("density[%d] = %v < 0", i, v)
@@ -166,34 +153,38 @@ func TestDensityStat(t *testing.T) {
 	}
 }
 
-func TestSmoothStat(t *testing.T) {
+func TestSmoothXY(t *testing.T) {
 	t.Parallel()
 
-	eng5 := memory.NewEngine(context.Background())
-	ds, _ := dataset.NewDataset(eng5,
-		eng5.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
-		eng5.NewFloat64Column("y", []float64{2, 4, 6, 8, 10}),
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{1, 2, 3, 4, 5}),
+		eng.NewFloat64Column("y", []float64{2, 4, 6, 8, 10}),
 	)
 
-	s, err := stat.Lookup(stat.Smooth)
+	tf := stat.SmoothXY()
+
+	result, err := tf.Apply(context.Background(), stat.TransformInput{
+		Data:    ds,
+		Mapping: map[string]string{"x": "x", "y": "y"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x", "y": "y"}, stat.Options{})
+	// Collect lazy result before checking.
+	result.Data, err = result.Data.Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Smooth should produce 80 points.
-	if result.NumRows() < 2 {
-		t.Errorf("smooth stat produced too few points: %d", result.NumRows())
+	if result.Data.NumRows() < 2 {
+		t.Errorf("smooth produced too few points: %d", result.Data.NumRows())
 	}
 
 	// For perfect linear data y=2x, smooth should be close.
-
-	xVals := getFloat64Values(t, result, "x")
-	yVals := getFloat64Values(t, result, "y")
+	xVals := getFloat64Values(t, result.Data, "x")
+	yVals := getFloat64Values(t, result.Data, "y")
 
 	for i := range xVals {
 		expected := 2 * xVals[i]
@@ -206,54 +197,39 @@ func TestSmoothStat(t *testing.T) {
 	}
 }
 
-func TestSummaryStat(t *testing.T) {
+func TestSummaryXY(t *testing.T) {
 	t.Parallel()
 
-	eng6 := memory.NewEngine(context.Background())
-	ds, _ := dataset.NewDataset(eng6,
-		eng6.NewFloat64Column("x", []float64{1, 1, 2, 2}),
-		eng6.NewFloat64Column("y", []float64{10, 20, 30, 40}),
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{1, 1, 2, 2}),
+		eng.NewFloat64Column("y", []float64{10, 20, 30, 40}),
 	)
 
-	s, err := stat.Lookup(stat.Summary)
+	tf := stat.SummaryXY()
+
+	result, err := tf.Apply(context.Background(), stat.TransformInput{
+		Data:    ds,
+		Mapping: map[string]string{"x": "x", "y": "y"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := s.Compute(context.Background(), ds, map[string]string{"x": "x", "y": "y"}, stat.Options{})
+	// Collect lazy result before checking.
+	result.Data, err = result.Data.Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if result.NumRows() != 2 {
-		t.Fatalf("summary: expected 2 groups, got %d", result.NumRows())
+	if result.Data.NumRows() != 2 {
+		t.Fatalf("summary: expected 2 groups, got %d", result.Data.NumRows())
 	}
 
-	means := getFloat64Values(t, result, "y")
+	means := getFloat64Values(t, result.Data, "y")
 	// mean(10,20)=15, mean(30,40)=35
 	if means[0] != 15 || means[1] != 35 {
 		t.Errorf("summary: expected [15,35], got %v", means)
-	}
-}
-
-func TestIdentityStat(t *testing.T) {
-	t.Parallel()
-
-	eng7 := memory.NewEngine(context.Background())
-	ds, _ := dataset.NewDataset(eng7, eng7.NewFloat64Column("x", []float64{1, 2, 3}))
-
-	s, err := stat.Lookup(stat.Identity)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := s.Compute(context.Background(), ds, nil, stat.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if result.Table() != ds.Table() {
-		t.Error("identity stat should return the same dataset")
 	}
 }
 
@@ -261,42 +237,110 @@ func TestOutputSchema(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   stat.Name
+		name   string
+		tf     stat.Transform
 		expect []string
 	}{
-		{stat.Identity, nil},
-		{stat.Bin, []string{"x", "count", "xmin", "xmax"}},
-		{stat.Count, []string{"x", "count"}},
-		{stat.Density, []string{"x", "density"}},
-		{stat.Smooth, []string{"x", "y"}},
-		{stat.Summary, []string{"x", "y"}},
-		{stat.Boxplot, []string{"x", "lower", "q1", "middle", "q3", "upper", "notch_lower", "notch_upper"}},
+		{"identity", stat.IdentityTransform(), nil},
+		{"binX", stat.BinX(), []string{"count", "x"}},
+		{"count", stat.Count(), []string{"count", "x"}},
+		{"densityX", stat.DensityX(), []string{"density", "x"}},
+		{"smoothXY", stat.SmoothXY(), []string{"x", "y"}},
+		{"summaryXY", stat.SummaryXY(), []string{"x", "y"}},
+		{"boxplotY", stat.BoxplotY(), []string{"lower", "middle", "notch_lower", "notch_upper", "q1", "q3", "upper", "x"}},
 	}
 	for _, tc := range tests {
-		s, err := stat.Lookup(tc.name)
-		if err != nil {
-			t.Fatalf("Lookup(%q): %v", tc.name, err)
-		}
-
-		schema := s.OutputSchema()
+		schema := tc.tf.OutputSchema()
 		if len(schema) != len(tc.expect) {
 			t.Errorf("OutputSchema(%q) = %v, want %v", tc.name, schema, tc.expect)
 		}
 	}
 }
 
-func getFloat64Values(t *testing.T, ds dataset.Table, colName string) []float64 {
+func TestRunPipeline_Empty(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng, eng.NewFloat64Column("x", []float64{1, 2, 3}))
+	mapping := map[string]string{"x": "x"}
+
+	outDS, outMapping, err := stat.RunPipeline(context.Background(), nil, ds, mapping)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if outDS.Table() != ds.Table() {
+		t.Error("empty pipeline should return same dataset")
+	}
+
+	if outMapping["x"] != "x" {
+		t.Error("empty pipeline should preserve mapping")
+	}
+}
+
+func TestRunPipeline_Chain(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{1, 2, 2, 3, 3, 3, 4, 4, 4, 4}),
+	)
+
+	// Single-element pipeline: BinX
+	pipeline := []stat.Transform{stat.BinX(stat.WithBins(4))}
+
+	outDS, outMapping, err := stat.RunPipeline(context.Background(), pipeline, ds, map[string]string{"x": "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Collect lazy result before checking.
+	outDS, err = outDS.Collect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if outDS.NumRows() != 4 {
+		t.Errorf("expected 4 bins, got %d rows", outDS.NumRows())
+	}
+
+	// Mapping should be rewritten: y → count
+	if outMapping["y"] != "count" {
+		t.Errorf("expected y→count mapping, got y→%q", outMapping["y"])
+	}
+}
+
+func getFloat64Values(t *testing.T, ds dataset.Dataset, colName string) []float64 {
 	t.Helper()
+
+	// Collect lazy pipeline before reading columns.
+	ds, err := ds.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("collect for column %s: %v", colName, err)
+	}
 
 	col, err := ds.Column(colName)
 	if err != nil {
 		t.Fatalf("missing column %s: %v", colName, err)
 	}
 
-	floatCol, ok := col.(dataset.Column[float64])
-	if !ok {
-		t.Fatalf("column %s is not float64", colName)
+	// Handle both float64 and int64 columns (e.g. AggCount produces int64).
+	if floatCol, ok := col.(dataset.Column[float64]); ok {
+		return floatCol.Values()
 	}
 
-	return floatCol.Values()
+	if intCol, ok := col.(dataset.Column[int64]); ok {
+		vals := intCol.Values()
+
+		out := make([]float64, len(vals))
+		for i, v := range vals {
+			out[i] = float64(v)
+		}
+
+		return out
+	}
+
+	t.Fatalf("column %s: unsupported type %T", colName, col)
+
+	return nil
 }

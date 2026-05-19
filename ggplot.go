@@ -12,7 +12,7 @@
 //	    aes.Color("group"),
 //	).
 //	    Layer(geom.Point(geom.WithSize(4), geom.WithAlpha(0.7))).
-//	    Layer(geom.Smooth(geom.WithMethod("lm"))).
+//	    Layer(geom.Smooth()).
 //	    Labs(ggplot.Title("My Plot"), ggplot.XLab("X Axis")).
 //	    Theme("minimal").
 //	    Save("output.png", 1200, 800)
@@ -52,7 +52,6 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
-	"github.com/TuSKan/ggplot/position"
 	"github.com/TuSKan/ggplot/scale"
 	"github.com/TuSKan/ggplot/stat"
 	"github.com/TuSKan/ggplot/theme"
@@ -384,6 +383,7 @@ func WithScale(s float64) RenderOpt {
 }
 
 // Save renders the plot to a file at the given dimensions.
+// If height ≤ 0, it is inferred from width (see [Built.Save] for rules).
 // The output format is inferred from the file extension:
 //
 //	.png — raster PNG (default)
@@ -402,6 +402,7 @@ func (p *Plot) Save(ctx context.Context, filename string, width, height int, opt
 
 // WriteTo renders the plot and writes the output to w in the given format.
 // Supported formats: "png" (default), "svg", "pdf".
+// If height ≤ 0, it is inferred from width (see [Built.Save] for rules).
 // Options: [WithScale] for HiDPI output.
 // Returns the number of bytes written.
 //
@@ -428,6 +429,12 @@ func (b *Built) DrawCanvas(ctx context.Context, width, height int) (*canvas.GGCa
 }
 
 // Save renders the built plot to a file. Format is inferred from extension.
+// If height ≤ 0, it is inferred from width and the y-scale type:
+//
+//   - continuous y: width / φ (golden ratio ≈ 1.618)
+//   - discrete y: 18px per category, clamped to [240, width]
+//
+// Supported extensions:
 //
 //	.png — raster PNG (default)
 //	.svg — SVG 1.1 vector
@@ -435,6 +442,10 @@ func (b *Built) DrawCanvas(ctx context.Context, width, height int) (*canvas.GGCa
 //
 // Options: [WithScale] for HiDPI output.
 func (b *Built) Save(ctx context.Context, filename string, width, height int, opts ...RenderOpt) error {
+	if height <= 0 {
+		height = b.autoHeight(width)
+	}
+
 	cfg := defaultRenderConfig()
 	for _, o := range opts {
 		o(&cfg)
@@ -488,9 +499,14 @@ func (b *Built) Save(ctx context.Context, filename string, width, height int, op
 
 // WriteTo writes the built plot to w in the given format.
 // Supported formats: "png" (default), "svg", "pdf".
+// If height ≤ 0, it is inferred from width (see [Built.Save] for rules).
 // Options: [WithScale] for HiDPI output.
 // Returns the number of bytes written.
 func (b *Built) WriteTo(ctx context.Context, w io.Writer, format string, width, height int, opts ...RenderOpt) (int64, error) {
+	if height <= 0 {
+		height = b.autoHeight(width)
+	}
+
 	cfg := defaultRenderConfig()
 	for _, o := range opts {
 		o(&cfg)
@@ -559,21 +575,24 @@ func (cw *countWriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-// updateMappingForStat updates aesthetic mappings to point to the columns
-// produced by a stat transform. Delegates to Stat.OutputMapping() so that
-// third-party stats work without modifying this function.
-func updateMappingForStat(s stat.Stat, mapping AesMap) AesMap {
-	om := s.OutputMapping()
-	if om == nil {
-		return mapping // identity -- no rewriting
+// goldenRatio is the golden ratio used for default aspect-ratio inference.
+const goldenRatio = 1.618
+
+// autoHeight infers a plot height from the given width and the y-scale type
+// of the first panel:
+//
+//   - discrete y: 18px per category + 100px padding, clamped to [240, width]
+//   - continuous y (default): width / φ (golden ratio ≈ 1.618)
+func (b *Built) autoHeight(width int) int {
+	if len(b.panels) > 0 {
+		if ds, ok := b.panels[0].YScale.(*scale.DiscreteScale); ok {
+			n := len(ds.Categories())
+			// 18px per category + axis/title padding
+			return min(max(18*n+100, 240), width)
+		}
 	}
 
-	result := make(AesMap, len(mapping))
-	maps.Copy(result, mapping)
-
-	maps.Copy(result, om)
-
-	return result
+	return int(float64(width) / goldenRatio)
 }
 
 // groupByColumn splits a Dataset into subsets by the distinct values in the
@@ -887,12 +906,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 	for _, layer := range p.spec.Layers {
 		layerStart := len(resolved) // track where this layer's BuiltLayers start
 		merged := layer.Mapping.Merge(p.spec.GlobalMapping)
-		statName := layer.Geom.StatName
-
-		s, err := stat.Lookup(statName)
-		if err != nil {
-			return BuiltPanel{}, fmt.Errorf("ggplot: %w", err)
-		}
+		pipeline := layer.Geom.Pipeline
 
 		ds := panelDS
 
@@ -946,31 +960,24 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 				grpMerged := make(AesMap, len(merged))
 				maps.Copy(grpMerged, merged)
 
-				if s.Name() != stat.Identity {
-					statMapping := make(map[string]string, len(grpMerged))
-					maps.Copy(statMapping, grpMerged)
-
-					opts := stat.Options{
-						Bins:    layer.Geom.Params.Bins,
-						Method:  layer.Geom.Params.Method,
-						Points:  layer.Geom.Params.Points,
-						Whisker: layer.Geom.Params.Whisker,
-						Notch:   layer.Geom.Params.Notch,
-					}
-
-					transformed, err := s.Compute(ctx, grpDS, statMapping, opts)
+				if len(pipeline) > 0 {
+					pipelineData, pipelineMapping, err := stat.RunPipeline(ctx, pipeline, grpDS, grpMerged)
 					if err != nil {
-						return BuiltPanel{}, fmt.Errorf("ggplot: stat %q failed for group %q: %w",
-							statName, grpLabel, err)
+						return BuiltPanel{}, fmt.Errorf("ggplot: transform pipeline failed for group %q: %w",
+							grpLabel, err)
 					}
 
-					if transformed.Table() == nil {
-						return BuiltPanel{}, fmt.Errorf("ggplot: stat %q produced nil table for group %q", //nolint:err113 // error contains dynamic context values that vary per call site.
-							statName, grpLabel)
+					if pipelineData.Table() == nil {
+						// Lazy pipeline — materialize at Draw time.
+						pipelineData, err = pipelineData.Collect(ctx)
+						if err != nil {
+							return BuiltPanel{}, fmt.Errorf("ggplot: transform pipeline collect failed for group %q: %w",
+								grpLabel, err)
+						}
 					}
 
-					grpDS = transformed
-					grpMerged = updateMappingForStat(s, grpMerged)
+					grpDS = pipelineData
+					grpMerged = pipelineMapping
 				}
 
 				// Bake group color into geom params.
@@ -1028,29 +1035,22 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 				mapping: merged,
 			})
 		} else {
-			if s.Name() != stat.Identity {
-				statMapping := make(map[string]string, len(merged))
-				maps.Copy(statMapping, merged)
-
-				opts := stat.Options{
-					Bins:    layer.Geom.Params.Bins,
-					Method:  layer.Geom.Params.Method,
-					Points:  layer.Geom.Params.Points,
-					Whisker: layer.Geom.Params.Whisker,
-					Notch:   layer.Geom.Params.Notch,
-				}
-
-				transformed, err := s.Compute(ctx, ds, statMapping, opts)
+			if len(pipeline) > 0 {
+				pipelineData, pipelineMapping, err := stat.RunPipeline(ctx, pipeline, ds, merged)
 				if err != nil {
-					return BuiltPanel{}, fmt.Errorf("ggplot: stat %q failed: %w", statName, err)
+					return BuiltPanel{}, fmt.Errorf("ggplot: transform pipeline failed: %w", err)
 				}
 
-				if transformed.Table() == nil {
-					return BuiltPanel{}, fmt.Errorf("ggplot: stat %q produced nil table: %w", statName, ErrRenderFailed)
+				if pipelineData.Table() == nil {
+					// Lazy pipeline — materialize at Draw time.
+					pipelineData, err = pipelineData.Collect(ctx)
+					if err != nil {
+						return BuiltPanel{}, fmt.Errorf("ggplot: transform pipeline collect failed: %w", err)
+					}
 				}
 
-				ds = transformed
-				merged = updateMappingForStat(s, merged)
+				ds = pipelineData
+				merged = pipelineMapping
 			}
 
 			var contScale *colormap.Scale
@@ -1122,7 +1122,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 // Used by trainPanelScales to apply position adjustments after categorical mapping.
 type layerSpan struct {
 	start, end int
-	pos        position.Pos
+	pos        geom.Pos
 	mapping    AesMap
 }
 
@@ -1130,13 +1130,13 @@ type layerSpan struct {
 // layers is the slice of BuiltLayers for a single geom layer (one per group).
 // The function creates a fresh Pos instance to avoid shared state, reads X/Y
 // from each layer's data, calls Adjust, and writes the adjusted values back.
-func applyPositionAdjust(ctx context.Context, layers []BuiltLayer, layerPos position.Pos, mapping AesMap) error {
+func applyPositionAdjust(ctx context.Context, layers []BuiltLayer, layerPos geom.Pos, mapping AesMap) error {
 	if len(layers) == 0 || layerPos == nil {
 		return nil
 	}
 
-	posName := position.Name(layerPos.String())
-	if posName == position.NameIdentity || posName == "" {
+	posName := geom.PosName(layerPos.String())
+	if posName == geom.PosIdentity || posName == "" {
 		return nil // identity is a no-op
 	}
 
@@ -1177,15 +1177,15 @@ func applyPositionAdjust(ctx context.Context, layers []BuiltLayer, layerPos posi
 	binWidth := computeBinWidth(allXs)
 
 	// Create a fresh position instance to avoid shared state.
-	pos := position.New(posName)
+	pos := geom.NewPos(posName)
 
 	// If Fill, run the setup phase.
-	if fs, ok := pos.(position.FillSetup); ok {
+	if fs, ok := pos.(geom.FillSetup); ok {
 		fs.Setup(allXs, allYs)
 	}
 
 	// Apply position adjustment per group and write back.
-	stacker, isStacker := pos.(position.Stacker)
+	stacker, isStacker := pos.(geom.Stacker)
 
 	for gi := range layers {
 		var adjXs, adjYs []float64
@@ -1221,7 +1221,7 @@ func applyPositionAdjust(ctx context.Context, layers []BuiltLayer, layerPos posi
 		layers[gi].Data = collected
 
 		// For dodge, narrow the bar width so groups fit side-by-side.
-		if posName == position.NameDodge && nGroups > 1 {
+		if posName == geom.PosDodge && nGroups > 1 {
 			w := layers[gi].Geom.Params.Width
 			if w <= 0 || w > 1 {
 				w = 0.8 // default bar relative width

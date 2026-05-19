@@ -1138,7 +1138,8 @@ func (rh *rowHasher) hash(row int) uint64 {
 	return rh.h.Sum64()
 }
 
-// renamedColumn wraps an AnyColumn with a different name.
+// renamedColumn wraps an AnyColumn with a different name,
+// preserving the typed Column[T] interface for GetColumn[float64] etc.
 type renamedColumn struct {
 	inner   AnyColumn
 	newName string
@@ -1148,9 +1149,74 @@ func (c *renamedColumn) Name() string { return c.newName }
 func (c *renamedColumn) Len() int64   { return c.inner.Len() }
 func (c *renamedColumn) DType() DType { return c.inner.DType() }
 
-// renameColumn wraps a column with a new name.
+// renamedFloat64Column preserves the Column[float64] interface.
+type renamedFloat64Column struct {
+	renamedColumn
+}
+
+func (c *renamedFloat64Column) Values() []float64 {
+	return c.inner.(Column[float64]).Values() //nolint:forcetypeassert,errcheck // type guaranteed by dispatch in renameColumn.
+}
+
+func (c *renamedFloat64Column) IsNull() []bool {
+	return c.inner.(Column[float64]).IsNull() //nolint:forcetypeassert,errcheck // type guaranteed by dispatch in renameColumn.
+}
+
+// renamedInt64Column preserves the Column[int64] interface.
+type renamedInt64Column struct {
+	renamedColumn
+}
+
+func (c *renamedInt64Column) Values() []int64 {
+	return c.inner.(Column[int64]).Values() //nolint:forcetypeassert,errcheck // type guaranteed by dispatch in renameColumn.
+}
+
+func (c *renamedInt64Column) IsNull() []bool {
+	return c.inner.(Column[int64]).IsNull() //nolint:forcetypeassert,errcheck // type guaranteed by dispatch in renameColumn.
+}
+
+// renamedStringColumn preserves the Column[string] interface.
+type renamedStringColumn struct {
+	renamedColumn
+}
+
+func (c *renamedStringColumn) Values() []string {
+	return c.inner.(Column[string]).Values() //nolint:forcetypeassert,errcheck // type guaranteed by dispatch in renameColumn.
+}
+
+func (c *renamedStringColumn) IsNull() []bool {
+	return c.inner.(Column[string]).IsNull() //nolint:forcetypeassert,errcheck // type guaranteed by dispatch in renameColumn.
+}
+
+// renamedBoolColumn preserves the Column[bool] interface.
+type renamedBoolColumn struct {
+	renamedColumn
+}
+
+func (c *renamedBoolColumn) Values() []bool {
+	return c.inner.(Column[bool]).Values() //nolint:forcetypeassert,errcheck // type guaranteed by dispatch in renameColumn.
+}
+
+func (c *renamedBoolColumn) IsNull() []bool {
+	return c.inner.(Column[bool]).IsNull() //nolint:forcetypeassert,errcheck // type guaranteed by dispatch in renameColumn.
+}
+
+// renameColumn wraps a column with a new name, preserving the typed interface.
 func renameColumn(col AnyColumn, name string) AnyColumn {
-	return &renamedColumn{inner: col, newName: name}
+	base := renamedColumn{inner: col, newName: name}
+
+	switch col.DType() { //nolint:exhaustive // intentional subset; default case handles the rest.
+	case DTypeFloat64:
+		return &renamedFloat64Column{renamedColumn: base}
+	case DTypeInt64, DTypeTimestamp:
+		return &renamedInt64Column{renamedColumn: base}
+	case DTypeString:
+		return &renamedStringColumn{renamedColumn: base}
+	case DTypeBool:
+		return &renamedBoolColumn{renamedColumn: base}
+	default:
+		return &base
+	}
 }
 
 // --- exec: GroupBy + Summarize ---

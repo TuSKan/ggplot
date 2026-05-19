@@ -18,4 +18,7 @@ var (
 
 	// ErrEmptyDataset is returned when an empty dataset is provided.
 	ErrEmptyDataset = errors.New("bigquery: empty dataset")
+
+	// ErrLengthMismatch is returned when column lengths don't match.
+	ErrLengthMismatch = errors.New("bigquery: column length mismatch")
 )

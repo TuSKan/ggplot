@@ -303,6 +303,42 @@ type MathKernel interface {
 	BitShiftRight(col AnyColumn, n int) (AnyColumn, error)
 }
 
+// StatKernel provides statistical compute kernels that produce new Tables.
+// These are higher-level operations that consume one or more columns and
+// produce a complete result table.
+//
+// For Memory/Arrow: implemented via go-highway SIMD + stdlib math.
+// For SQL: could generate UDFs or client-side fallback.
+type StatKernel interface {
+	// Histogram bins a numeric column into equal-width bins.
+	// Returns a Table with columns: "x" (bin centers) and "count" (frequencies).
+	// nBins <= 0 means auto-select using Sturges' rule.
+	Histogram(col AnyColumn, nBins int) (Table, error)
+
+	// KDE computes kernel density estimation over a numeric column.
+	// Returns a Table with columns: "x" (grid points) and "density".
+	// bandwidth <= 0 means Silverman auto-select. points is the output grid size.
+	KDE(ctx context.Context, col AnyColumn, bandwidth float64, points int) (Table, error)
+
+	// LinearFit computes OLS linear regression y = a + b*x.
+	// Returns a Table with columns: "x" (grid) and "y" (fitted values).
+	// nOut is the number of output grid points.
+	LinearFit(xCol, yCol AnyColumn, nOut int) (Table, error)
+
+	// LoessFit computes locally weighted regression (LOESS).
+	// Returns a Table with columns: "x" (grid) and "y" (fitted values).
+	// nOut is the number of output grid points.
+	LoessFit(ctx context.Context, xCol, yCol AnyColumn, nOut int) (Table, error)
+
+	// Boxplot computes the five-number summary for a numeric column,
+	// optionally grouped by a categorical column.
+	// Returns a Table with columns: "x", "lower", "q1", "middle", "q3",
+	// "upper", "notch_lower", "notch_upper".
+	// groupCol may be nil for a single-group boxplot.
+	// whisker is "tukey" (1.5*IQR) or "range" (min-max).
+	Boxplot(yCol, groupCol AnyColumn, whisker string, notch bool) (Table, error)
+}
+
 // --- IO ---
 
 // CSVConfig holds engine-agnostic CSV configuration.

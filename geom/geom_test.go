@@ -1,98 +1,90 @@
 package geom_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/TuSKan/ggplot/geom"
 )
 
-func TestValidate_PointWithBins_Warning(t *testing.T) {
+// --- Warning tests (irrelevant options) ---
+
+func TestValidate_PointWithWidth_Warning(t *testing.T) {
 	t.Parallel()
 
-	layer := geom.Point(geom.WithBins(30))
+	// WithWidth is for bar/histogram, not point.
+	layer := geom.Point(geom.WithWidth(0.5))
 
 	warnings := layer.Validate()
 	if len(warnings) == 0 {
-		t.Fatal("expected warning for WithBins on Point")
-	}
-
-	found := false
-
-	for _, w := range warnings {
-		if strings.Contains(w, "WithBins") && strings.Contains(w, "geom_point") {
-			found = true
-		}
-	}
-
-	if !found {
-		t.Errorf("expected WithBins warning, got: %v", warnings)
+		t.Fatal("expected warning for WithWidth on Point")
 	}
 }
 
-func TestValidate_PointWithMethod_Warning(t *testing.T) {
+func TestValidate_PointWithFontSize_Warning(t *testing.T) {
 	t.Parallel()
 
-	layer := geom.Point(geom.WithMethod("lm"))
+	// WithFontSize is for text, not point.
+	layer := geom.Point(geom.WithFontSize(14))
 
 	warnings := layer.Validate()
 	if len(warnings) == 0 {
-		t.Fatal("expected warning for WithMethod on Point")
+		t.Fatal("expected warning for WithFontSize on Point")
 	}
 }
 
-func TestValidate_LineWithBins_Warning(t *testing.T) {
+func TestValidate_LineWithFontSize_Warning(t *testing.T) {
 	t.Parallel()
 
-	layer := geom.Line(geom.WithBins(10))
+	layer := geom.Line(geom.WithFontSize(10))
 
 	warnings := layer.Validate()
 	if len(warnings) == 0 {
-		t.Fatal("expected warning for WithBins on Line")
+		t.Fatal("expected warning for WithFontSize on Line")
 	}
 }
 
-func TestValidate_BarWithMethod_Warning(t *testing.T) {
+func TestValidate_BarWithAngle_Warning(t *testing.T) {
 	t.Parallel()
 
-	layer := geom.Bar(geom.WithMethod("lm"))
+	layer := geom.Bar(geom.WithAngle(45))
 
 	warnings := layer.Validate()
 	if len(warnings) == 0 {
-		t.Fatal("expected warning for WithMethod on Bar")
+		t.Fatal("expected warning for WithAngle on Bar")
 	}
 }
 
-func TestValidate_TextWithBins_Warning(t *testing.T) {
+func TestValidate_TextWithWidth_Warning(t *testing.T) {
 	t.Parallel()
 
-	layer := geom.Text(geom.WithBins(10), geom.WithWidth(0.5))
+	// Both Width and Orientation are irrelevant for Text.
+	layer := geom.Text(geom.WithWidth(0.5), geom.WithOrientation(geom.Horizontal))
 
 	warnings := layer.Validate()
 	if len(warnings) < 2 {
-		t.Errorf("expected >=2 warnings for WithBins+WithWidth on Text, got %d: %v", len(warnings), warnings)
+		t.Errorf("expected >=2 warnings for WithWidth+WithOrientation on Text, got %d: %v", len(warnings), warnings)
 	}
 }
 
-func TestValidate_SmoothWithBins_Warning(t *testing.T) {
+func TestValidate_SmoothWithWidth_Warning(t *testing.T) {
 	t.Parallel()
 
-	layer := geom.Smooth(geom.WithBins(30))
+	layer := geom.Smooth(geom.WithWidth(0.5))
 
 	warnings := layer.Validate()
 	if len(warnings) == 0 {
-		t.Fatal("expected warning for WithBins on Smooth")
+		t.Fatal("expected warning for WithWidth on Smooth")
 	}
 }
 
-func TestValidate_HistogramWithMethod_Warning(t *testing.T) {
+func TestValidate_HistogramWithFontSize_Warning(t *testing.T) {
 	t.Parallel()
 
-	layer := geom.Histogram(geom.WithMethod("lm"))
+	layer := geom.Histogram(geom.WithFontSize(14))
 
 	warnings := layer.Validate()
 	if len(warnings) == 0 {
-		t.Fatal("expected warning for WithMethod on Histogram")
+		t.Fatal("expected warning for WithFontSize on Histogram")
 	}
 }
 
@@ -131,10 +123,10 @@ func TestValidate_BarWithWidth_NoWarning(t *testing.T) {
 	}
 }
 
-func TestValidate_HistogramWithBins_NoWarning(t *testing.T) {
+func TestValidate_HistogramWithAlpha_NoWarning(t *testing.T) {
 	t.Parallel()
 
-	layer := geom.Histogram(geom.WithBins(50), geom.WithAlpha(0.7))
+	layer := geom.Histogram(geom.WithAlpha(0.7))
 
 	warnings := layer.Validate()
 	if len(warnings) != 0 {
@@ -142,10 +134,10 @@ func TestValidate_HistogramWithBins_NoWarning(t *testing.T) {
 	}
 }
 
-func TestValidate_SmoothWithMethod_NoWarning(t *testing.T) {
+func TestValidate_SmoothWithColor_NoWarning(t *testing.T) {
 	t.Parallel()
 
-	layer := geom.Smooth(geom.WithMethod("loess"), geom.WithPoints(100))
+	layer := geom.Smooth(geom.WithColor("#FF0000"), geom.WithLineWidth(2))
 
 	warnings := layer.Validate()
 	if len(warnings) != 0 {
@@ -175,10 +167,10 @@ func TestValidate_NoExplicitOpts_NoWarning(t *testing.T) {
 	}
 }
 
-func TestValidate_DensityWithPoints_NoWarning(t *testing.T) {
+func TestValidate_DensityWithFill_NoWarning(t *testing.T) {
 	t.Parallel()
 
-	layer := geom.Density(geom.WithPoints(1024), geom.WithFill("#993366"))
+	layer := geom.Density(geom.WithFill("#993366"))
 
 	warnings := layer.Validate()
 	if len(warnings) != 0 {

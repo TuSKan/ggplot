@@ -355,4 +355,5 @@ var (
 	_ dataset.Filler         = (*Engine)(nil)
 	_ dataset.Composer       = (*Engine)(nil)
 	_ dataset.MathKernel     = (*Engine)(nil)
+	_ dataset.StatKernel     = (*Engine)(nil)
 )
