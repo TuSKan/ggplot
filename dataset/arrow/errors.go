@@ -30,4 +30,7 @@ var (
 
 	// ErrComputeTypeMismatch is returned when a compute kernel result has unexpected type.
 	ErrComputeTypeMismatch = errors.New("arrow: unexpected result type from compute kernel")
+
+	// ErrOutOfRange is returned when a parameter value is out of the expected range.
+	ErrOutOfRange = errors.New("arrow: value out of range")
 )

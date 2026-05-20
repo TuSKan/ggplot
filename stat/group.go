@@ -82,7 +82,7 @@ func aggFuncForReducer(name string) (dataset.AggFunc, float64, bool) {
 	}
 }
 
-func (g *groupTransform) Apply(_ context.Context, in TransformInput) (TransformResult, error) {
+func (g *groupTransform) Apply(ctx context.Context, in TransformInput) (TransformResult, error) {
 	// Determine group-by and value axes.
 	groupAxis := g.axis
 	valueAxis := "y"
@@ -101,7 +101,7 @@ func (g *groupTransform) Apply(_ context.Context, in TransformInput) (TransformR
 
 	// Handle proportion: count per group / total count.
 	if g.reducerName == "proportion" || g.reducerName == "proportion-facet" {
-		return g.applyProportion(in, groupCol, valueCol)
+		return g.applyProportion(ctx, in, groupCol, valueCol)
 	}
 
 	// Try engine-native GroupBy + Summarize for known aggregations.
@@ -129,49 +129,69 @@ func (g *groupTransform) Apply(_ context.Context, in TransformInput) (TransformR
 }
 
 // applyProportion computes count-per-group / total-count.
-// Since transforms run per-panel in buildPanel, "proportion-facet"
-// is equivalent to "proportion" — the input is already facet-scoped.
-func (g *groupTransform) applyProportion(in TransformInput, groupCol, valueCol string) (TransformResult, error) {
-	// Count per group.
-	counted := in.Data.
+// Fully lazy: GroupBy+Summarize+Arrange → Mutate(proportionMutator).
+// No materialization in stat/ — the Mutate runs at Collect time inside the engine.
+func (g *groupTransform) applyProportion(_ context.Context, in TransformInput, groupCol, valueCol string) (TransformResult, error) {
+	total := float64(in.Data.NumRows())
+	if total == 0 {
+		total = 1 // avoid divide by zero
+	}
+
+	// Lazy: count per group → sort → mutate count→proportion.
+	outData := in.Data.
 		GroupBy(groupCol).
 		Summarize(dataset.AggSpec{
 			OutputName: valueCol,
 			InputName:  valueCol,
 			Fn:         dataset.AggCount,
 		}).
-		Arrange(groupCol)
-
-	// Normalize: divide each group count by total row count.
-	total := float64(in.Data.NumRows())
-	if total == 0 {
-		total = 1 // avoid divide by zero
-	}
-
-	eng := dataset.GetEngine(in.Data.Table())
-
-	mk, ok := eng.(dataset.MathKernel)
-	if !ok {
-		return TransformResult{}, fmt.Errorf("group%s: proportion: engine %q: MathKernel: %w",
-			g.axis, eng.Name(), dataset.ErrUnsupportedEngine)
-	}
-
-	col, err := counted.Column(valueCol)
-	if err != nil {
-		return TransformResult{}, fmt.Errorf("group%s: proportion: %w", g.axis, err)
-	}
-
-	propCol, err := mk.MulScalar(col, 1.0/total)
-	if err != nil {
-		return TransformResult{}, fmt.Errorf("group%s: proportion: %w", g.axis, err)
-	}
-
-	outData := counted.WithColumn(propCol)
+		Arrange(groupCol).
+		Mutate(valueCol, &proportionMutator{col: valueCol, invTotal: 1.0 / total})
 
 	outMapping := make(map[string]string, len(in.Mapping))
 	maps.Copy(outMapping, in.Mapping)
 
 	return TransformResult{Data: outData, Mapping: outMapping}, nil
+}
+
+// proportionMutator implements dataset.MutateFunc.
+// At Collect time it reads the count column, casts int64→float64,
+// and multiplies by 1/total — all through engine interfaces.
+type proportionMutator struct {
+	col      string  // column to transform
+	invTotal float64 // 1 / total count
+}
+
+func (m *proportionMutator) Apply(tbl dataset.Table) (dataset.AnyColumn, error) {
+	eng := dataset.GetEngine(tbl)
+
+	col, err := tbl.Column(m.col)
+	if err != nil {
+		return nil, fmt.Errorf("proportion: %w", err)
+	}
+
+	// AggCount produces int64 — cast to float64 for MulScalar.
+	caster, ok := eng.(dataset.Caster)
+	if !ok {
+		return nil, fmt.Errorf("proportion: engine %q: Caster: %w", eng.Name(), dataset.ErrUnsupportedEngine)
+	}
+
+	fcol, err := caster.Cast(col, dataset.DTypeFloat64)
+	if err != nil {
+		return nil, fmt.Errorf("proportion: cast: %w", err)
+	}
+
+	mk, ok := eng.(dataset.MathKernel)
+	if !ok {
+		return nil, fmt.Errorf("proportion: engine %q: MathKernel: %w", eng.Name(), dataset.ErrUnsupportedEngine)
+	}
+
+	result, mulErr := mk.MulScalar(fcol, m.invTotal)
+	if mulErr != nil {
+		return nil, fmt.Errorf("proportion: %w", mulErr)
+	}
+
+	return result, nil
 }
 
 // --- Dual-axis grouping ---

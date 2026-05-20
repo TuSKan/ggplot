@@ -154,10 +154,10 @@ type Aggregator interface {
 	Count(col AnyColumn) (AnyColumn, error)
 	Median(col AnyColumn) (AnyColumn, error)
 	Variance(col AnyColumn) (AnyColumn, error)
-	StdDev(col AnyColumn) (AnyColumn, error)         // sqrt(variance)
-	First(col AnyColumn) (AnyColumn, error)           // first element
-	Last(col AnyColumn) (AnyColumn, error)            // last element
-	Mode(col AnyColumn) (AnyColumn, error)            // most frequent value
+	StdDev(col AnyColumn) (AnyColumn, error)                // sqrt(variance)
+	First(col AnyColumn) (AnyColumn, error)                 // first element
+	Last(col AnyColumn) (AnyColumn, error)                  // last element
+	Mode(col AnyColumn) (AnyColumn, error)                  // most frequent value
 	Percentile(col AnyColumn, p float64) (AnyColumn, error) // quantile ∈ [0,1]
 }
 

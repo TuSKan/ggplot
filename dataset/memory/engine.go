@@ -393,7 +393,7 @@ func (e *Engine) Percentile(col dataset.AnyColumn, p float64) (dataset.AnyColumn
 	}
 
 	if p < 0 || p > 1 {
-		return nil, fmt.Errorf("Percentile: p=%f out of range [0,1]", p)
+		return nil, fmt.Errorf("Percentile: p=%f out of range [0,1]: %w", p, ErrOutOfRange)
 	}
 
 	switch c := col.(type) {

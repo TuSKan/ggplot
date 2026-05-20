@@ -531,6 +531,7 @@ func (e *Engine) LinearFitSE(xCol, yCol dataset.AnyColumn, nOut int) (dataset.Ta
 
 	// Residual standard error.
 	var sse float64
+
 	for _, p := range pts {
 		r := p.y - (a + b*p.x)
 		sse += r * r
@@ -623,7 +624,7 @@ func (e *Engine) LoessFitSE(ctx context.Context, xCol, yCol dataset.AnyColumn, n
 	ymax := make([]float64, nOut)
 
 	k := min(max(int(math.Ceil(alpha*float64(n))), 3), n) //nolint:mnd // Minimum window of 3 data points.
-	tCrit := 1.96                                          //nolint:mnd // z ≈ 1.96 for 95% CI.
+	tCrit := 1.96                                         //nolint:mnd // z ≈ 1.96 for 95% CI.
 
 	lo, hi := 0, k
 

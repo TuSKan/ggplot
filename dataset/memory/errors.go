@@ -27,4 +27,7 @@ var (
 
 	// ErrTakeTypeMismatch is returned when a Take/Select result has unexpected type.
 	ErrTakeTypeMismatch = errors.New("memory: unexpected result type from Take/Select")
+
+	// ErrOutOfRange is returned when a parameter value is out of the expected range.
+	ErrOutOfRange = errors.New("memory: value out of range")
 )

@@ -139,55 +139,91 @@ func (b *binTransform) Apply(_ context.Context, in TransformInput) (TransformRes
 }
 
 // applyCumulative replaces a column with its forward (+1) or reverse (-1)
-// cumulative sum. Dispatches to the engine's Windower.CumSum.
+// cumulative sum. Uses engine-native Windower.CumSum — stays fully lazy.
 func applyCumulative(ds dataset.Dataset, colName string, dir int) (dataset.Dataset, error) {
-	eng := dataset.GetEngine(ds.Table())
+	if dir >= 0 {
+		// Forward: input is collected, read column directly.
+		eng := dataset.GetEngine(ds.Table())
+
+		win, ok := eng.(dataset.Windower)
+		if !ok {
+			return dataset.Dataset{}, fmt.Errorf("cumulative: engine %q: Windower: %w", eng.Name(), dataset.ErrUnsupportedEngine)
+		}
+
+		col, err := ds.Column(colName)
+		if err != nil {
+			return dataset.Dataset{}, fmt.Errorf("cumulative: %w", err)
+		}
+
+		cumCol, err := win.CumSum(col)
+		if err != nil {
+			return dataset.Dataset{}, fmt.Errorf("cumulative: %w", err)
+		}
+
+		return ds.WithColumn(cumCol), nil // lazy
+	}
+
+	// Reverse: entire reverse→cumsum→reverse runs at Collect time via Mutate.
+	return ds.Mutate(colName, &cumSumMutator{col: colName, reverse: true}), nil
+}
+
+// cumSumMutator implements dataset.MutateFunc.
+// At Collect time it applies Windower.CumSum to the named column,
+// optionally reversing row order before/after for reverse cumulative.
+type cumSumMutator struct {
+	col     string
+	reverse bool
+}
+
+func (m *cumSumMutator) Apply(tbl dataset.Table) (dataset.AnyColumn, error) {
+	eng := dataset.GetEngine(tbl)
 
 	win, ok := eng.(dataset.Windower)
 	if !ok {
-		return dataset.Dataset{}, fmt.Errorf("engine %q: Windower: %w", eng.Name(), dataset.ErrUnsupportedEngine)
+		return nil, fmt.Errorf("cumulative: engine %q: Windower: %w", eng.Name(), dataset.ErrUnsupportedEngine)
 	}
 
-	n := int(ds.NumRows())
-
-	// Reverse: flip rows, cumsum, flip back.
-	if dir < 0 && n > 1 {
-		revIdx := make([]int, n)
-		for i := range revIdx {
-			revIdx[i] = n - 1 - i
-		}
-
-		var err error
-
-		ds, err = ds.SelectRows(revIdx)
-		if err != nil {
-			return dataset.Dataset{}, fmt.Errorf("reverse: %w", err)
-		}
-	}
-
-	col, err := ds.Column(colName)
+	col, err := tbl.Column(m.col)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return nil, fmt.Errorf("cumulative: %w", err)
 	}
 
-	cumCol, err := win.CumSum(col)
+	if !m.reverse {
+		result, cumErr := win.CumSum(col)
+		if cumErr != nil {
+			return nil, fmt.Errorf("cumulative: %w", cumErr)
+		}
+
+		return result, nil
+	}
+
+	// Reverse: Select(reverse) → CumSum → Select(reverse).
+	sel, ok := eng.(dataset.Selector)
+	if !ok {
+		return nil, fmt.Errorf("cumulative: engine %q: Selector: %w", eng.Name(), dataset.ErrUnsupportedEngine)
+	}
+
+	n := int(col.Len())
+	revIdx := make([]int, n)
+
+	for i := range revIdx {
+		revIdx[i] = n - 1 - i
+	}
+
+	reversed, err := sel.Select(col, revIdx)
 	if err != nil {
-		return dataset.Dataset{}, err
+		return nil, fmt.Errorf("cumulative: reverse: %w", err)
 	}
 
-	ds = ds.WithColumn(cumCol)
-
-	if dir < 0 && n > 1 {
-		revIdx := make([]int, n)
-		for i := range revIdx {
-			revIdx[i] = n - 1 - i
-		}
-
-		ds, err = ds.SelectRows(revIdx)
-		if err != nil {
-			return dataset.Dataset{}, fmt.Errorf("reverse: %w", err)
-		}
+	cumCol, err := win.CumSum(reversed)
+	if err != nil {
+		return nil, fmt.Errorf("cumulative: %w", err)
 	}
 
-	return ds, nil
+	result, selErr := sel.Select(cumCol, revIdx)
+	if selErr != nil {
+		return nil, fmt.Errorf("cumulative: reverse: %w", selErr)
+	}
+
+	return result, nil
 }
