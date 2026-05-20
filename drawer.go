@@ -80,6 +80,8 @@ func init() {
 	RegisterDrawer(geom.TypeSegment, DrawerFunc(drawSegmentFn))
 	RegisterDrawer(geom.TypeErrorBar, DrawerFunc(drawErrorBarFn))
 	RegisterDrawer(geom.TypePolygon, DrawerFunc(drawPolygonFn))
+	RegisterDrawer(geom.TypeRibbon, DrawerFunc(drawRibbonFn))
+	RegisterDrawer(geom.TypeDifference, DrawerFunc(drawDifferenceFn))
 }
 
 // drawLayer dispatches rendering to the registered Drawer for the layer's geom type.
@@ -1298,4 +1300,86 @@ func drawPolygonFn(dc DrawContext) {
 	dc.Canvas.SetRGBA(cr, cg, cb, alpha)
 	dc.Canvas.SetLineWidth(lw)
 	dc.Canvas.Stroke()
+}
+
+// drawRibbonFn renders a filled band between ymin and ymax columns.
+func drawRibbonFn(dc DrawContext) {
+	xCol := dc.Mapping["x"]
+
+	xVals, errX := dc.Data.Float64(xCol)
+	if errX != nil {
+		return
+	}
+
+	yminVals, errMin := dc.Data.Float64("ymin")
+	if errMin != nil {
+		return
+	}
+
+	ymaxVals, errMax := dc.Data.Float64("ymax")
+	if errMax != nil {
+		return
+	}
+
+	n := min(len(xVals), min(len(yminVals), len(ymaxVals)))
+	if n < 2 {
+		return
+	}
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 0.3
+	}
+
+	fr, fg, fb := colormap.ParseRGB(dc.Params.Fill, 0.2, 0.5, 0.8)
+
+	// Forward pass: trace the upper edge (ymax).
+	nx0 := normalize(xVals[0], dc.XMin, dc.XMax)
+	ny0 := normalize(ymaxVals[0], dc.YMin, dc.YMax)
+	px, py := orientedTransform(dc.Coord, nx0, ny0, dc.W, dc.H, dc.Params.Orientation)
+	dc.Canvas.MoveTo(px, py)
+
+	for i := 1; i < n; i++ {
+		nx := normalize(xVals[i], dc.XMin, dc.XMax)
+		ny := normalize(ymaxVals[i], dc.YMin, dc.YMax)
+		px, py = orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
+		dc.Canvas.LineTo(px, py)
+	}
+
+	// Reverse pass: trace the lower edge (ymin) back.
+	for i := n - 1; i >= 0; i-- {
+		nx := normalize(xVals[i], dc.XMin, dc.XMax)
+		ny := normalize(yminVals[i], dc.YMin, dc.YMax)
+		px, py = orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
+		dc.Canvas.LineTo(px, py)
+	}
+
+	dc.Canvas.ClosePath()
+
+	// Fill.
+	dc.Canvas.SetRGBA(fr, fg, fb, alpha)
+	dc.Canvas.FillPreserve()
+
+	// Stroke.
+	lw := dc.Params.LineWidth
+	if lw <= 0 {
+		lw = 0.5
+	}
+
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, fr*0.7, fg*0.7, fb*0.7)
+	dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+	dc.Canvas.SetLineWidth(lw)
+	dc.Canvas.Stroke()
+}
+
+// drawDifferenceFn renders the area between two series with dual fill.
+// Positive regions (ymax > ymin) use the fill color, negative regions
+// use a complementary color. Falls back to ribbon rendering for now.
+func drawDifferenceFn(dc DrawContext) {
+	// Difference is structurally the same as ribbon — the dual-color
+	// split requires clipping which canvas backends may not support.
+	// We render it as a ribbon with the fill color for now, producing
+	// correct shape. Dual-color clipping will be added when the canvas
+	// abstraction supports clip paths.
+	drawRibbonFn(dc)
 }

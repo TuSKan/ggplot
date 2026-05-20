@@ -57,12 +57,13 @@ type ChannelHint string
 
 // Standard channel hints.
 const (
-	HintNone       ChannelHint = ""
-	HintCount      ChannelHint = "count"
-	HintProportion ChannelHint = "proportion"
-	HintInterval   ChannelHint = "interval"
-	HintCumulative ChannelHint = "cumulative"
-	HintDeviation  ChannelHint = "deviation"
+	HintNone        ChannelHint = ""
+	HintCount       ChannelHint = "count"
+	HintProportion  ChannelHint = "proportion"
+	HintProbability ChannelHint = "probability" // axis clamps to [0,1]
+	HintInterval    ChannelHint = "interval"
+	HintCumulative  ChannelHint = "cumulative"
+	HintDeviation   ChannelHint = "deviation"
 )
 
 // --- Identity Transform ---

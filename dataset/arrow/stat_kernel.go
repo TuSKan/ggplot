@@ -470,6 +470,251 @@ func (e *Engine) LoessFit(ctx context.Context, xCol, yCol dataset.AnyColumn, nOu
 	return e.buildStatTable(map[string][]float64{"x": xs, "y": ys})
 }
 
+// --- LinearFitSE ---
+
+// LinearFitSE computes OLS regression with 95% confidence bands.
+func (e *Engine) LinearFitSE(xCol, yCol dataset.AnyColumn, nOut int) (dataset.Table, error) {
+	xData, err := requireArrowFloat64(xCol)
+	if err != nil {
+		return nil, fmt.Errorf("LinearFitSE: x: %w", err)
+	}
+
+	yData, err := requireArrowFloat64(yCol)
+	if err != nil {
+		return nil, fmt.Errorf("LinearFitSE: y: %w", err)
+	}
+
+	if len(xData) != len(yData) {
+		return nil, fmt.Errorf("LinearFitSE: length mismatch: %w", ErrLengthMismatch)
+	}
+
+	n := len(xData)
+	if n < 3 { //nolint:mnd // SE requires at least 3 points (n-2 df).
+		return e.buildStatTable(map[string][]float64{
+			"x": xData, "y": yData,
+			"ymin": yData, "ymax": yData,
+		})
+	}
+
+	pts := make([]arrowXYPair, n)
+	for i := range xData {
+		pts[i] = arrowXYPair{xData[i], yData[i]}
+	}
+
+	sort.Slice(pts, func(i, j int) bool { return pts[i].x < pts[j].x })
+
+	xMin, xMax := pts[0].x, pts[n-1].x
+
+	if nOut <= 0 {
+		nOut = 80 //nolint:mnd // Default output grid size.
+	}
+
+	if nOut > n {
+		nOut = n
+	}
+
+	nf := float64(n)
+
+	var sx, sy, sxx, sxy float64
+	for _, p := range pts {
+		sx += p.x
+		sy += p.y
+		sxx += p.x * p.x
+		sxy += p.x * p.y
+	}
+
+	det := nf*sxx - sx*sx
+
+	var a, b float64
+	if math.Abs(det) < 1e-15 { //nolint:mnd // Near-zero determinant threshold.
+		a = sy / nf
+		b = 0
+	} else {
+		b = (nf*sxy - sx*sy) / det
+		a = (sy - b*sx) / nf
+	}
+
+	var sse float64
+	for _, p := range pts {
+		r := p.y - (a + b*p.x)
+		sse += r * r
+	}
+
+	mse := sse / (nf - 2) //nolint:mnd // df = n-2 for simple linear regression.
+	xbar := sx / nf
+
+	step := (xMax - xMin) / float64(nOut-1)
+	xs := make([]float64, nOut)
+	ys := make([]float64, nOut)
+	ymin := make([]float64, nOut)
+	ymax := make([]float64, nOut)
+
+	tCrit := 1.96 //nolint:mnd // z ≈ 1.96 for 95% CI.
+
+	for i := range nOut {
+		xi := xMin + float64(i)*step
+		xs[i] = xi
+		ys[i] = a + b*xi
+
+		dx := xi - xbar
+		se := math.Sqrt(mse * (1/nf + dx*dx/(sxx-sx*sx/nf)))
+		ymin[i] = ys[i] - tCrit*se
+		ymax[i] = ys[i] + tCrit*se
+	}
+
+	return e.buildStatTable(map[string][]float64{
+		"x": xs, "y": ys, "ymin": ymin, "ymax": ymax,
+	})
+}
+
+// --- LoessFitSE ---
+
+// LoessFitSE computes LOESS with approximate 95% confidence bands.
+func (e *Engine) LoessFitSE(ctx context.Context, xCol, yCol dataset.AnyColumn, nOut int) (dataset.Table, error) {
+	xData, err := requireArrowFloat64(xCol)
+	if err != nil {
+		return nil, fmt.Errorf("LoessFitSE: x: %w", err)
+	}
+
+	yData, err := requireArrowFloat64(yCol)
+	if err != nil {
+		return nil, fmt.Errorf("LoessFitSE: y: %w", err)
+	}
+
+	if len(xData) != len(yData) {
+		return nil, fmt.Errorf("LoessFitSE: length mismatch: %w", ErrLengthMismatch)
+	}
+
+	n := len(xData)
+	if n < 3 { //nolint:mnd // SE requires at least 3 points.
+		return e.buildStatTable(map[string][]float64{
+			"x": xData, "y": yData,
+			"ymin": yData, "ymax": yData,
+		})
+	}
+
+	pts := make([]arrowXYPair, n)
+	for i := range xData {
+		pts[i] = arrowXYPair{xData[i], yData[i]}
+	}
+
+	sort.Slice(pts, func(i, j int) bool { return pts[i].x < pts[j].x })
+
+	xMin, xMax := pts[0].x, pts[n-1].x
+
+	if nOut <= 0 {
+		nOut = 80 //nolint:mnd // Default grid size.
+	}
+
+	if nOut > n {
+		nOut = n
+	}
+
+	alpha := 0.3 //nolint:mnd // LOESS bandwidth fraction.
+	if n < 20 {  //nolint:mnd // Adaptive bandwidth.
+		alpha = 0.75 //nolint:mnd // 75% for very small datasets.
+	} else if n < 50 { //nolint:mnd // Medium dataset size.
+		alpha = 0.5 //nolint:mnd // 50% for medium datasets.
+	}
+
+	step := (xMax - xMin) / float64(nOut-1)
+
+	xs := make([]float64, nOut)
+	ys := make([]float64, nOut)
+	ymin := make([]float64, nOut)
+	ymax := make([]float64, nOut)
+
+	k := min(max(int(math.Ceil(alpha*float64(n))), 3), n) //nolint:mnd // Minimum window of 3.
+	tCrit := 1.96                                          //nolint:mnd // z ≈ 1.96 for 95% CI.
+
+	lo, hi := 0, k
+
+	for i := range nOut {
+		if i%32 == 0 { //nolint:mnd // Check cancellation every 32 iterations.
+			if err := ctx.Err(); err != nil {
+				return nil, fmt.Errorf("LoessFitSE: %w", err)
+			}
+		}
+
+		xEval := xMin + float64(i)*step
+		xs[i] = xEval
+
+		for hi < n && math.Abs(pts[hi].x-xEval) < math.Abs(pts[lo].x-xEval) {
+			lo++
+			hi++
+		}
+
+		maxDist := math.Max(math.Abs(pts[lo].x-xEval), math.Abs(pts[hi-1].x-xEval))
+		if maxDist < 1e-12 { //nolint:mnd // Minimum distance threshold.
+			maxDist = 1e-12 //nolint:mnd // Minimum distance threshold.
+		}
+
+		var sw, swx, swy, swxx, swxy float64
+
+		for j := lo; j < hi; j++ {
+			u := math.Abs(pts[j].x-xEval) / maxDist
+			if u >= 1.0 {
+				continue
+			}
+
+			w := (1 - u*u*u)
+			w = w * w * w
+
+			dx := pts[j].x - xEval
+			sw += w
+			swx += w * dx
+			swy += w * pts[j].y
+			swxx += w * dx * dx
+			swxy += w * dx * pts[j].y
+		}
+
+		if sw < 1e-15 { //nolint:mnd // Near-zero weight sum.
+			ys[i] = 0
+			ymin[i] = 0
+			ymax[i] = 0
+
+			continue
+		}
+
+		localDet := sw*swxx - swx*swx
+		if math.Abs(localDet) < 1e-15 { //nolint:mnd // Singular matrix.
+			ys[i] = swy / sw
+		} else {
+			a := (swxx*swy - swx*swxy) / localDet
+			ys[i] = a
+		}
+
+		var wsse, wn float64
+
+		for j := lo; j < hi; j++ {
+			u := math.Abs(pts[j].x-xEval) / maxDist
+			if u >= 1.0 {
+				continue
+			}
+
+			w := (1 - u*u*u)
+			w = w * w * w
+
+			r := pts[j].y - ys[i]
+			wsse += w * r * r
+			wn += w
+		}
+
+		if wn > 0 {
+			se := math.Sqrt(wsse / wn / sw)
+			ymin[i] = ys[i] - tCrit*se
+			ymax[i] = ys[i] + tCrit*se
+		} else {
+			ymin[i] = ys[i]
+			ymax[i] = ys[i]
+		}
+	}
+
+	return e.buildStatTable(map[string][]float64{
+		"x": xs, "y": ys, "ymin": ymin, "ymax": ymax,
+	})
+}
+
 // --- Boxplot ---
 
 // Boxplot computes the five-number summary for a numeric column.

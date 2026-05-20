@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -254,6 +255,20 @@ func (c *GGCanvas) EncodePNG(w io.Writer) error {
 // Image returns the underlying image.
 func (c *GGCanvas) Image() image.Image {
 	return c.ctx.Image()
+}
+
+// Close releases the underlying gg.Context's GPU resources.
+// Always call Close (or use defer) when the canvas is no longer needed
+// to avoid GPU resource leaks (wgpu BindGroup/Buffer finalizer warnings).
+func (c *GGCanvas) Close() error {
+	if c.ctx == nil {
+		return nil
+	}
+
+	err := c.ctx.Close()
+	c.ctx = nil
+
+	return errors.Join(err)
 }
 
 // Compile-time check.

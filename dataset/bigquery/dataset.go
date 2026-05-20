@@ -132,7 +132,9 @@ func (d *bqDataset) buildSelectSQL() string {
 				colsSb121.WriteString(", ")
 			}
 
-			colsSb121.WriteString("`" + f + "`")
+			colsSb121.WriteString("`")
+			colsSb121.WriteString(f)
+			colsSb121.WriteString("`")
 		}
 
 		cols += colsSb121.String()
@@ -222,7 +224,9 @@ func (d *bqDataset) withFields(fields []string) *bqDataset {
 				colsSb199.WriteString(", ")
 			}
 
-			colsSb199.WriteString("`" + f + "`")
+			colsSb199.WriteString("`")
+			colsSb199.WriteString(f)
+			colsSb199.WriteString("`")
 		}
 
 		cols += colsSb199.String()

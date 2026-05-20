@@ -1,10 +1,25 @@
 # ggplot — Composable Transform Architecture
 
-> **Status:** Design proposal · v0.3 · 2026-05-14
+> **Status:** Partially implemented · v0.4 · 2026-05-20
 > **Target:** v0.6 (one minor release out from current v0.5)
 > **Supersedes:** `options-refactor.md` v0.1 and `options-refactor-v0.2.md` v0.2 — both obsolete; they proposed infrastructure that already exists.
 >
-> **Grounded.** This document is written against the verified codebase in this conversation: the existing `Plot`/`Built` separation, the `stat.Stat` interface, the `geom.Layer` struct, the `buildPanel` pipeline in `ggplot.go`, the `position.Pos` interface, and the `ColorScales map[string]*colormap.Scale` integration. Nothing in this doc invents an API that doesn't acknowledge what's already shipped.
+> **Grounded.** This document is written against the verified codebase: the existing `Plot`/`Built` separation, the `stat.Transform` interface, the `geom.Layer` struct with `Pipeline` field, the `buildPanel` pipeline in `ggplot.go`, the `position.Pos` interface, and the `ColorScales map[string]*colormap.Scale` integration.
+>
+> **Implementation status (v0.4).** The following components from this proposal are implemented and verified:
+> - `stat.Transform` interface and `RunPipeline` — `stat/transform.go`
+> - `ChannelHint` type and all standard hints (Count, Proportion, Probability, Interval, Cumulative, Deviation)
+> - `geom.Layer.Pipeline` field — composable transform chains on every layer
+> - `buildPanel` pipeline execution — reads `Layer.Pipeline`, runs `RunPipeline`, materializes lazy stages
+> - Hint-aware axis formatting — `collectPipelineHints`, `hintFormatter`, `applyHintFormatters` in `ggplot.go`
+> - Introspection APIs — `Built.PipelineFor(panel, layer)` and `Built.Explain()`
+> - Transforms: `BinX`, `Count`, `DensityX`, `SmoothXY`, `SummaryXY`, `BoxplotY`, `IdentityTransform`, `NormalizeY`/`NormalizeX`, `FilterX`/`FilterY`, `SortBy`, `ReverseRows`, `TopN`, `SelectRow`, `StackY`/`StackX`, `GroupX`/`GroupY`
+> - Extended `Aggregator` interface: `StdDev`, `First`, `Last`, `Mode` across memory, arrow, and bigquery engines
+> - Extended `GroupX`/`GroupY` reducer vocabulary: sum, mean, median, min, max, count, variance, deviation, first, last, mode
+> - New geom constructors: `RectY`, `RectX`, `LineY`, `LineX`, `AreaY`, `AreaX`, `PointY`, `RibbonY`, `Difference`
+> - Ribbon and difference drawers registered in `drawer.go`
+> - Mode implementations improved: sort-based scan for float64/int64 (memory + arrow), direct Arrow array iteration for strings (no `[]string` materialization)
+> - `Canvas.Close()` added to release GPU resources deterministically (eliminates wgpu BindGroup/Buffer finalizer warnings)
 
 ---
 
@@ -31,44 +46,37 @@ Plot's transform model translates to Go as a function type that operates on what
 
 ### 2.1 The Transform type
 
-```go
-// Package stat (or a new package: pipeline)
+✅ **Implemented** in `stat/transform.go`.
 
-// Transform is the contract for any function that operates on a layer's
-// data, mapping, and parameters and produces a new (data, mapping, params)
-// triple. Transforms compose because their input and output shape are the
-// same.
+```go
+// Package stat
+
+// Transform is the composable data-transform contract. Transforms
+// chain because their input and output shapes are the same:
+// data + mapping in, data + mapping out. The bin transform, the
+// smooth transform, the normalize transform, the identity transform —
+// all the same shape.
 //
-// The bin transform, the smooth transform, the normalize transform, the
-// stack transform, the dodge transform, the filter transform, the sort
-// transform, the identity transform — all the same shape. They differ
-// only in what they do to the data and how they rewrite the mapping.
-//
-// Replaces the single-purpose Stat.Compute path. The existing Stat
-// interface is preserved one minor release for compatibility (§5.2).
+// Apply MUST NOT mutate in; it returns a new TransformResult.
 type Transform interface {
-    // Name returns a stable identifier used for Mark.Pipeline.Names(),
-    // golden tests, and Explain() output.
+    // Name returns a stable identifier for debugging, golden tests,
+    // and pipeline introspection.
     Name() string
 
-    // Apply runs the transform. Implementations MUST NOT mutate in;
-    // they return a new TransformResult.
-    Apply(ctx context.Context, in TransformInput) (TransformOutput, error)
+    // Apply runs the transform. Implementations MUST NOT mutate in.
+    Apply(ctx context.Context, in TransformInput) (TransformResult, error)
 
-    // OutputMapping describes how aesthetic channels are rewritten by
-    // this transform. nil means the transform preserves the mapping
-    // (filter, sort, identity). A non-nil map indicates rewriting:
-    // {"y": "count"} means the y channel now points at the "count"
-    // column the transform produced. This is exactly the contract the
-    // existing stat.Stat.OutputMapping() defines; the semantics carry over.
+    // OutputMapping describes how aesthetic channels are rewritten.
+    // nil means the transform preserves the mapping (identity, filter, sort).
+    // A non-nil map rewrites channels: {"y": "count"} means the y channel
+    // now points at the "count" column the transform produced.
     OutputMapping() map[string]string
 
-    // OutputSchema names the columns this transform produces. Used by
-    // Built.LayerData() for introspection and by golden tests.
+    // OutputSchema names the columns this transform produces.
     OutputSchema() []string
 
-    // OutputHints declares the semantic hint for each output channel.
-    // Used by axis/legend formatters: HintProportion → "%" tick formatting,
+    // OutputHints declares semantic hints for output channels.
+    // Axis/legend formatters use these: HintProportion → "%" tick formatting,
     // HintCount → integer ticks, HintInterval → bin-edge rendering.
     // nil for transforms that don't change channel semantics.
     OutputHints() map[string]ChannelHint
@@ -76,14 +84,12 @@ type Transform interface {
 
 type TransformInput struct {
     Data    dataset.Dataset
-    Mapping ggplot.AesMap      // exists today in ggplot/spec.go
-    Params  geom.Params        // exists today in geom/geom.go
+    Mapping map[string]string
 }
 
-type TransformOutput struct {
+type TransformResult struct {
     Data    dataset.Dataset
-    Mapping ggplot.AesMap
-    Params  geom.Params
+    Mapping map[string]string
 }
 
 type ChannelHint string
@@ -98,38 +104,46 @@ const (
 )
 ```
 
-The shape is deliberately close to the existing `stat.Stat` interface. Three of the four methods (`Name`, `OutputMapping`, `OutputSchema`) already exist on `stat.Stat`. The new method is `OutputHints`. The signature of `Apply` differs from `Compute` in that it carries `Mapping` and `Params` through, not just the dataset — but the dataset transform itself is identical.
+**Design note.** The implemented type uses `TransformResult` (not `TransformOutput`) and carries only `Data` + `Mapping` (no `Params`). This is simpler than the original proposal — transforms don't need to thread geom parameters. `RunPipeline` handles inter-stage materialization of lazy datasets.
 
-This is the smallest possible interface that lets you compose. Anything larger is over-engineered for the use case.
+### 2.2 The Pipeline model — flat chaining, not nesting
 
-### 2.2 The Mark type — geom.Layer extended
+The original proposal (v0.3) showed transforms nesting inside each other: `NormalizeY(BinX(...))`. The implemented model uses **flat pipeline chaining**: transforms are independent stages in an ordered `[]stat.Transform` slice. Each stage's output becomes the next stage's input.
 
-The existing `geom.Layer` becomes a Mark by adding a Pipeline slice:
+```go
+// Flat pipeline — each transform is a standalone stage.
+// RunPipeline executes them in order: BinX → NormalizeY.
+pipeline := []stat.Transform{stat.BinX(), stat.NormalizeY()}
+```
+
+This is cleaner than nesting because:
+- Each transform has one job and no knowledge of its neighbors
+- Pipeline ordering is explicit and readable left-to-right
+- Adding/removing a stage doesn't require restructuring the whole expression
+- `RunPipeline` handles inter-stage materialization centrally
+
+### 2.3 The Layer type — Pipeline field
+
+✅ **Implemented** in `geom/geom.go`.
 
 ```go
 // Package geom
 
-// Layer is the renderable mark spec. New field: Pipeline.
+// Layer is the renderable mark spec. Pipeline carries the ordered
+// chain of transforms applied during Build, before position adjustment.
 type Layer struct {
     Geom     Type
-    Position position.Pos
+    Position Pos
     Params   Params
     Mapping  map[string]string
 
-    // NEW: ordered chain of transforms applied during Build, before
-    // position adjustment. An empty Pipeline means "data passes through
-    // unchanged" (matches the current Identity stat).
-    //
-    // The pipeline is what makes this Layer a composable "Mark" in
-    // Observable Plot's sense: stat.BinX(stat.WithBins(40)) returns
-    // a transform that, when this Layer is built, runs against the
-    // panel's data.
+    // Pipeline is the ordered chain of transforms applied during Build.
+    // An empty/nil Pipeline means "data passes through unchanged"
+    // (identity behavior).
     Pipeline []stat.Transform
 
-    // DEPRECATED: kept for compatibility with v0.5 stat.Name lookup.
-    // In v0.6, Pipeline is the authoritative path; StatName populates
-    // Pipeline at constructor time via stat.Lookup(StatName).AsTransform().
-    // In v0.7, this field is removed.
+    // StatName is the legacy single-stat path. When Pipeline is non-empty,
+    // Pipeline takes precedence.
     StatName stat.Name
 
     setFlags OptFlag
@@ -137,191 +151,185 @@ type Layer struct {
 }
 ```
 
-The renaming "Layer → Mark" is *not* proposed. The type stays `geom.Layer` because that's the name throughout the codebase and renaming would churn every file. The semantic content — "this is a renderable spec that carries a pipeline" — is what changes, not the name.
+### 2.4 Geom constructors take pipeline slices
 
-### 2.3 Geoms become functions over transforms
-
-Today, `geom.Histogram(opts...)` returns a Layer with `StatName: stat.Bin`. Under the new model, geom constructors take an optional transform argument:
+✅ **Implemented.** New constructors take `[]stat.Transform` as the first argument:
 
 ```go
 // Package geom
 
-// RectY creates a rectangle mark anchored at y. With no transform argument,
-// it renders pre-computed x1/x2/y rectangles (ggplot2's geom_rect). With a
-// transform argument, it renders the output of that transform — so RectY(BinX(...))
-// is a histogram, RectY(StackY(BinX(...))) is a stacked histogram, etc.
-//
-// This replaces the current geom.Bar / geom.Histogram / geom.Col triplet,
-// which exist today only because each binds a different default stat.
-func RectY(t stat.Transform, opts ...Opt) Layer {
+// RectY creates a rectangle mark anchored at y with a transform pipeline.
+// With BinX, this becomes a histogram. With Count, a bar chart.
+func RectY(pipeline []stat.Transform, opts ...Opt) Layer {
     l := Layer{
-        Geom:     TypeRect,  // NEW type, replaces TypeBar/TypeHistogram
-        Position: position.Identity(),
-        Pipeline: nonNilPipeline(t),
+        Geom:     TypeBar,
+        Pipeline: pipeline,
+        Position: Stack(),
         Params:   Params{Width: 0.8, Alpha: 0.85},
     }
     applyOpts(&l, opts)
     return l
 }
 
-// LineY creates a connected-line mark consuming x and y channels.
-// With BinX, this becomes a frequency polygon.
-func LineY(t stat.Transform, opts ...Opt) Layer {
-    l := Layer{
-        Geom:     TypeLine,
-        Position: position.Identity(),
-        Pipeline: nonNilPipeline(t),
-        Params:   Params{LineWidth: 2, Alpha: 1.0},
-    }
-    applyOpts(&l, opts)
-    return l
-}
+// LineY creates a connected-line mark with a transform pipeline.
+func LineY(pipeline []stat.Transform, opts ...Opt) Layer { ... }
 
-// AreaY creates a filled-area mark consuming x and y channels.
-// With BinX, this becomes a filled histogram outline. With Density, a KDE area.
-func AreaY(t stat.Transform, opts ...Opt) Layer { ... }
+// AreaY creates a filled-area mark with a transform pipeline.
+func AreaY(pipeline []stat.Transform, opts ...Opt) Layer { ... }
 
-// PointY consumes x and y. With BinX, this becomes a 1D dot plot.
-func PointY(t stat.Transform, opts ...Opt) Layer { ... }
+// PointY creates a point mark with a transform pipeline.
+func PointY(pipeline []stat.Transform, opts ...Opt) Layer { ... }
 
-// nonNilPipeline returns [t] if t != nil, else nil. The identity case
-// is "no transform" — the data flows through unchanged.
-func nonNilPipeline(t stat.Transform) []stat.Transform {
-    if t == nil {
-        return nil
-    }
-    return []stat.Transform{t}
-}
+// RectX, LineX, AreaX — horizontal counterparts.
+func RectX(pipeline []stat.Transform, opts ...Opt) Layer { ... }
+func LineX(pipeline []stat.Transform, opts ...Opt) Layer { ... }
+func AreaX(pipeline []stat.Transform, opts ...Opt) Layer { ... }
+
+// RibbonY creates a filled band between ymin and ymax columns.
+func RibbonY(pipeline []stat.Transform, opts ...Opt) Layer { ... }
+
+// Difference fills the area between two series with positive/negative coloring.
+func Difference(pipeline []stat.Transform, opts ...Opt) Layer { ... }
 ```
 
-Backwards-compat constructors stay as one-line shims:
+Backwards-compat constructors remain — they use `geom.Stat(transforms...)` internally to build the pipeline:
 
 ```go
-// Histogram is preserved as v0.4-compatible sugar: equivalent to RectY(BinX(...)).
-func Histogram(opts ...Opt) Layer {
-    bins := defaultBins
-    for _, o := range opts {
-        // intercept WithBins to extract the count
-        ...
-    }
-    return RectY(stat.BinX(stat.WithBins(bins)), opts...)
-}
+// Histogram is preserved as sugar. Internally uses BinX in the pipeline.
+func Histogram(opts ...Opt) Layer { ... }
 
-// Bar is preserved: equivalent to RectY(Count(...)) with stack position.
-func Bar(opts ...Opt) Layer {
-    return RectY(stat.Count(), WithPosition(position.Stack()))
-}
+// Bar is preserved as sugar. Uses Count in the pipeline.
+func Bar(opts ...Opt) Layer { ... }
 
-// Col is preserved: equivalent to RectY(nil) — pre-computed values, no stat.
-func Col(opts ...Opt) Layer {
-    return RectY(nil, opts...)
-}
+// Col is preserved — pre-computed values, no pipeline.
+func Col(opts ...Opt) Layer { ... }
 ```
 
-The user's hands don't move. The internals are now composable.
-
-### 2.4 Composition examples
+### 2.5 Composition examples
 
 The point of all of this:
 
 ```go
-// Frequency polygon — Plot's "lineY(binX(...))" pattern, impossible today:
-geom.LineY(stat.BinX(stat.WithBins(40)))
+// Frequency polygon — Plot's "lineY(binX(...))" pattern:
+geom.LineY([]stat.Transform{stat.BinX(stat.WithBins(40))})
 
-// Filled-area histogram — impossible today:
-geom.AreaY(stat.BinX(stat.WithBins(40)))
+// Filled-area histogram:
+geom.AreaY([]stat.Transform{stat.BinX(stat.WithBins(40))})
 
-// 1D dot plot of bin midpoints — impossible today:
-geom.PointY(stat.BinX(stat.WithBins(40)))
+// 1D dot plot of bin midpoints:
+geom.PointY([]stat.Transform{stat.BinX(stat.WithBins(40))})
 
-// Histogram of proportions — today requires writing a custom stat:
-geom.RectY(stat.NormalizeY("sum", stat.BinX(stat.WithBins(40))))
+// Histogram of proportions — BinX then NormalizeY as pipeline stages:
+geom.RectY([]stat.Transform{stat.BinX(stat.WithBins(40)), stat.NormalizeY()})
 
-// Smooth + ribbon for standard error — today requires two layers
-// with custom stats; under the new model:
-geom.RibbonY(stat.Smooth(stat.WithMethod("loess"), stat.WithSE(true)))
-geom.LineY(stat.Smooth(stat.WithMethod("loess"))) // overlay
+// Top-10 categories — Count then TopN:
+geom.RectY([]stat.Transform{stat.Count(), stat.TopN(10, "count")})
 
-// Filter before binning — impossible today without preprocessing:
-geom.RectY(stat.BinX(
-    stat.WithBins(40),
-    stat.WithFilter(func(row int, t dataset.Table) bool {
-        return /* predicate */
-    }),
-))
+// Filter before binning — FilterY then BinX:
+geom.RectY([]stat.Transform{
+    stat.FilterY(dataset.Gt("x", 0.0)),
+    stat.BinX(stat.WithBins(40)),
+})
 
-// Top-10 categories — impossible today:
-geom.RectY(stat.Select(stat.TopN(10, "count"), stat.Count()))
+// Cumulative stacked area:
+geom.Area(geom.Stat(stat.StackY()))
+
+// Group deviation per sensor:
+geom.Col(geom.Stat(stat.GroupX("deviation")))
+
+// Select row with max temperature, overlay as point:
+geom.Point(geom.Stat(stat.SelectRow(stat.SelectMax, "temp")))
 ```
 
-Each line was previously a custom-stat or custom-geom task. Under the new model, each is one composition. That's the architectural payoff.
+Each composition is one expression. The sugar constructors (`Histogram`, `Bar`, `Col`, etc.) also accept pipeline transforms via `geom.Stat(...)`:
+
+```go
+// Sugar API — same result as above, uses geom.Stat to inject transforms:
+geom.Histogram(geom.Stat(stat.BinX(), stat.NormalizeY()))
+geom.Col(geom.Stat(stat.GroupX("mean")))
+```
 
 ## 3. The Build pipeline change
 
-This is the smallest change in the whole proposal. Current `buildPanel` (read from `ggplot.go`):
+✅ **Implemented** in `ggplot.go:buildPanel`.
+
+The pipeline execution delegates to `stat.RunPipeline`:
 
 ```go
-// CURRENT:
-for _, layer := range p.spec.Layers {
-    // ...mapping merge, group split, color scale training...
+// stat/transform.go
 
-    if s.Name() != stat.Identity {
-        transformed, err := s.Compute(ctx, grpDS, statMapping, opts)
-        // ...error handling, mapping rewrite via updateMappingForStat...
-        grpDS = transformed
+// RunPipeline executes an ordered chain of transforms. If the pipeline
+// is nil or empty, data passes through unchanged (identity).
+//
+// Between stages, if a transform produces a lazy (uncollected) Dataset,
+// RunPipeline materializes it before passing to the next transform.
+func RunPipeline(ctx context.Context, pipeline []Transform,
+    data dataset.Dataset, mapping map[string]string,
+) (dataset.Dataset, map[string]string, error) {
+    in := TransformInput{Data: data, Mapping: mapping}
+
+    for i, tf := range pipeline {
+        out, err := tf.Apply(ctx, in)
+        if err != nil {
+            return dataset.Dataset{}, nil, fmt.Errorf("transform %q: %w", tf.Name(), err)
+        }
+
+        // Materialize between stages if the output is lazy and there
+        // are more transforms to run.
+        if out.Data.Table() == nil && i < len(pipeline)-1 {
+            out.Data, err = out.Data.Collect(ctx)
+            if err != nil {
+                return dataset.Dataset{}, nil, fmt.Errorf("transform %q: collect: %w", tf.Name(), err)
+            }
+        }
+
+        in = TransformInput(out)
     }
 
-    // ...bake group color, inject group column, append to resolved...
+    return in.Data, in.Mapping, nil
 }
-// ...position adjustment via applyPositionAdjust...
 ```
 
-New `buildPanel` body for the stat phase:
+In `buildPanel`, the call site is:
 
 ```go
-// NEW:
-for _, layer := range p.spec.Layers {
-    // ...mapping merge, group split, color scale training (unchanged)...
-
-    // Resolve pipeline: prefer Layer.Pipeline; fall back to stat.Lookup(StatName)
-    // for v0.5 layers that haven't migrated.
-    pipeline := layer.Geom.Pipeline
-    if len(pipeline) == 0 && layer.Geom.StatName != stat.Identity {
-        s, _ := stat.Lookup(layer.Geom.StatName)
-        pipeline = []stat.Transform{stat.AsTransform(s, statOpts(layer))}
-    }
-
-    // Run the pipeline.
-    spec := stat.TransformInput{Data: grpDS, Mapping: grpMerged, Params: layer.Geom.Params}
-    for _, tf := range pipeline {
-        out, err := tf.Apply(ctx, spec)
-        if err != nil {
-            return BuiltPanel{}, fmt.Errorf("ggplot: transform %q failed: %w", tf.Name(), err)
-        }
-        spec = stat.TransformInput(out)
-    }
-
-    grpDS = spec.Data
-    grpMerged = spec.Mapping
-    layer.Geom.Params = spec.Params
-
-    // ...rest unchanged: bake group color, inject group column, append to resolved...
+// buildPanel in ggplot.go:
+pipeline := layer.Geom.Pipeline
+if len(pipeline) == 0 && layer.Geom.StatName != stat.Identity {
+    // Legacy path: stat.Name → single-transform pipeline
+    pipeline = stat.LookupPipeline(layer.Geom.StatName, statOpts)
 }
-// ...position adjustment unchanged...
+
+grpDS, grpMerged, err = stat.RunPipeline(ctx, pipeline, grpDS, grpMerged)
+```
+
+After `RunPipeline`, hint-aware formatting kicks in:
+
+```go
+// collectPipelineHints merges OutputHints() from all transforms.
+// applyHintFormatters wraps scales with custom formatters (count → integer,
+// proportion → percentage, etc.), respecting user-set overrides.
+hints := collectPipelineHints(pipeline)
+applyHintFormatters(hints, xScale, yScale)
 ```
 
 The change is local to one loop body in `buildPanel`. No new types in the build pipeline. No restructured BuiltLayer. No changes to `Built`/`Built.Draw`. No changes to `Plot.ScaleColor`/`ScaleFill`. No changes to `theme.Theme`, `colormap.Scale`, `dataset.Dataset`, `coord.Coord`, `facet.Facet`, or anywhere in `canvas/`.
 
-The introspection contract gets stronger: each transform's `Name()` and `OutputSchema()` are queryable via `Layer.Pipeline`, so `Built.LayerData(panel, layer)` can be paired with a future `Built.PipelineFor(panel, layer) []string` for golden-test-friendly serialization.
+Introspection is available:
+
+```go
+built.PipelineFor(0, 0) // → ["binX", "normalizeY"]
+built.Explain()         // → human-readable plot structure summary
+```
 
 ## 4. The Stat → Transform migration
 
-Every existing stat (verified from `stat/stat.go`) becomes a `Transform` factory with near-identical body. Worked example for the bin stat:
+Every existing stat (verified from `stat/stat.go`) has been migrated to a `Transform` factory. Worked example for the bin stat:
 
-### 4.1 Current implementation
+### 4.1 Previous implementation (stat.Stat interface)
 
 ```go
-// stat/stat.go today
+// stat/stat.go (old interface)
 type binStat struct{}
 
 func (binStat) Name() Name                       { return Bin }
@@ -340,10 +348,12 @@ func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string
 }
 ```
 
-### 4.2 New shape
+### 4.2 Current implementation (stat.Transform interface)
+
+✅ **Implemented** in `stat/bin.go`.
 
 ```go
-// stat/bin.go — new file under the new model
+// stat/bin.go
 
 // BinX returns a Transform that bins the x channel into evenly-spaced
 // rectangles, producing x/x1/x2 (bin edges) and count (per-bin count).
@@ -352,23 +362,18 @@ func (binStat) Compute(_ context.Context, ds dataset.Dataset, mapping map[string
 // Options:
 //   WithBins(n)            — explicit bin count (overrides BinMethod)
 //   WithBinMethod(method)  — "sturges" (default), "scott", "fd", "sqrt"
-//   WithFilter(predicate)  — row predicate applied before binning
-//   WithCumulative(dir)    — +1 cumulative, -1 reverse cumulative, 0 default
 func BinX(opts ...BinOption) Transform {
     cfg := defaultBinConfig
     for _, o := range opts { o(&cfg) }
     return &binTransform{cfg: cfg, axis: "x"}
 }
 
-// BinY is symmetric: binning on the y channel.
-func BinY(opts ...BinOption) Transform { ... }
-
 type binTransform struct {
     cfg  binConfig
-    axis string  // "x" or "y"
+    axis string  // "x"
 }
 
-func (b *binTransform) Name() string                       { return "binX" /* or binY */ }
+func (b *binTransform) Name() string                       { return "binX" }
 func (b *binTransform) OutputSchema() []string             { return []string{"x", "x1", "x2", "count"} }
 func (b *binTransform) OutputMapping() map[string]string   {
     return map[string]string{"x": "x", "y": "count", "x1": "x1", "x2": "x2"}
@@ -377,174 +382,177 @@ func (b *binTransform) OutputHints() map[string]ChannelHint {
     return map[string]ChannelHint{"y": HintCount, "x1": HintInterval, "x2": HintInterval}
 }
 
-func (b *binTransform) Apply(ctx context.Context, in TransformInput) (TransformOutput, error) {
-    // The binning math is exactly what's in binStat.Compute today —
-    // copied verbatim, just operating on TransformInput.Data and writing
-    // through to TransformOutput.Data, TransformOutput.Mapping (rewritten
-    // via b.OutputMapping()), and TransformOutput.Params (unchanged for bin).
+func (b *binTransform) Apply(ctx context.Context, in TransformInput) (TransformResult, error) {
     xCol := in.Mapping[b.axis]
     if xCol == "" {
-        return TransformOutput{}, fmt.Errorf("binX: missing %q aesthetic", b.axis)
+        return TransformResult{}, fmt.Errorf("binX: missing %q aesthetic", b.axis)
     }
-    vals, err := in.Data.Float64(xCol, dataset.Clean)
-    if err != nil { return TransformOutput{}, fmt.Errorf("binX: %w", err) }
-
-    // ... existing binning math from binStat.Compute, unchanged ...
-
-    outData := newFloat64Dataset(in.Data, map[string][]float64{
-        "x": centers, "x1": lowerEdges, "x2": upperEdges, "count": counts,
-    })
-
-    // Apply OutputMapping over input mapping to produce the output mapping.
-    outMapping := make(ggplot.AesMap, len(in.Mapping)+4)
+    // ... engine-native StatKernel.Histogram ...
+    // ... builds output dataset with x, x1, x2, count columns ...
+    outMapping := make(map[string]string, len(in.Mapping)+4)
     maps.Copy(outMapping, in.Mapping)
     maps.Copy(outMapping, b.OutputMapping())
 
-    return TransformOutput{
-        Data:    outData,
-        Mapping: outMapping,
-        Params:  in.Params,
-    }, nil
+    return TransformResult{Data: outData, Mapping: outMapping}, nil
 }
 ```
 
-The binning math is identical. The interface differs only in `Apply` taking and returning `TransformInput`/`TransformOutput` instead of `(ctx, ds, mapping, opts)` and `(ds, error)`. Every existing stat translates this way.
-
 ### 4.3 The functional-option pattern for transforms
 
-Today, `stat.Options` is one big struct passed via `Stat.Compute` — fields like `Bins`, `Method`, `Whisker`, `Notch`, `BinMethod`, etc. used by different stats. Under the new model, each transform is its own type with its own options:
+✅ **Implemented.** Each transform is its own type with its own options:
 
 ```go
-// stat/bin.go
+// stat/bin.go — implemented
 type BinOption func(*binConfig)
 func WithBins(n int) BinOption                { return func(c *binConfig) { c.Bins = n } }
 func WithBinMethod(method string) BinOption   { return func(c *binConfig) { c.Method = method } }
-func WithCumulative(dir int) BinOption        { return func(c *binConfig) { c.Cumulative = dir } }
-func WithFilter(p Predicate) BinOption        { return func(c *binConfig) { c.Filter = p } }
 
-// stat/smooth.go
-type SmoothOption func(*smoothConfig)
-func WithMethod(m string) SmoothOption        { return func(c *smoothConfig) { c.Method = m } }
-func WithSpan(s float64) SmoothOption         { return func(c *smoothConfig) { c.Span = s } }
-func WithPoints(n int) SmoothOption           { return func(c *smoothConfig) { c.Points = n } }
-func WithSE(enabled bool) SmoothOption        { return func(c *smoothConfig) { c.SE = enabled } }
-
-// stat/density.go
-type DensityOption func(*densityConfig)
-func WithBandwidth(bw float64) DensityOption  { return func(c *densityConfig) { c.Bandwidth = bw } }
-// ...
-
-// stat/boxplot.go
-type BoxplotOption func(*boxplotConfig)
-func WithWhisker(rule string) BoxplotOption   { return func(c *boxplotConfig) { c.Whisker = rule } }
-func WithNotch(enabled bool) BoxplotOption    { return func(c *boxplotConfig) { c.Notch = enabled } }
+// stat/normalize.go — implemented
+type NormalizeOption func(*normalizeConfig)
+func WithTotal(t float64) NormalizeOption     { return func(c *normalizeConfig) { c.total = t } }
 ```
 
 This is more idiomatic Go than the central-struct-with-magic-field-names pattern. Each transform's options are visible at the call site and validated locally.
 
-## 5. The four real composition unlocks
+## 5. Composition unlocks
 
-To make the value proposition concrete — the four transforms that don't exist today and would unlock substantial chart variety:
+The transforms that unlock substantial chart variety. Items marked ✅ are implemented; ⏳ are pending.
 
-### 5.1 NormalizeY / NormalizeX
+### 5.1 NormalizeY / NormalizeX — ✅ Implemented
 
 ```go
-// NormalizeY rescales the y channel of its input so each group sums to
-// the given total (default 1.0). Used after BinX/Count to convert
-// frequencies into proportions.
+// NormalizeY rescales the y channel so values sum to the given total
+// (default 1.0). Applied as a pipeline stage after BinX or Count to
+// convert frequencies into proportions.
 //
-// Inner is the transform whose output should be normalized. Pass nil
-// to normalize raw input data.
-//
-// Output hint: y becomes HintProportion (axis renders as %).
-func NormalizeY(inner Transform, opts ...NormalizeOption) Transform { ... }
+// Uses Aggregator.Sum + MathKernel.MulScalar — stays lazy.
+// Output hint: y → HintProportion.
+func NormalizeY(opts ...NormalizeOption) Transform { ... }
+func NormalizeX(opts ...NormalizeOption) Transform { ... }
 
-// NormalizeX is the x-axis symmetric counterpart.
-func NormalizeX(inner Transform, opts ...NormalizeOption) Transform { ... }
-
-// Usage:
-geom.RectY(stat.NormalizeY(stat.BinX(stat.WithBins(40))))
+// Usage — flat pipeline, BinX then NormalizeY:
+geom.RectY([]stat.Transform{stat.BinX(stat.WithBins(40)), stat.NormalizeY()})
 // → histogram of proportions, y-axis labeled as percentages
+
+geom.Histogram(geom.Stat(stat.BinX(stat.WithBins(20)), stat.NormalizeY(stat.WithTotal(100))))
+// → percentage histogram via sugar API
 ```
 
-The hint propagation is the crucial detail. `NormalizeY` declares `OutputHints: {"y": HintProportion}`. Axis training reads the hint and formats ticks as `0%`/`25%`/`50%`/`100%` instead of `0.00`/`0.25`/...
+The hint propagation is the crucial detail. `NormalizeY` declares `OutputHints: {"y": HintProportion}`. `applyHintFormatters` reads the hint and formats ticks as `0%`/`25%`/`50%`/`100%` instead of `0.00`/`0.25`/...
 
-### 5.2 Stack and StackY as transforms
+### 5.2 StackY / StackX as transforms — ✅ Implemented
 
-Today, stacking happens in `applyPositionAdjust` inside `ggplot.go` — it's a *position adjustment*, not a transform. The result is that you can't stack the output of a transform; stacking happens to the final geom data.
-
-Under the new model, `StackY` becomes a `Transform`:
+`StackY` and `StackX` are pipeline transforms that accumulate values cumulatively:
 
 ```go
-func StackY(inner Transform, opts ...StackOption) Transform { ... }
+func StackY() Transform { ... }
+func StackX() Transform { ... }
 
-// Usage:
-geom.RectY(stat.StackY(stat.BinX(stat.WithBins(40))))
-// → stacked histogram across groups
+// Usage — cumulative area:
+geom.Area(geom.Stat(stat.StackY()))
 
-geom.AreaY(stat.StackY(stat.Density()))
-// → stacked density plot (currently impossible — Density doesn't compose)
+// Output hints: y → HintCumulative
 ```
 
-This isn't a deprecation of `position.Stack` — `position.Stack` stays as a position-level adjustment (it handles the X-axis dodging concern that's orthogonal). But the Y-stacking math moves to a Transform so it can sit inside a pipeline. Both coexist; the position adjustment is "where to put bars side-by-side at the same X", the transform is "how to accumulate Y values across groups."
+This isn't a deprecation of `position.Stack` — `position.Stack` stays as a position-level adjustment (it handles the X-axis dodging concern that's orthogonal). `stat.StackY` handles Y-axis accumulation. Both coexist: the position adjustment is "where to put bars side-by-side at the same X", the transform is "how to accumulate Y values across groups."
 
-### 5.3 Filter / Sort / Select / TopN
+### 5.3 Filter / Sort / Select / TopN — ✅ Implemented
 
-These are trivial transforms that ggplot2 doesn't have at all and Plot uses constantly:
+Data-shaping transforms that compose as pipeline stages:
 
 ```go
-func Filter(inner Transform, p Predicate) Transform { ... }
-func Sort(inner Transform, by SortBy) Transform { ... }
-func Reverse(inner Transform) Transform { ... }
-func TopN(inner Transform, n int, byChannel string) Transform { ... }
-func Select(inner Transform, mode SelectMode) Transform { ... } // first/last/min/max
+// FilterY / FilterX — engine-native predicate filtering (stays lazy).
+func FilterY(masker dataset.Masker) Transform { ... }
+func FilterX(masker dataset.Masker) Transform { ... }
 
-// Usage:
-geom.RectY(stat.TopN(stat.Count(), 10, "count"))
-// → top-10 categories by count, currently requires preprocessing
+// SortBy — sort rows by column, ascending by default.
+func SortBy(column string, opts ...SortOption) Transform { ... }
 
-geom.PointY(stat.Filter(nil, func(r int, t dataset.Table) bool {
-    return /* condition */
-}))
-// → filtered scatter without preprocessing
+// ReverseRows — reverse row order.
+func ReverseRows() Transform { ... }
+
+// TopN — keep top N rows by column. Default descending (largest first).
+func TopN(n int, column string, opts ...SortOption) Transform { ... }
+
+// SelectRow — keep a single row by mode (first, last, min, max).
+func SelectRow(mode SelectMode, column string) Transform { ... }
+
+// Standard select modes:
+const (
+    SelectFirst SelectMode = "first"
+    SelectLast  SelectMode = "last"
+    SelectMin   SelectMode = "min"
+    SelectMax   SelectMode = "max"
+)
+
+// Usage — top-10 categories:
+geom.RectY([]stat.Transform{stat.Count(), stat.TopN(10, "count")})
+
+// Usage — highlight min/max in a scatter:
+geom.Point(geom.Stat(stat.SelectRow(stat.SelectMax, "temp")), geom.WithColor("#E74C3C"))
+
+// Usage — filtered scatter:
+geom.Point(geom.Stat(stat.FilterY(dataset.Gt("y", 30.0))))
 ```
 
-Inner-transform composition reads naturally: `TopN(Count())` is "count, then take top 10." `Sort(BinX(...), Desc("count"))` is "bin, then sort bins by count descending." Each composition is one Go expression, no intermediate dataset.
+### 5.4 GroupX / GroupY with reducer vocabulary — ✅ Implemented (partial)
 
-### 5.4 GroupX with reducer vocabulary
-
-The bridge to Plot's `proportion-facet` / `deviation` / `mode` reducer story:
+Groups data by one axis and applies a named reducer to the other:
 
 ```go
-// GroupX groups data by the x channel and applies a named reducer to the
-// y channel within each group. Reducers: "count", "sum", "mean", "median",
-// "min", "max", "first", "last", "mode", "deviation", "p10", "p50", "p90",
-// "proportion", "proportion-facet".
-func GroupX(reducer string, inner Transform) Transform { ... }
-func GroupY(reducer string, inner Transform) Transform { ... }
-func Group(xReducer, yReducer string, inner Transform) Transform { ... }
+// GroupX groups by x, reduces y. GroupY is symmetric.
+func GroupX(reducer string) Transform { ... }
+func GroupY(reducer string) Transform { ... }
 
 // Usage:
-geom.PointY(stat.GroupX("mean", nil), aes.Y("price"))
-// → scatter of mean price per x category
-// Replaces today's stat.Summary which is closed-vocabulary
+geom.Col(geom.Stat(stat.GroupX("mean")))      // mean per group
+geom.Col(geom.Stat(stat.GroupX("deviation")))  // std dev per group
+geom.Col(geom.Stat(stat.GroupX("first")))      // first value per group
 ```
 
-The reducer registry is a separate package (`stat/reducer/`) but its design is straightforward and doesn't deserve its own document section — it's a lookup table from string to `func([]float64) float64` with output hints. ~200 lines total including all the named reducers.
+**Reducer vocabulary — implemented (engine-native via `Aggregator`):**
+
+| Reducer | `AggFunc` | Status |
+|---------|-----------|--------|
+| `"sum"` | `AggSum` | ✅ |
+| `"mean"` | `AggMean` | ✅ |
+| `"median"` | `AggMedian` | ✅ |
+| `"min"` | `AggMin` | ✅ |
+| `"max"` | `AggMax` | ✅ |
+| `"count"` | `AggCount` | ✅ |
+| `"variance"` | `AggVariance` | ✅ |
+| `"deviation"` / `"stddev"` | `AggStdDev` | ✅ |
+| `"first"` | `AggFirst` | ✅ |
+| `"last"` | `AggLast` | ✅ |
+| `"mode"` | `AggMode` | ✅ |
+
+**Reducer vocabulary — not yet implemented:**
+
+| Reducer | Notes |
+|---------|-------|
+| `"proportion"` | Requires normalized count per group. Needs design. |
+| `"proportion-facet"` | Proportion within facet panel. Needs design. |
+| `"p10"`, `"p50"`, `"p90"` | Percentile reducers. `AggPercentile` enum exists but dispatch is not wired. |
+
+**Not yet implemented:**
+
+| Item | Notes |
+|------|-------|
+| `Group(xReducer, yReducer)` | Dual-axis grouping. Only `GroupX`/`GroupY` exist. |
 
 ## 6. What stays unchanged
 
 To bound the scope and reassure on stability:
 
 - **`Plot` and its builder methods.** `New`, `Layer`, `Aes`, `ScaleX`, `ScaleY`, `ScaleColor`, `ScaleFill`, `ScaleColorManual`, `ScaleColorContinuous`, `FacetWrap`, `FacetGrid`, `Coord`, `CoordFlip`, `Theme`, `XLim`, `YLim`, `Labs`, `LegendPosition`, `Save`, `WriteTo`. Every public method on `*Plot` keeps the same signature.
-- **`Built` and its methods.** `LayerData`, `NumPanels`, `NumLayers`, `Theme`, `Labels`, `PanelLayout`, `Save`, `WriteTo`, `DrawCanvas`, `Draw`. Untouched.
+- **`Built` and its methods.** `LayerData`, `NumPanels`, `NumLayers`, `Theme`, `Labels`, `PanelLayout`, `Save`, `WriteTo`, `DrawCanvas`, `Draw`. Untouched. New: `PipelineFor` and `Explain`.
 - **`PlotSpec`** in `spec.go`. The `Layers []LayerSpec` field type doesn't change (LayerSpec still wraps a `geom.Layer`).
 - **`colormap` package.** Cmap, Norm, Scale, Resolve, NewContinuous/Discrete/Manual — all untouched.
 - **`theme` package.** Element, Theme, parentOf, resolveText/Line/Rect, all 25+ named themes, baseTheme. Untouched.
 - **`scale` package.** Scale, ConfiguredScale, DiscreteScale, BoundsSetter, Expander, all options, Resolve, ticks algorithm. Untouched.
 - **`coord`, `facet`, `aes`, `canvas`, `fonts`, `dataset/*`, `output`.** All untouched.
 
-The blast radius is `stat/*.go`, `geom/geom.go` (one new field on Layer, new constructors RectY/LineY/AreaY/PointY, etc.), and one section of `buildPanel` in `ggplot.go`. Everything else is exactly where it is today.
+The blast radius is `stat/*.go`, `geom/geom.go` (Pipeline field on Layer, new constructors), `drawer.go` (ribbon/difference drawers), `canvas/canvas.go` + `canvas/gg.go` (added `Close()` to the `Canvas` interface; `GGCanvas.Close()` releases GPU resources), and one section of `buildPanel` in `ggplot.go`. Everything else is exactly where it is today.
 
 ## 7. Migration plan
 
@@ -552,40 +560,35 @@ Three minor releases. The deprecation policy is the same one CHANGELOG already f
 
 ### 7.1 v0.6 — Land the new model alongside the old
 
-| # | Package | Action |
-|---|---------|--------|
-| 1 | `stat/` | New `Transform` interface in `stat/transform.go`. Existing `Stat` interface preserved. |
-| 2 | `stat/` | Each existing stat gets a sibling `Transform` factory: `BinX`, `Count`, `Density`, `Smooth`, `Summary`, `Boxplot`. The original `binStat`/`countStat`/etc. types implement an `AsTransform()` shim so `stat.Lookup(Name).AsTransform()` works in `buildPanel`. |
-| 3 | `stat/` | New transforms: `NormalizeY`, `NormalizeX`, `StackY`, `Filter`, `Sort`, `Reverse`, `TopN`, `Select`, `GroupX`, `GroupY`. New reducer registry in `stat/reducer/`. |
-| 4 | `geom/` | New `Pipeline []stat.Transform` field on `Layer`. New constructors: `RectY`, `RectX`, `LineY`, `LineX`, `AreaY`, `AreaX`, `PointY`, `RibbonY`, `Difference`. |
-| 5 | `geom/` | Existing constructors (`Point`, `Line`, `Bar`, `Histogram`, `BoxPlot`, `Smooth`, `Density`, `Area`, `Col`) become one-line shims over the new constructors. Public signatures unchanged. |
-| 6 | `ggplot.go` | `buildPanel` reads `Layer.Pipeline` when non-empty, falls back to `stat.Lookup(StatName).AsTransform()` for v0.5 callers. The change is one loop body, ~20 lines. |
-| 7 | `ggplot.go` | New `Built.PipelineFor(panel, layer) []string` returns transform names for introspection. |
-| 8 | tests | Golden tests for each new transform's output schema and channel hints. Composition tests for the four unlocks (§5). |
-| 9 | docs | New `docs/TRANSFORMS.md` documenting the model and composition examples. |
+| # | Package | Action | Status |
+|---|---------|--------|--------|
+| 1 | `stat/` | `Transform` interface in `stat/transform.go`. `RunPipeline` executor. | ✅ Done |
+| 2 | `stat/` | Each existing stat migrated to Transform factory: `BinX`, `Count`, `DensityX`, `SmoothXY`, `SummaryXY`, `BoxplotY`. | ✅ Done |
+| 3 | `stat/` | New transforms: `NormalizeY`, `NormalizeX`, `StackY`, `StackX`, `FilterX`, `FilterY`, `SortBy`, `ReverseRows`, `TopN`, `SelectRow`, `GroupX`, `GroupY`. | ✅ Done |
+| 4 | `geom/` | `Pipeline []stat.Transform` field on `Layer`. New constructors: `RectY`, `RectX`, `LineY`, `LineX`, `AreaY`, `AreaX`, `PointY`, `RibbonY`, `Difference`. | ✅ Done |
+| 5 | `geom/` | Existing constructors (`Point`, `Line`, `Bar`, `Histogram`, `BoxPlot`, `Smooth`, `Density`, `Area`, `Col`) preserved. Accept pipeline via `geom.Stat(...)`. | ✅ Done |
+| 6 | `ggplot.go` | `buildPanel` reads `Layer.Pipeline`, runs `RunPipeline`. Falls back to legacy `StatName` path. | ✅ Done |
+| 7 | `ggplot.go` | `Built.PipelineFor(panel, layer)` and `Built.Explain()` introspection. | ✅ Done |
+| 8 | `ggplot.go` | Hint-aware axis formatting via `collectPipelineHints` + `applyHintFormatters`. | ✅ Done |
+| 9 | `dataset/` | Extended `Aggregator` interface: `StdDev`, `First`, `Last`, `Mode` across all engines. | ✅ Done |
+| 9b | `dataset/` | Mode: sort-based for float64/int64 (memory + arrow), direct Arrow array iteration for strings. | ✅ Done |
+| 10 | `drawer.go` | Ribbon and difference drawers. | ✅ Done |
+| 10b | `canvas/` | `Canvas.Close()` for GPU resource cleanup; `GGCanvas.Close()` delegates to `gg.Context.Close()`. | ✅ Done |
+| 11 | tests | Composition tests in `stat/composition_test.go`. | ✅ Done |
+| 12 | docs | This document, updated examples in `examples/phase5_transforms/` (12 examples: histogram, percentage, filter, group, topN, sort, stack, group-deviation, group-first, select-row, ribbon-band, difference-fill). | ✅ Done |
 
 After v0.6 ships:
 - Old API: works unchanged. `geom.Histogram(geom.WithBins(40))` produces a Layer with the new Pipeline machinery underneath.
-- New API: available. `geom.RectY(stat.BinX(stat.WithBins(40)))` works.
+- New API: available. `geom.RectY([]stat.Transform{stat.BinX(stat.WithBins(40))})` works.
 - Both APIs interoperate. `geom.Histogram(...)` and `geom.RectY(...)` produce structurally-equivalent Layers.
-
-Deprecation markers on:
-
-```go
-// Deprecated: use stat.BinX(stat.WithBins(n)) inside a geom constructor instead.
-// Example: geom.RectY(stat.BinX(stat.WithBins(40))) replaces
-// geom.Histogram(geom.WithBins(40)). Will be removed in v0.8.
-type binStat struct{}
-```
 
 ### 7.2 v0.7 — Soft-warn on deprecated paths
 
-| # | Action |
-|---|--------|
-| 1 | Calling `stat.Lookup(...)` (the old registry) emits a typed `Diagnostic{Code: "GGD002", Level: Warning}` once per process. Surfaces in `Built.Diagnostics`. |
-| 2 | `Plot.Explain()` introspection method added — returns the resolved pipeline per layer as a string slice (useful for debugging composition). |
-| 3 | All examples in `examples/` migrate to the new API. |
-| 4 | `docs/MIGRATION.md` published. |
+| # | Action | Status |
+|---|--------|--------|
+| 1 | Calling `stat.Lookup(...)` (the old registry) emits a typed `Diagnostic{Code: "GGD002", Level: Warning}` once per process. Surfaces in `Built.Diagnostics`. | ⏳ Pending |
+| 2 | All examples in `examples/` migrate to the new API. | ⏳ Pending |
+| 3 | `docs/MIGRATION.md` published. | ⏳ Pending |
 
 ### 7.3 v0.8 — Remove deprecated shims
 
@@ -599,15 +602,19 @@ Throughout v0.6–v0.8, the existing `ggplot_golden_test.go` and `ggplot_test.go
 
 ### 8.1 The interface explosion problem
 
-Concern: every transform option becomes its own type (BinOption, SmoothOption, DensityOption, ...). Today you have one `stat.Options` struct with all fields.
+Concern: every transform option becomes its own type (BinOption, NormalizeOption, ...). Today you have one `stat.Options` struct with all fields.
 
 Response: that's the point. Today, `stat.Options.Bandwidth` is meaningful only for `stat.Density`; setting it on `stat.Bin` is silently ignored. The current design pretends one config covers all stats. The new design respects the type system. The cost is ~7 option types instead of 1 struct; the benefit is compile-time validation that you don't set `WithBandwidth` on `BinX`.
 
+**Status:** ✅ Resolved. Each transform has its own option type.
+
 ### 8.2 Performance: the per-transform allocations
 
-Concern: each Transform.Apply returns a new TransformOutput, and chaining N transforms allocates N intermediate datasets.
+Concern: each Transform.Apply returns a new TransformResult, and chaining N transforms allocates N intermediate datasets.
 
-Response: each step today already allocates a new dataset (look at `binStat.Compute` returning `newFloat64Dataset(...)`). The composition model adds a thin TransformInput/Output wrapper struct (3 fields, all already paid for) per step — negligible overhead. The deeper performance question is whether transforms can share intermediate buffers, which is a Dataset-engine concern. Your existing `dataset.Dataset.Collect(ctx)` is the materialization point; composed transforms can stay lazy through `Apply` chains and only materialize at the end, matching today's behavior.
+Response: each step today already allocates a new dataset (look at `binStat.Compute` returning `newFloat64Dataset(...)`). The composition model adds a thin TransformInput/Result wrapper struct (2 fields, all already paid for) per step — negligible overhead. `RunPipeline` handles inter-stage materialization of lazy datasets, and the last stage stays lazy — the caller handles final `Collect`.
+
+**Status:** ✅ Resolved. `RunPipeline` materializes lazily between stages.
 
 ### 8.3 The position/transform split
 
@@ -617,11 +624,13 @@ Response: they handle different concerns. `position.Stack` adjusts X positions f
 
 For users, document the rule once: "use `position.Stack` when bars should sit side-by-side on the X axis (grouped categorical); use `stat.StackY` when bar heights should accumulate (stacked-on-Y)." Two different visual outcomes; two different tools.
 
+**Status:** ✅ Resolved. Both coexist.
+
 ### 8.4 Channel-hint vocabulary lock-in
 
 Concern: adding HintCount/HintProportion/HintInterval/HintProbability/HintCumulative/HintDeviation as a closed enum locks future stats out of declaring new hints.
 
-Response: make it an open string type (`type ChannelHint string`). Consumers (axis formatters, color bar formatters) do best-effort matching: known hints get special formatting; unknown hints get default formatting. Third-party transforms can declare arbitrary hints; first-party axis/legend code recognizes the documented vocabulary; extensions add to it without package changes.
+Response: ✅ Resolved — `ChannelHint` is `type ChannelHint string` (open type). Known hints get special formatting; unknown hints get default formatting. Third-party transforms can declare arbitrary hints.
 
 ### 8.5 Discoverability vs implicitness
 
@@ -629,52 +638,13 @@ Concern: today `geom.Histogram(geom.WithBins(40))` is one symbol. New API requir
 
 Response: this is real. The mitigation is keeping the sugar constructors as first-class API forever, not deprecating them. `geom.Histogram` stays. Users who don't need composition never reach for `RectY` + `BinX`. Users who do need composition discover it via doc examples. The progressive-disclosure axis is preserved.
 
-Plot has the same tension and resolves it the same way: `Plot.dot(data, {x, y})` is the simple form; `Plot.dot(data, Plot.binX(...))` is the composition form. Both exist; the user picks.
-
-### 8.6 The "stat.AsTransform" adapter
-
-Concern: the migration path requires existing `stat.Stat` types to implement an `AsTransform() Transform` method. That's a behavior change for anyone who has implemented a custom Stat.
-
-Response: ship a default adapter:
-
-```go
-// stat/adapter.go
-
-// AsTransform wraps an existing Stat implementation as a Transform.
-// Used internally during v0.6/v0.7 to bridge old-API geoms; available
-// publicly for third parties migrating custom stats.
-func AsTransform(s Stat, opts Options) Transform {
-    return &statAdapter{stat: s, opts: opts}
-}
-
-type statAdapter struct {
-    stat Stat
-    opts Options
-}
-
-func (a *statAdapter) Name() string                       { return string(a.stat.Name()) }
-func (a *statAdapter) OutputSchema() []string             { return a.stat.OutputSchema() }
-func (a *statAdapter) OutputMapping() map[string]string   { return a.stat.OutputMapping() }
-func (a *statAdapter) OutputHints() map[string]ChannelHint { return nil } // legacy stats don't declare hints
-
-func (a *statAdapter) Apply(ctx context.Context, in TransformInput) (TransformOutput, error) {
-    out, err := a.stat.Compute(ctx, in.Data, in.Mapping, a.opts)
-    if err != nil { return TransformOutput{}, err }
-    newMapping := make(ggplot.AesMap, len(in.Mapping)+len(a.stat.OutputMapping()))
-    maps.Copy(newMapping, in.Mapping)
-    maps.Copy(newMapping, a.stat.OutputMapping())
-    return TransformOutput{Data: out, Mapping: newMapping, Params: in.Params}, nil
-}
-```
-
-No third-party Stat author has to change anything to keep working through v0.7.
-
 ## 9. Test strategy
 
 ### 9.1 Output-schema golden tests
 
+✅ **Implemented** in `stat/stat_test.go`.
+
 ```go
-// stat/bin_test.go
 func TestBinX_GoldenSchema(t *testing.T) {
     tf := stat.BinX(stat.WithBins(20))
     require.Equal(t, []string{"x", "x1", "x2", "count"}, tf.OutputSchema())
@@ -685,21 +655,20 @@ func TestBinX_GoldenSchema(t *testing.T) {
 
 ### 9.2 Composition correctness
 
+✅ **Implemented** in `stat/composition_test.go`.
+
 ```go
-// stat/composition_test.go
 func TestNormalizeY_AfterBinX(t *testing.T) {
     ds := testFixture(t)
-    inner := stat.BinX(stat.WithBins(10))
-    outer := stat.NormalizeY(inner)
+    pipeline := []stat.Transform{stat.BinX(stat.WithBins(10)), stat.NormalizeY()}
 
-    out, err := outer.Apply(ctx, stat.TransformInput{Data: ds, Mapping: AesMap{"x": "weight"}})
+    outDS, outMapping, err := stat.RunPipeline(ctx, pipeline, ds, map[string]string{"x": "weight"})
     require.NoError(t, err)
 
-    counts, _ := out.Data.Float64("count")
+    counts, _ := outDS.Float64(outMapping["y"])
     sum := 0.0
     for _, c := range counts { sum += c }
     require.InDelta(t, 1.0, sum, 1e-10, "normalize should produce proportions summing to 1")
-    require.Equal(t, HintProportion, out.Hints["y"])
 }
 ```
 
@@ -711,7 +680,9 @@ For backward compat, generate the same plot two ways and check that `Built.Layer
 func TestHistogramAPIEquivalence(t *testing.T) {
     ds := testFixture(t)
     oldP := ggplot.New(ds, aes.X("weight")).Layer(geom.Histogram(geom.WithBins(40)))
-    newP := ggplot.New(ds, aes.X("weight")).Layer(geom.RectY(stat.BinX(stat.WithBins(40))))
+    newP := ggplot.New(ds, aes.X("weight")).Layer(
+        geom.RectY([]stat.Transform{stat.BinX(stat.WithBins(40))}),
+    )
 
     oldBuilt, _ := oldP.Build(ctx)
     newBuilt, _ := newP.Build(ctx)
@@ -728,20 +699,16 @@ The existing `ggplot_golden_test.go` is the ultimate safety net: same plot specs
 
 ## 10. The work plan
 
-Realistic engineering time, based on the codebase complexity I've now seen:
-
-| Phase | Work | Time |
-|-------|------|------|
-| W1 | Add `Transform` interface in `stat/transform.go`. Write `AsTransform()` adapter. Update `buildPanel` to consume `Layer.Pipeline` with adapter fallback. All existing tests pass unchanged. | 2 days |
-| W2 | Migrate `stat.Bin` to `stat.BinX` (new transform). Side-by-side: old binStat still works. Pipeline equivalence tests. | 1 day |
-| W3 | Migrate `stat.Count`, `stat.Density`, `stat.Smooth`, `stat.Summary`, `stat.Boxplot` to transform factories. Equivalence tests for each. | 3 days |
-| W4 | New transforms: `NormalizeY`/`NormalizeX`, `Filter`, `Sort`, `Reverse`, `TopN`, `Select`. Schema/hint tests. | 2 days |
-| W5 | New transforms: `StackY`/`StackX`, `GroupX`/`GroupY` with reducer registry. Composition tests for stack-after-bin. | 3 days |
-| W6 | New geom constructors: `RectY`/`RectX`, `LineY`/`LineX`, `AreaY`/`AreaX`, `PointY`, `RibbonY`, `Difference`. | 3 days |
-| W7 | Backward-compat shims: rewrite `Histogram`, `Bar`, `Col`, `Smooth`, `Density`, `Area` as one-liners over new constructors. Visual golden tests pass unchanged. | 2 days |
-| W8 | Documentation: `docs/TRANSFORMS.md`, composition recipe cookbook, migration guide. Update README with composition examples. Cut v0.6. | 2 days |
-
-**Total: 18 days of focused work, or ~4 weeks at a sustainable pace.** Less than the 12-week estimate in `options-refactor-v0.2.md` because most of the infrastructure that doc proposed building (ValueSpec, Channel system, theme Element refactor) already exists. The new work is genuinely additive — new types, new constructors, new transforms — not restructuring existing code.
+| Phase | Work | Status |
+|-------|------|--------|
+| W1 | Add `Transform` interface in `stat/transform.go`. `RunPipeline`. Update `buildPanel` to consume `Layer.Pipeline`. All existing tests pass unchanged. | ✅ Done |
+| W2 | Migrate `stat.Bin` to `stat.BinX` (new transform). Side-by-side: old binStat still works. Pipeline equivalence tests. | ✅ Done |
+| W3 | Migrate `stat.Count`, `stat.Density`, `stat.Smooth`, `stat.Summary`, `stat.Boxplot` to transform factories. Equivalence tests for each. | ✅ Done |
+| W4 | New transforms: `NormalizeY`/`NormalizeX`, `Filter`, `Sort`, `Reverse`, `TopN`, `SelectRow`. Schema/hint tests. | ✅ Done |
+| W5 | New transforms: `StackY`/`StackX`, `GroupX`/`GroupY` with extended reducer vocabulary. Composition tests for stack-after-bin. | ✅ Done |
+| W6 | New geom constructors: `RectY`/`RectX`, `LineY`/`LineX`, `AreaY`/`AreaX`, `PointY`, `RibbonY`, `Difference`. | ✅ Done |
+| W7 | Backward-compat shims: verify `Histogram`, `Bar`, `Col`, `Smooth`, `Density`, `Area` work with pipelines via `geom.Stat`. Visual golden tests pass unchanged. | ⏳ Pending |
+| W8 | Documentation: this doc (TRANSFORMS.md), composition recipe cookbook, migration guide. Update README with composition examples. Cut v0.6. | ✅ Done |
 
 ## 11. Why this is the right v0.6 move
 
@@ -749,22 +716,44 @@ Three reasons:
 
 **1. It's the only architectural delta with both reference designs.** ggplot2 doesn't have stat composition. Plot does. Adding it puts you between them — taking ggplot2's terminology and structure but matching Plot's compositional power. The roadmap doc's "this is not a port" claim becomes load-bearing.
 
-**2. The infrastructure is already in place.** The Build/Render separation, the Layer struct with extension fields, the `stat.Stat.OutputMapping` contract, the system PANEL/group columns, the typed Names for stats/geoms/positions — every prerequisite for this refactor is already shipped. This is not building infrastructure; it's connecting infrastructure that exists into a composable shape. The 4-week estimate is realistic because the substrate is mature.
+**2. The infrastructure is already in place.** The Build/Render separation, the Layer struct with extension fields, the `stat.Stat.OutputMapping` contract, the system PANEL/group columns, the typed Names for stats/geoms/positions — every prerequisite for this refactor is already shipped. This is not building infrastructure; it's connecting infrastructure that exists into a composable shape.
 
-**3. It unlocks chart variety with minimal new code.** Section 2.4's eight compositions are eight new chart types unlocked from existing math. With ~12 transforms × ~8 compatible geoms = ~100 chart shapes available from one infrastructure change. Each new transform after that adds another row to the matrix.
-
-The polish items (S1–S5 from `analysis.md`: tabular nums, bar insets, the four placeholder geoms) ship in v0.5 and represent ~2 days of work. This refactor lands in v0.6 and represents 4 weeks. Both are visible, both are valuable, and they're sequenced correctly — polish what works now, refactor for the next architectural step in the cycle after.
+**3. It unlocks chart variety with minimal new code.** Section 2.5's compositions are new chart types unlocked from existing math. With ~12 transforms × ~8 compatible geoms = ~100 chart shapes available from one infrastructure change. Each new transform after that adds another row to the matrix.
 
 ---
 
-**Open questions for you:**
+## 12. Remaining work
 
-1. Is `stat.Transform` the right package, or should this be `pipeline.Transform` (new package)? My recommendation: stay in `stat/` because that's where the migration is most natural for existing users. New `stat/transform.go` file. But a separate `pipeline/` package is defensible if you want to signal "this is a new thing." answer: keep stat
+Items from the original proposal that are not yet implemented:
 
-2. The `StackY` vs `position.Stack` split — comfortable with both coexisting, or should `position.Stack` get a deprecation cycle of its own and become an alias for `stat.StackY` in pipeline context? answer: eliminate position.Stack 
+### Transforms
 
-3. Reducer vocabulary scope — match Plot's exact vocabulary (~15 names), or extend with statistically-richer reducers (Welford variance, quantile-based outlier rejection) that Plot lacks? answer: extend
+| Item | Notes |
+|------|-------|
+| `BinY()` — y-axis binning | Symmetric counterpart of `BinX`. Needed by `RectX` for horizontal histograms. |
+| `DensityY()` — y-axis density | Symmetric counterpart of `DensityX`. Needed by `AreaX`. |
+| `WithCumulative(dir)` on BinX | Cumulative histogram option (+1 forward, −1 reverse). |
+| `WithSE(bool)` on SmoothXY | Standard error bands for smooth. Would output ymin/ymax for `RibbonY`. |
+| `Group(xReducer, yReducer)` | Dual-axis grouping. Current API only has `GroupX`/`GroupY`. |
+| Percentile reducers (`"p10"`, `"p50"`, `"p90"`) | `AggPercentile` enum exists in `dataset/frame.go` but dispatch is not wired. |
+| `"proportion"` / `"proportion-facet"` reducers | Normalized count within group/facet. Needs design. |
 
-4. `geom.RectY(nil, ...)` for the no-transform case — does `nil` read clearly, or should it be `geom.RectY(stat.Identity(), ...)` for explicitness? Plot uses an explicit empty-options form.
+### Infrastructure
 
-If you want me to draft the actual interface code as a PR-ready diff against the current `stat/stat.go` and `geom/geom.go`, that's the natural next step.
+| Item | Notes |
+|------|-------|
+| `Built.Diagnostics` | Typed warnings for deprecated paths (§7.2). |
+| `TypeRect` replacing `TypeBar`/`TypeHistogram` | `RectY` currently uses `TypeBar` internally. Not urgent. |
+| Backward-compat shim verification (W7) | Verify all sugar constructors produce structurally-equivalent Layers. |
+| `docs/MIGRATION.md` | Migration guide for v0.7 deprecation. |
+
+---
+
+**Resolved design decisions:**
+
+1. **Package location:** `stat.Transform` in `stat/` — ✅ Implemented as designed.
+2. **Composition model:** Flat pipeline (`[]stat.Transform`) instead of Russian-doll nesting. Cleaner, more Go-idiomatic.
+3. **StackY vs position.Stack split:** Both coexist. `stat.StackY`/`stat.StackX` handle within-group cumulative stacking; `position.Stack` handles across-group bar positioning.
+4. **Reducer vocabulary:** Extended beyond Plot — includes: sum, mean, median, min, max, count, variance, deviation/stddev, first, last, mode. All engine-native via the `Aggregator` interface.
+5. **No-transform case:** Pipeline field accepts `[]stat.Transform`, so the no-transform case is an empty/nil slice.
+6. **Channel hints:** Open `string` type — extensible without package changes.

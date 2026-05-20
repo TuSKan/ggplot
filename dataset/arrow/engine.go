@@ -17,6 +17,8 @@ package arrow
 import (
 	"context"
 	"fmt"
+	gomath "math"
+	"slices"
 
 	"github.com/TuSKan/ggplot/dataset"
 	simd "github.com/TuSKan/ggplot/dataset/compute"
@@ -329,6 +331,179 @@ func (e *Engine) Variance(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	}
 
 	return e.NewFloat64Column(ac.name, []float64{ss / float64(len(vals)-1)}), nil
+}
+
+// StdDev returns the sample standard deviation as a single-row float64 column.
+func (e *Engine) StdDev(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	vCol, err := e.Variance(col)
+	if err != nil {
+		return nil, err
+	}
+
+	v := vCol.(*arrowFloat64Column).arr.Float64Values()[0] //nolint:errcheck,forcetypeassert // Variance always returns *arrowFloat64Column.
+
+	return e.NewFloat64Column(col.Name(), []float64{gomath.Sqrt(v)}), nil
+}
+
+// First returns the first element of a column as a single-row column.
+func (e *Engine) First(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	if col.Len() == 0 {
+		return nil, fmt.Errorf("First: %w", ErrEmptyColumn)
+	}
+
+	return e.Slice(col, 0, 1)
+}
+
+// Last returns the last element of a column as a single-row column.
+func (e *Engine) Last(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	n := int(col.Len())
+	if n == 0 {
+		return nil, fmt.Errorf("Last: %w", ErrEmptyColumn)
+	}
+
+	return e.Slice(col, n-1, n)
+}
+
+// Mode returns the most frequent value as a single-row column.
+// For ties, the first sorted value wins (deterministic).
+// Float64 and int64 use a sort-based scan (O(n log n), no map overhead).
+// Strings iterate over the Arrow array directly (no materialization to []string).
+func (e *Engine) Mode(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	if col.Len() == 0 {
+		return nil, fmt.Errorf("Mode: %w", ErrEmptyColumn)
+	}
+
+	switch c := col.(type) {
+	case *arrowFloat64Column:
+		// Zero-copy slice from Arrow buffer → copy → sort → scan.
+		vals := c.arr.Float64Values()
+		tmp := make([]float64, len(vals))
+		copy(tmp, vals)
+		slices.Sort(tmp)
+
+		bestVal := tmp[0]
+		bestCount, curCount := 1, 1
+
+		for i := 1; i < len(tmp); i++ {
+			if tmp[i] == tmp[i-1] {
+				curCount++
+			} else {
+				curCount = 1
+			}
+
+			if curCount > bestCount {
+				bestCount = curCount
+				bestVal = tmp[i]
+			}
+		}
+
+		return e.NewFloat64Column(c.name, []float64{bestVal}), nil
+	case *arrowInt64Column:
+		vals := c.arr.Int64Values()
+		tmp := make([]int64, len(vals))
+		copy(tmp, vals)
+		slices.Sort(tmp)
+
+		bestVal := tmp[0]
+		bestCount, curCount := 1, 1
+
+		for i := 1; i < len(tmp); i++ {
+			if tmp[i] == tmp[i-1] {
+				curCount++
+			} else {
+				curCount = 1
+			}
+
+			if curCount > bestCount {
+				bestCount = curCount
+				bestVal = tmp[i]
+			}
+		}
+
+		if c.dtype == dataset.DTypeTimestamp {
+			return e.NewTimestampColumn(c.name, []int64{bestVal}), nil
+		}
+
+		return e.NewInt64Column(c.name, []int64{bestVal}), nil
+	case *arrowStringColumn:
+		// Iterate directly over Arrow array — no []string materialization.
+		n := c.arr.Len()
+		counts := make(map[string]int, n/2) //nolint:mnd // reasonable pre-alloc hint.
+
+		var bestVal string
+
+		bestCount := 0
+
+		for i := range n {
+			v := c.arr.Value(i)
+			counts[v]++
+
+			if counts[v] > bestCount {
+				bestCount = counts[v]
+				bestVal = v
+			}
+		}
+
+		return e.NewStringColumn(c.name, []string{bestVal}), nil
+	default:
+		return nil, fmt.Errorf("Mode: %T: %w", col, ErrUnsupportedType)
+	}
+}
+
+// Percentile returns the p-th quantile as a single-row float64 column.
+// p ∈ [0,1]. Uses sort-based R-7 linear interpolation.
+// Float64: zero-copy slice → copy → sort → interpolate.
+// Int64: zero-copy → convert to float64 → sort → interpolate.
+func (e *Engine) Percentile(col dataset.AnyColumn, p float64) (dataset.AnyColumn, error) {
+	if col.Len() == 0 {
+		return nil, fmt.Errorf("Percentile: %w", ErrEmptyColumn)
+	}
+
+	if p < 0 || p > 1 {
+		return nil, fmt.Errorf("Percentile: p=%f out of range [0,1]", p)
+	}
+
+	switch c := col.(type) {
+	case *arrowFloat64Column:
+		vals := c.arr.Float64Values()
+		tmp := make([]float64, len(vals))
+		copy(tmp, vals)
+		slices.Sort(tmp)
+
+		return e.NewFloat64Column(c.name, []float64{interpolateQuantile(tmp, p)}), nil
+	case *arrowInt64Column:
+		vals := c.arr.Int64Values()
+		tmp := make([]float64, len(vals))
+		for i, v := range vals {
+			tmp[i] = float64(v)
+		}
+
+		slices.Sort(tmp)
+
+		return e.NewFloat64Column(c.name, []float64{interpolateQuantile(tmp, p)}), nil
+	default:
+		return nil, fmt.Errorf("Percentile: %T: %w", col, ErrUnsupportedType)
+	}
+}
+
+// interpolateQuantile computes the p-th quantile from a sorted slice
+// using R-7 linear interpolation (same as NumPy default / Excel PERCENTILE).
+func interpolateQuantile(sorted []float64, p float64) float64 {
+	n := len(sorted)
+	if n == 1 {
+		return sorted[0]
+	}
+
+	idx := p * float64(n-1)
+	lo := int(gomath.Floor(idx))
+	hi := lo + 1
+	frac := idx - float64(lo)
+
+	if hi >= n {
+		return sorted[n-1]
+	}
+
+	return sorted[lo]*(1-frac) + sorted[hi]*frac
 }
 
 // --- Caster ---

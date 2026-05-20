@@ -8,7 +8,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 )
 
-// DensityOption configures the DensityX transform.
+// DensityOption configures the DensityX / DensityY transform.
 type DensityOption func(*densityConfig)
 
 type densityConfig struct {
@@ -35,53 +35,77 @@ func DensityX(opts ...DensityOption) Transform {
 		o(&cfg)
 	}
 
-	return &densityTransform{cfg: cfg}
+	return &densityTransform{cfg: cfg, axis: "x"}
+}
+
+// DensityY returns a Transform that computes a kernel density estimation
+// on the y channel. Produces y (grid) and density columns.
+// This is the symmetric counterpart of [DensityX] for horizontal density plots.
+func DensityY(opts ...DensityOption) Transform {
+	cfg := densityConfig{Points: 512}
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	return &densityTransform{cfg: cfg, axis: "y"}
 }
 
 type densityTransform struct {
-	cfg densityConfig
+	cfg  densityConfig
+	axis string // "x" or "y"
 }
 
-func (d *densityTransform) Name() string { return "densityX" }
+func (d *densityTransform) Name() string { return "density" + d.axis }
 
 func (d *densityTransform) OutputSchema() []string {
-	return []string{"density", "x"}
+	return []string{"density", d.axis}
 }
 
 func (d *densityTransform) OutputMapping() map[string]string {
-	return map[string]string{"x": "x", "y": "density"}
+	cross := "y"
+	if d.axis == "y" {
+		cross = "x"
+	}
+
+	return map[string]string{d.axis: d.axis, cross: "density"}
 }
 
 func (d *densityTransform) OutputHints() map[string]ChannelHint { return nil }
 
 func (d *densityTransform) Apply(ctx context.Context, in TransformInput) (TransformResult, error) {
-	xCol := in.Mapping["x"]
-	if xCol == "" {
-		return TransformResult{}, fmt.Errorf("densityX: missing 'x' aesthetic: %w", ErrMissingColumn)
+	label := d.Name()
+
+	srcCol := in.Mapping[d.axis]
+	if srcCol == "" {
+		return TransformResult{}, fmt.Errorf("%s: missing '%s' aesthetic: %w", label, d.axis, ErrMissingColumn)
 	}
 
-	// Dispatch to engine StatKernel.
 	eng := dataset.GetEngine(in.Data.Table())
 	if eng == nil {
-		return TransformResult{}, fmt.Errorf("densityX: no engine: %w", ErrUnsupportedType)
+		return TransformResult{}, fmt.Errorf("%s: no engine: %w", label, ErrUnsupportedType)
 	}
 
 	sk, ok := eng.(dataset.StatKernel)
 	if !ok {
-		return TransformResult{}, fmt.Errorf("densityX: engine %q: StatKernel: %w", eng.Name(), ErrUnsupportedType)
+		return TransformResult{}, fmt.Errorf("%s: engine %q: StatKernel: %w", label, eng.Name(), ErrUnsupportedType)
 	}
 
-	col, err := in.Data.Column(xCol)
+	col, err := in.Data.Column(srcCol)
 	if err != nil {
-		return TransformResult{}, fmt.Errorf("densityX: %w", err)
+		return TransformResult{}, fmt.Errorf("%s: %w", label, err)
 	}
 
 	tbl, err := sk.KDE(ctx, col, d.cfg.Bandwidth, d.cfg.Points)
 	if err != nil {
-		return TransformResult{}, fmt.Errorf("densityX: %w", err)
+		return TransformResult{}, fmt.Errorf("%s: %w", label, err)
 	}
 
 	outData := dataset.From(tbl)
+
+	// KDE produces "x" (grid) + "density". For DensityY, rename "x" → "y".
+	if d.axis == "y" {
+		outData = outData.Rename("x", "y")
+	}
 
 	outMapping := make(map[string]string, len(in.Mapping)+len(d.OutputMapping()))
 	maps.Copy(outMapping, in.Mapping)

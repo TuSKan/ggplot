@@ -14,6 +14,7 @@ type SmoothOption func(*smoothConfig)
 type smoothConfig struct {
 	Method string // "linear" or "loess" (default)
 	NOut   int    // output grid size; 0 = 80
+	SE     bool   // produce ymin/ymax confidence bands
 }
 
 // WithMethod sets the smoothing method: "linear" or "loess" (default).
@@ -24,6 +25,9 @@ func WithNOut(n int) SmoothOption { return func(c *smoothConfig) { c.NOut = n } 
 
 // WithSmoothPoints is an alias for [WithNOut] for backward compatibility.
 func WithSmoothPoints(n int) SmoothOption { return WithNOut(n) }
+
+// WithSE enables 95% confidence band output (ymin, ymax columns).
+func WithSE(se bool) SmoothOption { return func(c *smoothConfig) { c.SE = se } }
 
 // SmoothXY returns a Transform that fits a smooth curve through (x, y) data.
 // Produces x (grid) and y (fitted) columns.
@@ -44,6 +48,10 @@ type smoothTransform struct {
 func (s *smoothTransform) Name() string { return "smoothXY" }
 
 func (s *smoothTransform) OutputSchema() []string {
+	if s.cfg.SE {
+		return []string{"x", "y", "ymin", "ymax"}
+	}
+
 	return []string{"x", "y"}
 }
 
@@ -82,9 +90,13 @@ func (s *smoothTransform) Apply(ctx context.Context, in TransformInput) (Transfo
 
 	var tbl dataset.Table
 
-	switch s.cfg.Method {
-	case "linear":
+	switch {
+	case s.cfg.Method == "linear" && s.cfg.SE:
+		tbl, err = sk.LinearFitSE(xCol, yCol, s.cfg.NOut)
+	case s.cfg.Method == "linear":
 		tbl, err = sk.LinearFit(xCol, yCol, s.cfg.NOut)
+	case s.cfg.SE:
+		tbl, err = sk.LoessFitSE(ctx, xCol, yCol, s.cfg.NOut)
 	default: // "loess"
 		tbl, err = sk.LoessFit(ctx, xCol, yCol, s.cfg.NOut)
 	}

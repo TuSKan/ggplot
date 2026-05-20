@@ -264,6 +264,192 @@ func (e *Engine) Variance(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	return &float64Column{name: c.name, data: []float64{ss / float64(n-1)}}, nil
 }
 
+// StdDev returns the sample standard deviation as a single-row float64 column.
+func (e *Engine) StdDev(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	vCol, err := e.Variance(col)
+	if err != nil {
+		return nil, err
+	}
+
+	v := vCol.(*float64Column).data[0] //nolint:errcheck,forcetypeassert // Variance always returns *float64Column.
+
+	return &float64Column{name: col.Name(), data: []float64{math.Sqrt(v)}}, nil
+}
+
+// First returns the first element of a column as a single-row column.
+func (e *Engine) First(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	if col.Len() == 0 {
+		return nil, fmt.Errorf("First: %w", ErrEmptyColumn)
+	}
+
+	return e.Slice(col, 0, 1)
+}
+
+// Last returns the last element of a column as a single-row column.
+func (e *Engine) Last(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	n := int(col.Len())
+	if n == 0 {
+		return nil, fmt.Errorf("Last: %w", ErrEmptyColumn)
+	}
+
+	return e.Slice(col, n-1, n)
+}
+
+// Mode returns the most frequent value as a single-row column.
+// For ties, the first value encountered wins.
+func (e *Engine) Mode(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	if col.Len() == 0 {
+		return nil, fmt.Errorf("Mode: %w", ErrEmptyColumn)
+	}
+
+	switch c := col.(type) {
+	case *float64Column:
+		return modeFloat64(c), nil
+	case *int64Column:
+		return modeInt64(c), nil
+	case *stringColumn:
+		return modeString(c), nil
+	default:
+		return nil, fmt.Errorf("Mode: %s: %w", col.DType(), ErrUnsupportedType)
+	}
+}
+
+func modeFloat64(c *float64Column) dataset.AnyColumn {
+	// Sort-based mode: copy → sort → scan for longest run.
+	// Better cache locality and no map overhead for numeric data.
+	tmp := make([]float64, len(c.data))
+	copy(tmp, c.data)
+	slices.Sort(tmp)
+
+	bestVal := tmp[0]
+	bestCount := 1
+	curCount := 1
+
+	for i := 1; i < len(tmp); i++ {
+		if tmp[i] == tmp[i-1] {
+			curCount++
+		} else {
+			curCount = 1
+		}
+
+		if curCount > bestCount {
+			bestCount = curCount
+			bestVal = tmp[i]
+		}
+	}
+
+	return &float64Column{name: c.name, data: []float64{bestVal}}
+}
+
+func modeInt64(c *int64Column) dataset.AnyColumn {
+	tmp := make([]int64, len(c.data))
+	copy(tmp, c.data)
+	slices.Sort(tmp)
+
+	bestVal := tmp[0]
+	bestCount := 1
+	curCount := 1
+
+	for i := 1; i < len(tmp); i++ {
+		if tmp[i] == tmp[i-1] {
+			curCount++
+		} else {
+			curCount = 1
+		}
+
+		if curCount > bestCount {
+			bestCount = curCount
+			bestVal = tmp[i]
+		}
+	}
+
+	return &int64Column{name: c.name, data: []int64{bestVal}, dtype: c.dtype}
+}
+
+func modeString(c *stringColumn) dataset.AnyColumn {
+	// Strings: map-based counting (sort order isn't meaningful for mode tie-breaking).
+	counts := make(map[string]int, len(c.data)/2) //nolint:mnd // reasonable pre-alloc hint.
+
+	var bestVal string
+
+	bestCount := 0
+
+	for _, v := range c.data {
+		counts[v]++
+		if counts[v] > bestCount {
+			bestCount = counts[v]
+			bestVal = v
+		}
+	}
+
+	return &stringColumn{name: c.name, data: []string{bestVal}}
+}
+
+// Percentile returns the p-th quantile as a single-row float64 column.
+// p ∈ [0,1]. Uses sort-based linear interpolation (R-7 method).
+func (e *Engine) Percentile(col dataset.AnyColumn, p float64) (dataset.AnyColumn, error) {
+	if col.Len() == 0 {
+		return nil, fmt.Errorf("Percentile: %w", ErrEmptyColumn)
+	}
+
+	if p < 0 || p > 1 {
+		return nil, fmt.Errorf("Percentile: p=%f out of range [0,1]", p)
+	}
+
+	switch c := col.(type) {
+	case *float64Column:
+		return percentileFloat64(c, p), nil
+	case *int64Column:
+		return percentileInt64(c, p), nil
+	default:
+		return nil, fmt.Errorf("Percentile: %s: %w", col.DType(), ErrUnsupportedType)
+	}
+}
+
+func percentileFloat64(c *float64Column, p float64) dataset.AnyColumn {
+	tmp := make([]float64, len(c.data))
+	copy(tmp, c.data)
+	slices.Sort(tmp)
+
+	val := interpolateQuantile(tmp, p)
+
+	return &float64Column{name: c.name, data: []float64{val}}
+}
+
+func percentileInt64(c *int64Column, p float64) dataset.AnyColumn {
+	tmp := make([]float64, len(c.data))
+	for i, v := range c.data {
+		tmp[i] = float64(v)
+	}
+
+	slices.Sort(tmp)
+
+	val := interpolateQuantile(tmp, p)
+
+	return &float64Column{name: c.name, data: []float64{val}}
+}
+
+// interpolateQuantile computes the p-th quantile from a sorted slice
+// using R-7 linear interpolation (same as NumPy default / Excel PERCENTILE).
+func interpolateQuantile(sorted []float64, p float64) float64 {
+	n := len(sorted)
+	if n == 1 {
+		return sorted[0]
+	}
+
+	// R-7: index = (n-1)*p
+	idx := p * float64(n-1)
+	lo := int(math.Floor(idx))
+	hi := lo + 1
+	frac := idx - float64(lo)
+
+	if hi >= n {
+		return sorted[n-1]
+	}
+
+	return sorted[lo]*(1-frac) + sorted[hi]*frac
+}
+
 // --- Caster ---
 
 // Cast converts a column to the specified dtype.

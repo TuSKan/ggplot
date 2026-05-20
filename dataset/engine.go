@@ -154,6 +154,11 @@ type Aggregator interface {
 	Count(col AnyColumn) (AnyColumn, error)
 	Median(col AnyColumn) (AnyColumn, error)
 	Variance(col AnyColumn) (AnyColumn, error)
+	StdDev(col AnyColumn) (AnyColumn, error)         // sqrt(variance)
+	First(col AnyColumn) (AnyColumn, error)           // first element
+	Last(col AnyColumn) (AnyColumn, error)            // last element
+	Mode(col AnyColumn) (AnyColumn, error)            // most frequent value
+	Percentile(col AnyColumn, p float64) (AnyColumn, error) // quantile ∈ [0,1]
 }
 
 // Caster provides engine-controlled type casting.
@@ -329,6 +334,16 @@ type StatKernel interface {
 	// Returns a Table with columns: "x" (grid) and "y" (fitted values).
 	// nOut is the number of output grid points.
 	LoessFit(ctx context.Context, xCol, yCol AnyColumn, nOut int) (Table, error)
+
+	// LinearFitSE computes OLS regression with 95% confidence bands.
+	// Returns a Table with columns: "x", "y" (fitted), "ymin", "ymax".
+	// nOut is the number of output grid points.
+	LinearFitSE(xCol, yCol AnyColumn, nOut int) (Table, error)
+
+	// LoessFitSE computes LOESS with approximate 95% confidence bands.
+	// Returns a Table with columns: "x", "y" (fitted), "ymin", "ymax".
+	// nOut is the number of output grid points.
+	LoessFitSE(ctx context.Context, xCol, yCol AnyColumn, nOut int) (Table, error)
 
 	// Boxplot computes the five-number summary for a numeric column,
 	// optionally grouped by a categorical column.

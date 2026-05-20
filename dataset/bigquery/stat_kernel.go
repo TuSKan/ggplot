@@ -456,6 +456,330 @@ func buildStatTableLocal(e *Engine, cols map[string][]float64) (dataset.Table, e
 	return result, nil
 }
 
+// --- LinearFitSE ---
+
+// LinearFitSE computes OLS regression with 95% confidence bands.
+// Coefficients and residual SE all computed server-side in BigQuery.
+func (e *Engine) LinearFitSE(xCol, yCol dataset.AnyColumn, nOut int) (dataset.Table, error) {
+	xName, xSrc, err := requireBQCol(xCol)
+	if err != nil {
+		return nil, fmt.Errorf("bigquery: LinearFitSE: x: %w", err)
+	}
+
+	yName, _, err := requireBQCol(yCol)
+	if err != nil {
+		return nil, fmt.Errorf("bigquery: LinearFitSE: y: %w", err)
+	}
+
+	if nOut <= 0 {
+		nOut = 80 //nolint:mnd // Default output grid size.
+	}
+
+	sql := fmt.Sprintf(`
+WITH stats AS (
+  SELECT
+    CAST(COUNT(*) AS FLOAT64) AS n,
+    SUM(`+"`%[1]s`"+`) AS sx,
+    SUM(`+"`%[2]s`"+`) AS sy,
+    SUM(`+"`%[1]s`"+` * `+"`%[1]s`"+`) AS sxx,
+    SUM(`+"`%[1]s`"+` * `+"`%[2]s`"+`) AS sxy,
+    MIN(`+"`%[1]s`"+`) AS x_min,
+    MAX(`+"`%[1]s`"+`) AS x_max
+  FROM %[3]s
+  WHERE `+"`%[1]s`"+` IS NOT NULL AND `+"`%[2]s`"+` IS NOT NULL
+),
+coeffs AS (
+  SELECT
+    n, sx, sxx, x_min, x_max,
+    CASE
+      WHEN ABS(n * sxx - sx * sx) < 1e-15 THEN sy / n
+      ELSE (sxx * sy - sx * sxy) / (n * sxx - sx * sx)
+    END AS a,
+    CASE
+      WHEN ABS(n * sxx - sx * sx) < 1e-15 THEN 0
+      ELSE (n * sxy - sx * sy) / (n * sxx - sx * sx)
+    END AS b,
+    LEAST(CAST(n AS INT64), %[4]d) AS nout
+  FROM stats
+),
+residuals AS (
+  SELECT
+    SUM(POW(`+"`%[2]s`"+` - (c.a + c.b * `+"`%[1]s`"+`), 2)) / GREATEST(c.n - 2, 1) AS mse,
+    c.*
+  FROM %[3]s t CROSS JOIN coeffs c
+  WHERE t.`+"`%[1]s`"+` IS NOT NULL AND t.`+"`%[2]s`"+` IS NOT NULL
+  GROUP BY c.n, c.sx, c.sxx, c.x_min, c.x_max, c.a, c.b, c.nout
+)
+SELECT
+  val AS x,
+  r.a + r.b * val AS y,
+  (r.a + r.b * val) - 1.96 * SQRT(r.mse * (1/r.n + POW(val - r.sx/r.n, 2) / (r.sxx - r.sx*r.sx/r.n))) AS ymin,
+  (r.a + r.b * val) + 1.96 * SQRT(r.mse * (1/r.n + POW(val - r.sx/r.n, 2) / (r.sxx - r.sx*r.sx/r.n))) AS ymax
+FROM residuals r,
+UNNEST(GENERATE_ARRAY(r.x_min, r.x_max,
+  (r.x_max - r.x_min) / GREATEST(r.nout - 1, 1))) AS val
+ORDER BY x
+`, xName, yName, xSrc, nOut)
+
+	schema := dataset.NewSchema(
+		dataset.Field{Name: "x", Dtype: dataset.DTypeFloat64},
+		dataset.Field{Name: "y", Dtype: dataset.DTypeFloat64},
+		dataset.Field{Name: "ymax", Dtype: dataset.DTypeFloat64},
+		dataset.Field{Name: "ymin", Dtype: dataset.DTypeFloat64},
+	)
+
+	return e.lazyStatDataset(sql, schema), nil
+}
+
+// --- LoessFitSE ---
+
+// LoessFitSE computes LOESS with approximate 95% confidence bands.
+// Like LoessFit, it samples server-side and computes locally.
+func (e *Engine) LoessFitSE(_ context.Context, xCol, yCol dataset.AnyColumn, nOut int) (dataset.Table, error) {
+	xName, xSrc, err := requireBQCol(xCol)
+	if err != nil {
+		return nil, fmt.Errorf("bigquery: LoessFitSE: x: %w", err)
+	}
+
+	yName, _, err := requireBQCol(yCol)
+	if err != nil {
+		return nil, fmt.Errorf("bigquery: LoessFitSE: y: %w", err)
+	}
+
+	if nOut <= 0 {
+		nOut = 80 //nolint:mnd // Default output grid size.
+	}
+
+	return &loessSELazyTable{
+		engine: e,
+		xName:  xName,
+		yName:  yName,
+		src:    xSrc,
+		nOut:   nOut,
+	}, nil
+}
+
+// loessSELazyTable is a lazy Table for LoessFitSE — same pattern as loessLazyTable
+// but produces ymin/ymax bands using the local engine's LoessFitSE.
+type loessSELazyTable struct {
+	engine *Engine
+	xName  string
+	yName  string
+	src    string
+	nOut   int
+
+	once   sync.Once
+	result dataset.Table
+	err    error
+}
+
+func (t *loessSELazyTable) Schema() *dataset.Schema {
+	return dataset.NewSchema(
+		dataset.Field{Name: "x", Dtype: dataset.DTypeFloat64},
+		dataset.Field{Name: "y", Dtype: dataset.DTypeFloat64},
+		dataset.Field{Name: "ymax", Dtype: dataset.DTypeFloat64},
+		dataset.Field{Name: "ymin", Dtype: dataset.DTypeFloat64},
+	)
+}
+
+func (t *loessSELazyTable) NumRows() int64 { return int64(t.nOut) }
+func (t *loessSELazyTable) NumCols() int64 { return 4 } //nolint:mnd // x, y, ymin, ymax.
+
+func (t *loessSELazyTable) Column(name string) (dataset.AnyColumn, error) {
+	t.once.Do(t.compute)
+
+	if t.err != nil {
+		return nil, t.err
+	}
+
+	col, err := t.result.Column(name)
+	if err != nil {
+		return nil, fmt.Errorf("bigquery: loessSELazyTable.Column: %w", err)
+	}
+
+	return col, nil
+}
+
+func (t *loessSELazyTable) compute() {
+	sampleSize := 10_000 //nolint:mnd // Sample size for LOESS.
+
+	sampleSQL := fmt.Sprintf(`
+SELECT `+"`%[1]s`"+` AS x, `+"`%[2]s`"+` AS y
+FROM %[3]s
+WHERE `+"`%[1]s`"+` IS NOT NULL AND `+"`%[2]s`"+` IS NOT NULL
+ORDER BY RAND()
+LIMIT %[4]d
+`, t.xName, t.yName, t.src, sampleSize)
+
+	sampleSchema := dataset.NewSchema(
+		dataset.Field{Name: "x", Dtype: dataset.DTypeFloat64},
+		dataset.Field{Name: "y", Dtype: dataset.DTypeFloat64},
+	)
+
+	sampleDS := &bqDataset{
+		engine:     t.engine,
+		schema:     sampleSchema,
+		pendingSQL: sampleSQL,
+	}
+
+	tbl, err := sampleDS.download()
+	if err != nil {
+		t.err = fmt.Errorf("bigquery: LoessFitSE: sample: %w", err)
+		return
+	}
+
+	xColLocal, err := tbl.Column("x")
+	if err != nil {
+		t.err = fmt.Errorf("bigquery: LoessFitSE: %w", err)
+		return
+	}
+
+	yColLocal, err := tbl.Column("y")
+	if err != nil {
+		t.err = fmt.Errorf("bigquery: LoessFitSE: %w", err)
+		return
+	}
+
+	xTyped, ok := xColLocal.(dataset.Column[float64])
+	if !ok {
+		t.err = fmt.Errorf("bigquery: LoessFitSE: x: expected float64, got %T: %w", xColLocal, ErrUnsupportedType)
+		return
+	}
+
+	yTyped, ok := yColLocal.(dataset.Column[float64])
+	if !ok {
+		t.err = fmt.Errorf("bigquery: LoessFitSE: y: expected float64, got %T: %w", yColLocal, ErrUnsupportedType)
+		return
+	}
+
+	t.result, t.err = loessComputeSE(t.engine, xTyped.Values(), yTyped.Values(), t.nOut)
+}
+
+// loessComputeSE runs LOESS with SE bands on local sample data.
+func loessComputeSE(e *Engine, xData, yData []float64, nOut int) (dataset.Table, error) {
+	n := len(xData)
+	if n < 3 { //nolint:mnd // SE requires at least 3 points.
+		return buildStatTableLocal(e, map[string][]float64{
+			"x": xData, "y": yData,
+			"ymin": yData, "ymax": yData,
+		})
+	}
+
+	type xyPair struct{ x, y float64 }
+
+	pts := make([]xyPair, n)
+	for i := range xData {
+		pts[i] = xyPair{xData[i], yData[i]}
+	}
+
+	sort.Slice(pts, func(i, j int) bool { return pts[i].x < pts[j].x })
+
+	xMin, xMax := pts[0].x, pts[n-1].x
+
+	if nOut > n {
+		nOut = n
+	}
+
+	alpha := 0.3 //nolint:mnd // LOESS bandwidth fraction.
+	if n < 20 {  //nolint:mnd // Adaptive bandwidth for small datasets.
+		alpha = 0.75 //nolint:mnd // 75% for very small datasets.
+	} else if n < 50 { //nolint:mnd // Medium dataset size threshold.
+		alpha = 0.5 //nolint:mnd // 50% for medium datasets.
+	}
+
+	step := (xMax - xMin) / float64(nOut-1)
+
+	xs := make([]float64, nOut)
+	ys := make([]float64, nOut)
+	ymin := make([]float64, nOut)
+	ymax := make([]float64, nOut)
+
+	k := min(max(int(math.Ceil(alpha*float64(n))), 3), n) //nolint:mnd // Minimum window of 3.
+	tCrit := 1.96                                          //nolint:mnd // z ≈ 1.96 for 95% CI.
+
+	lo, hi := 0, k
+
+	for i := range nOut {
+		xEval := xMin + float64(i)*step
+		xs[i] = xEval
+
+		for hi < n && math.Abs(pts[hi].x-xEval) < math.Abs(pts[lo].x-xEval) {
+			lo++
+			hi++
+		}
+
+		maxDist := math.Max(math.Abs(pts[lo].x-xEval), math.Abs(pts[hi-1].x-xEval))
+		if maxDist < 1e-12 { //nolint:mnd // Minimum distance threshold.
+			maxDist = 1e-12 //nolint:mnd // Minimum distance threshold.
+		}
+
+		var sw, swx, swy, swxx, swxy float64
+
+		for j := lo; j < hi; j++ {
+			u := math.Abs(pts[j].x-xEval) / maxDist
+			if u >= 1.0 {
+				continue
+			}
+
+			w := (1 - u*u*u)
+			w = w * w * w // tri-cube kernel
+
+			dx := pts[j].x - xEval
+			sw += w
+			swx += w * dx
+			swy += w * pts[j].y
+			swxx += w * dx * dx
+			swxy += w * dx * pts[j].y
+		}
+
+		if sw < 1e-15 { //nolint:mnd // Near-zero weight sum.
+			ys[i] = 0
+			ymin[i] = 0
+			ymax[i] = 0
+
+			continue
+		}
+
+		det := sw*swxx - swx*swx
+		if math.Abs(det) < 1e-15 { //nolint:mnd // Singular matrix.
+			ys[i] = swy / sw
+		} else {
+			a := (swxx*swy - swx*swxy) / det
+			ys[i] = a
+		}
+
+		// Approximate SE from weighted residuals in the local window.
+		var wsse, wn float64
+
+		for j := lo; j < hi; j++ {
+			u := math.Abs(pts[j].x-xEval) / maxDist
+			if u >= 1.0 {
+				continue
+			}
+
+			w := (1 - u*u*u)
+			w = w * w * w
+
+			r := pts[j].y - ys[i]
+			wsse += w * r * r
+			wn += w
+		}
+
+		if wn > 0 {
+			se := math.Sqrt(wsse / wn / sw)
+			ymin[i] = ys[i] - tCrit*se
+			ymax[i] = ys[i] + tCrit*se
+		} else {
+			ymin[i] = ys[i]
+			ymax[i] = ys[i]
+		}
+	}
+
+	return buildStatTableLocal(e, map[string][]float64{
+		"x": xs, "y": ys, "ymin": ymin, "ymax": ymax,
+	})
+}
+
 // --- Boxplot ---
 
 // Boxplot computes the five-number summary for a numeric column,

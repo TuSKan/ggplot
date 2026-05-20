@@ -96,6 +96,10 @@ type Canvas interface {
 	Width() int
 	// Height returns the canvas height in pixels.
 	Height() int
+
+	// Close releases backend resources (GPU buffers, etc.).
+	// Implementations that hold no resources may return nil.
+	Close() error
 }
 
 // TextAnchor defines text alignment as normalized coordinates.

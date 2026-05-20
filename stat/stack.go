@@ -33,51 +33,82 @@ func (s *stackYTransform) OutputHints() map[string]ChannelHint {
 	return map[string]ChannelHint{"y": HintCumulative}
 }
 
-func (s *stackYTransform) Apply(_ context.Context, in TransformInput) (TransformResult, error) {
-	yCol := in.Mapping["y"]
+func (s *stackYTransform) Apply(ctx context.Context, in TransformInput) (TransformResult, error) {
+	return applyStackAxis(ctx, in, "y", "ymin", "stackY")
+}
 
-	if yCol == "" {
-		return TransformResult{}, fmt.Errorf("stackY: missing 'y' aesthetic: %w", ErrMissingColumn)
+// StackX returns a Transform that cumulatively stacks x values.
+// Produces an "xmin" column containing the base of each stacked segment:
+// xmin = CumSum(x) - x, and replaces x with CumSum(x).
+//
+// Uses the engine's Windower.CumSum and MathKernel.SubCols — no manual
+// float64 loops. Returns a lazy Dataset.
+//
+// This is the horizontal counterpart of [StackY].
+func StackX() Transform {
+	return &stackXTransform{}
+}
+
+type stackXTransform struct{}
+
+func (s *stackXTransform) Name() string           { return "stackX" }
+func (s *stackXTransform) OutputSchema() []string { return []string{"xmin"} }
+
+func (s *stackXTransform) OutputMapping() map[string]string { return nil }
+
+func (s *stackXTransform) OutputHints() map[string]ChannelHint {
+	return map[string]ChannelHint{"x": HintCumulative}
+}
+
+func (s *stackXTransform) Apply(ctx context.Context, in TransformInput) (TransformResult, error) {
+	return applyStackAxis(ctx, in, "x", "xmin", "stackX")
+}
+
+// applyStackAxis implements the shared cumulative-stacking logic for both
+// StackY (axis="y", minCol="ymin") and StackX (axis="x", minCol="xmin").
+func applyStackAxis(_ context.Context, in TransformInput, axis, minCol, label string) (TransformResult, error) {
+	valCol := in.Mapping[axis]
+
+	if valCol == "" {
+		return TransformResult{}, fmt.Errorf("%s: missing '%s' aesthetic: %w", label, axis, ErrMissingColumn)
 	}
 
 	eng := dataset.GetEngine(in.Data.Table())
 
 	win, ok := eng.(dataset.Windower)
 	if !ok {
-		return TransformResult{}, fmt.Errorf("stackY: engine %q: Windower: %w",
-			eng.Name(), dataset.ErrUnsupportedEngine)
+		return TransformResult{}, fmt.Errorf("%s: engine %q: Windower: %w",
+			label, eng.Name(), dataset.ErrUnsupportedEngine)
 	}
 
 	mk, ok := eng.(dataset.MathKernel)
 	if !ok {
-		return TransformResult{}, fmt.Errorf("stackY: engine %q: MathKernel: %w",
-			eng.Name(), dataset.ErrUnsupportedEngine)
+		return TransformResult{}, fmt.Errorf("%s: engine %q: MathKernel: %w",
+			label, eng.Name(), dataset.ErrUnsupportedEngine)
 	}
 
-	col, err := in.Data.Column(yCol)
+	col, err := in.Data.Column(valCol)
 	if err != nil {
-		return TransformResult{}, fmt.Errorf("stackY: %w", err)
+		return TransformResult{}, fmt.Errorf("%s: %w", label, err)
 	}
 
-	// CumSum gives us the stacked y (top of each bar).
+	// CumSum gives us the stacked value (top of each segment).
 	cumSumCol, err := win.CumSum(col)
 	if err != nil {
-		return TransformResult{}, fmt.Errorf("stackY: cumsum: %w", err)
+		return TransformResult{}, fmt.Errorf("%s: cumsum: %w", label, err)
 	}
 
-	// ymin = cumsum - original_y (base of each bar).
-	// SubCols inherits the input column name ('y').
-	// Strategy: replace y with ymin values, rename to 'ymin', then add cumsum as 'y'.
-	yminCol, err := mk.SubCols(cumSumCol, col)
+	// min = cumsum - original (base of each segment).
+	baseCol, err := mk.SubCols(cumSumCol, col)
 	if err != nil {
-		return TransformResult{}, fmt.Errorf("stackY: ymin: %w", err)
+		return TransformResult{}, fmt.Errorf("%s: %s: %w", label, minCol, err)
 	}
 
 	// Lazy: all Dataset verbs — materialized on Collect.
 	outData := in.Data.
-		WithColumn(yminCol).  // replace 'y' with ymin values
-		Rename(yCol, "ymin"). // rename to 'ymin' (lazy)
-		WithColumn(cumSumCol) // add cumsum back as 'y'
+		WithColumn(baseCol).    // replace axis with min values
+		Rename(valCol, minCol). // rename to minCol (lazy)
+		WithColumn(cumSumCol)   // add cumsum back as axis
 
 	outMapping := make(map[string]string, len(in.Mapping))
 	maps.Copy(outMapping, in.Mapping)

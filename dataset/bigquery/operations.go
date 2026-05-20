@@ -86,6 +86,110 @@ func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyCo
 	return minCol, maxCol, nil
 }
 
+// StdDev returns the sample standard deviation via SQL STDDEV_SAMP.
+func (e *Engine) StdDev(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	return e.lazyAgg("STDDEV_SAMP", col)
+}
+
+// First returns the first element of a column.
+// For BQ columns, generates a SELECT with LIMIT 1 (no ORDER BY — natural order).
+func (e *Engine) First(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	bqCol, ok := col.(*bqColumn)
+	if !ok {
+		result, err := e.localEngine().First(col)
+		if err != nil {
+			return nil, fmt.Errorf("bigquery: %w", err)
+		}
+
+		return result, nil
+	}
+
+	sql := fmt.Sprintf(
+		"SELECT `%s` FROM %s LIMIT 1",
+		bqCol.name, bqCol.ds.sourceRef(),
+	)
+	ds := bqCol.ds.withSQL(sql,
+		dataset.NewSchema(dataset.Field{Name: bqCol.name, Dtype: bqCol.dtype}),
+		1,
+	)
+
+	return &bqColumn{ds: ds, name: bqCol.name, dtype: bqCol.dtype}, nil
+}
+
+// Last returns the last element of a column.
+// For BQ columns, generates a subquery that reverses row order.
+func (e *Engine) Last(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	bqCol, ok := col.(*bqColumn)
+	if !ok {
+		result, err := e.localEngine().Last(col)
+		if err != nil {
+			return nil, fmt.Errorf("bigquery: %w", err)
+		}
+
+		return result, nil
+	}
+
+	// BQ has no guaranteed row order; use ARRAY_REVERSE + LIMIT 1 pattern.
+	sql := fmt.Sprintf(
+		"SELECT `%s` FROM %s ORDER BY (SELECT NULL) DESC LIMIT 1",
+		bqCol.name, bqCol.ds.sourceRef(),
+	)
+	ds := bqCol.ds.withSQL(sql,
+		dataset.NewSchema(dataset.Field{Name: bqCol.name, Dtype: bqCol.dtype}),
+		1,
+	)
+
+	return &bqColumn{ds: ds, name: bqCol.name, dtype: bqCol.dtype}, nil
+}
+
+// Mode returns the most frequent value via BQ APPROX_TOP_COUNT.
+func (e *Engine) Mode(col dataset.AnyColumn) (dataset.AnyColumn, error) {
+	bqCol, ok := col.(*bqColumn)
+	if !ok {
+		result, err := e.localEngine().Mode(col)
+		if err != nil {
+			return nil, fmt.Errorf("bigquery: %w", err)
+		}
+
+		return result, nil
+	}
+
+	sql := fmt.Sprintf(
+		"SELECT APPROX_TOP_COUNT(`%s`, 1)[OFFSET(0)].value AS `%s` FROM %s",
+		bqCol.name, bqCol.name, bqCol.ds.sourceRef(),
+	)
+	ds := bqCol.ds.withSQL(sql,
+		dataset.NewSchema(dataset.Field{Name: bqCol.name, Dtype: bqCol.dtype}),
+		1,
+	)
+
+	return &bqColumn{ds: ds, name: bqCol.name, dtype: bqCol.dtype}, nil
+}
+
+// Percentile returns the p-th quantile via BQ PERCENTILE_CONT.
+func (e *Engine) Percentile(col dataset.AnyColumn, p float64) (dataset.AnyColumn, error) {
+	bqCol, ok := col.(*bqColumn)
+	if !ok {
+		result, err := e.localEngine().Percentile(col, p)
+		if err != nil {
+			return nil, fmt.Errorf("bigquery: %w", err)
+		}
+
+		return result, nil
+	}
+
+	sql := fmt.Sprintf(
+		"SELECT PERCENTILE_CONT(`%s`, %f) OVER() AS `%s` FROM %s LIMIT 1",
+		bqCol.name, p, bqCol.name, bqCol.ds.sourceRef(),
+	)
+	ds := bqCol.ds.withSQL(sql,
+		dataset.NewSchema(dataset.Field{Name: bqCol.name, Dtype: dataset.DTypeFloat64}),
+		1,
+	)
+
+	return &bqColumn{ds: ds, name: bqCol.name, dtype: dataset.DTypeFloat64}, nil
+}
+
 // lazyAgg creates a lazy bqColumn backed by a SELECT fn(col) SQL.
 func (e *Engine) lazyAgg(fn string, col dataset.AnyColumn) (dataset.AnyColumn, error) {
 	bqCol, ok := col.(*bqColumn)
@@ -104,6 +208,8 @@ func (e *Engine) lazyAgg(fn string, col dataset.AnyColumn) (dataset.AnyColumn, e
 			result, aggErr = e.localEngine().Count(col)
 		case "VARIANCE":
 			result, aggErr = e.localEngine().Variance(col)
+		case "STDDEV_SAMP":
+			result, aggErr = e.localEngine().StdDev(col)
 		default:
 			return nil, fmt.Errorf("bigquery: unknown agg function %q: %w", fn, ErrUnsupportedType)
 		}
@@ -121,7 +227,7 @@ func (e *Engine) lazyAgg(fn string, col dataset.AnyColumn) (dataset.AnyColumn, e
 	)
 
 	dtype := bqCol.dtype
-	if fn == "AVG" || fn == "VARIANCE" {
+	if fn == "AVG" || fn == "VARIANCE" || fn == "STDDEV_SAMP" {
 		dtype = dataset.DTypeFloat64
 	}
 

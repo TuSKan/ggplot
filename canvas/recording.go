@@ -196,6 +196,9 @@ func (c *RecordingCanvas) Width() int { return c.rec.Width() }
 // Height returns the canvas height in pixels.
 func (c *RecordingCanvas) Height() int { return c.rec.Height() }
 
+// Close is a no-op for RecordingCanvas (no GPU resources to release).
+func (c *RecordingCanvas) Close() error { return nil }
+
 // Compile-time check.
 var _ Canvas = (*RecordingCanvas)(nil)
 

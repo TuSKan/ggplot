@@ -43,24 +43,26 @@ type Type string
 
 // TypePoint identifies a scatter point geometry.
 const (
-	TypePoint     Type = "point"
-	TypeLine      Type = "line"
-	TypeBar       Type = "bar"
-	TypeHistogram Type = "histogram"
-	TypeArea      Type = "area"
-	TypePolygon   Type = "polygon"
-	TypeSmooth    Type = "smooth"
-	TypeText      Type = "text"
-	TypeBoxPlot   Type = "boxplot"
-	TypeErrorBar  Type = "errorbar"
-	TypeDensity   Type = "density"
-	TypeTile      Type = "tile"
-	TypeRug       Type = "rug"
-	TypeSegment   Type = "segment"
-	TypeStep      Type = "step"
-	TypeHLine     Type = "hline"
-	TypeVLine     Type = "vline"
-	TypeABLine    Type = "abline"
+	TypePoint      Type = "point"
+	TypeLine       Type = "line"
+	TypeBar        Type = "bar"
+	TypeHistogram  Type = "histogram"
+	TypeArea       Type = "area"
+	TypePolygon    Type = "polygon"
+	TypeSmooth     Type = "smooth"
+	TypeText       Type = "text"
+	TypeBoxPlot    Type = "boxplot"
+	TypeErrorBar   Type = "errorbar"
+	TypeDensity    Type = "density"
+	TypeTile       Type = "tile"
+	TypeRug        Type = "rug"
+	TypeSegment    Type = "segment"
+	TypeStep       Type = "step"
+	TypeHLine      Type = "hline"
+	TypeVLine      Type = "vline"
+	TypeABLine     Type = "abline"
+	TypeRibbon     Type = "ribbon"     // filled band between ymin/ymax
+	TypeDifference Type = "difference" // difference between two series
 )
 
 // Orientation controls which axis a directional geom extends along.
@@ -140,24 +142,26 @@ const (
 
 // paramRelevance maps geometry types to what parameters are meaningful for them.
 var paramRelevance = map[Type]OptFlag{
-	TypePoint:     OptColor | OptFill | OptAlpha | OptSize | OptShape,
-	TypeLine:      OptColor | OptAlpha | OptLineWidth | OptSize, // Size → LineWidth
-	TypeBar:       OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation,
-	TypeHistogram: OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptBins,
-	TypeArea:      OptColor | OptFill | OptAlpha | OptLineWidth | OptOrientation,
-	TypePolygon:   OptColor | OptFill | OptAlpha | OptLineWidth,
-	TypeSmooth:    OptColor | OptAlpha | OptLineWidth | OptSize | OptMethod | OptSmoothPoints,
-	TypeDensity:   OptColor | OptFill | OptAlpha | OptLineWidth | OptOrientation | OptBandwidth | OptDensityPoints,
-	TypeText:      OptColor | OptAlpha | OptFontSize | OptFontFamily | OptAngle,
-	TypeStep:      OptColor | OptAlpha | OptLineWidth | OptSize,
-	TypeRug:       OptColor | OptAlpha | OptLineWidth | OptOrientation,
-	TypeBoxPlot:   OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptWhisker | OptNotch,
-	TypeErrorBar:  OptColor | OptAlpha | OptLineWidth | OptWidth,
-	TypeSegment:   OptColor | OptAlpha | OptLineWidth,
-	TypeTile:      OptColor | OptFill | OptAlpha,
-	TypeHLine:     OptColor | OptAlpha | OptLineWidth,
-	TypeVLine:     OptColor | OptAlpha | OptLineWidth,
-	TypeABLine:    OptColor | OptAlpha | OptLineWidth,
+	TypePoint:      OptColor | OptFill | OptAlpha | OptSize | OptShape,
+	TypeLine:       OptColor | OptAlpha | OptLineWidth | OptSize, // Size → LineWidth
+	TypeBar:        OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation,
+	TypeHistogram:  OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptBins,
+	TypeArea:       OptColor | OptFill | OptAlpha | OptLineWidth | OptOrientation,
+	TypePolygon:    OptColor | OptFill | OptAlpha | OptLineWidth,
+	TypeSmooth:     OptColor | OptAlpha | OptLineWidth | OptSize | OptMethod | OptSmoothPoints,
+	TypeDensity:    OptColor | OptFill | OptAlpha | OptLineWidth | OptOrientation | OptBandwidth | OptDensityPoints,
+	TypeText:       OptColor | OptAlpha | OptFontSize | OptFontFamily | OptAngle,
+	TypeStep:       OptColor | OptAlpha | OptLineWidth | OptSize,
+	TypeRug:        OptColor | OptAlpha | OptLineWidth | OptOrientation,
+	TypeBoxPlot:    OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptWhisker | OptNotch,
+	TypeErrorBar:   OptColor | OptAlpha | OptLineWidth | OptWidth,
+	TypeSegment:    OptColor | OptAlpha | OptLineWidth,
+	TypeTile:       OptColor | OptFill | OptAlpha,
+	TypeHLine:      OptColor | OptAlpha | OptLineWidth,
+	TypeVLine:      OptColor | OptAlpha | OptLineWidth,
+	TypeABLine:     OptColor | OptAlpha | OptLineWidth,
+	TypeRibbon:     OptColor | OptFill | OptAlpha | OptLineWidth,
+	TypeDifference: OptColor | OptFill | OptAlpha | OptLineWidth,
 }
 
 // RegisterGeomType registers a custom geometry type with its relevant option
@@ -863,6 +867,88 @@ func PointY(pipeline []stat.Transform, opts ...Opt) Layer {
 		Pipeline: pipeline,
 		Position: IdentityPos(),
 		Params:   Params{Size: 3, Alpha: 1.0, Shape: "circle"},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// RectX creates a rectangle mark anchored at x. This is the horizontal
+// counterpart of [RectY]. With StackX, produces a horizontally stacked bar.
+//
+//	geom.RectX([]stat.Transform{stat.BinY(stat.WithBins(40))})  // horizontal histogram
+//	geom.RectX([]stat.Transform{stat.Count()})                   // horizontal bar chart
+func RectX(pipeline []stat.Transform, opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeBar,
+		Pipeline: pipeline,
+		Position: Stack(),
+		Params:   Params{Width: 0.8, Alpha: 0.85, Orientation: Horizontal},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// LineX creates a connected-line mark with horizontal orientation.
+// This is the horizontal counterpart of [LineY].
+//
+//	geom.LineX([]stat.Transform{stat.GroupY("mean")})  // horizontal mean line
+func LineX(pipeline []stat.Transform, opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeLine,
+		Pipeline: pipeline,
+		Position: IdentityPos(),
+		Params:   Params{LineWidth: 2, Alpha: 1.0, Orientation: Horizontal},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// AreaX creates a filled-area mark with horizontal orientation.
+// This is the horizontal counterpart of [AreaY].
+//
+//	geom.AreaX([]stat.Transform{stat.DensityY()})  // horizontal density fill
+func AreaX(pipeline []stat.Transform, opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeArea,
+		Pipeline: pipeline,
+		Position: IdentityPos(),
+		Params:   Params{Alpha: 0.6, Orientation: Horizontal},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// RibbonY creates a filled band between ymin and ymax columns.
+// Used for confidence intervals, prediction bands, error envelopes, etc.
+//
+//	geom.RibbonY([]stat.Transform{stat.SmoothXY()}, geom.WithAlpha(0.3))
+func RibbonY(pipeline []stat.Transform, opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeRibbon,
+		Pipeline: pipeline,
+		Position: IdentityPos(),
+		Params:   Params{Alpha: 0.3},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// Difference creates a layer that fills the area between two series,
+// coloring positive and negative differences. Requires ymin and ymax
+// columns in the pipeline output.
+//
+//	geom.Difference([]stat.Transform{stat.DeltaXY()}, geom.WithAlpha(0.5))
+func Difference(pipeline []stat.Transform, opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeDifference,
+		Pipeline: pipeline,
+		Position: IdentityPos(),
+		Params:   Params{Alpha: 0.4},
 	}
 	applyOpts(&l, opts)
 

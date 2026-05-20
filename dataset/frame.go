@@ -764,6 +764,7 @@ type AggSpec struct {
 	OutputName string  // name of the result column
 	InputName  string  // name of the source column
 	Fn         AggFunc // which aggregation to apply
+	P          float64 // percentile ∈ [0,1]; only used when Fn == AggPercentile
 }
 
 // AggFunc identifies an aggregation function.
@@ -778,6 +779,11 @@ const (
 	AggCount
 	AggMedian
 	AggVariance
+	AggStdDev     // population standard deviation = sqrt(variance)
+	AggFirst      // first element
+	AggLast       // last element
+	AggMode       // most frequent value
+	AggPercentile // quantile; requires PercentileSpec.P
 )
 
 // Sum builds a sum aggregation spec.
@@ -803,6 +809,23 @@ func Variance(out, in string) AggSpec {
 	return AggSpec{OutputName: out, InputName: in, Fn: AggVariance}
 }
 
+// StdDev builds a standard deviation aggregation spec.
+func StdDev(out, in string) AggSpec { return AggSpec{OutputName: out, InputName: in, Fn: AggStdDev} }
+
+// First builds a first-element aggregation spec.
+func First(out, in string) AggSpec { return AggSpec{OutputName: out, InputName: in, Fn: AggFirst} }
+
+// Last builds a last-element aggregation spec.
+func Last(out, in string) AggSpec { return AggSpec{OutputName: out, InputName: in, Fn: AggLast} }
+
+// Mode builds a mode (most-frequent-value) aggregation spec.
+func Mode(out, in string) AggSpec { return AggSpec{OutputName: out, InputName: in, Fn: AggMode} }
+
+// Percentile builds a percentile aggregation spec. p ∈ [0,1].
+func Percentile(out, in string, p float64) AggSpec {
+	return AggSpec{OutputName: out, InputName: in, Fn: AggPercentile, P: p}
+}
+
 // GroupedFrame holds a Frame with group-by columns set.
 type GroupedFrame struct {
 	frame     Dataset
@@ -826,8 +849,8 @@ func (gf GroupedFrame) Summarize(specs ...AggSpec) Dataset {
 }
 
 // dispatchAgg calls the appropriate Aggregator method.
-func dispatchAgg(agg Aggregator, fn AggFunc, col AnyColumn) (AnyColumn, error) {
-	switch fn {
+func dispatchAgg(agg Aggregator, spec AggSpec, col AnyColumn) (AnyColumn, error) {
+	switch spec.Fn {
 	case AggSum:
 		result, err := agg.Sum(col)
 		if err != nil {
@@ -843,19 +866,19 @@ func dispatchAgg(agg Aggregator, fn AggFunc, col AnyColumn) (AnyColumn, error) {
 
 		return result, nil
 	case AggMin:
-		lo, _, err := agg.MinMax(col)
+		result, _, err := agg.MinMax(col)
 		if err != nil {
 			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
-		return lo, nil
+		return result, nil
 	case AggMax:
-		_, hi, err := agg.MinMax(col)
+		_, result, err := agg.MinMax(col)
 		if err != nil {
 			return nil, fmt.Errorf("dataset: %w", err)
 		}
 
-		return hi, nil
+		return result, nil
 	case AggCount:
 		result, err := agg.Count(col)
 		if err != nil {
@@ -877,9 +900,44 @@ func dispatchAgg(agg Aggregator, fn AggFunc, col AnyColumn) (AnyColumn, error) {
 		}
 
 		return result, nil
-	default:
-		return nil, fmt.Errorf("AggFunc %d: %w", fn, ErrUnsupportedAggFunc)
+	case AggStdDev:
+		result, err := agg.StdDev(col)
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return result, nil
+	case AggFirst:
+		result, err := agg.First(col)
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return result, nil
+	case AggLast:
+		result, err := agg.Last(col)
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return result, nil
+	case AggMode:
+		result, err := agg.Mode(col)
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return result, nil
+	case AggPercentile:
+		result, err := agg.Percentile(col, spec.P)
+		if err != nil {
+			return nil, fmt.Errorf("dataset: %w", err)
+		}
+
+		return result, nil
 	}
+
+	return nil, fmt.Errorf("AggFunc %d: %w", spec.Fn, ErrUnsupportedAggFunc)
 }
 
 // resolveAggDType determines the output DType for an aggregation.
@@ -892,15 +950,17 @@ func resolveAggDType(fn AggFunc, ds Table, colName string) DType {
 	switch fn {
 	case AggSum:
 		return col.DType() // preserves type
-	case AggMean, AggMedian, AggVariance:
+	case AggMean, AggMedian, AggVariance, AggStdDev:
 		return DTypeFloat64 // always float64
-	case AggMin, AggMax:
+	case AggMin, AggMax, AggFirst, AggLast, AggMode:
 		return col.DType() // preserves type
 	case AggCount:
 		return DTypeInt64 // always int64
-	default:
-		return DTypeFloat64
+	case AggPercentile:
+		return DTypeFloat64 // always float64
 	}
+
+	return DTypeFloat64
 }
 
 // mergeAggResults combines N single-element AnyColumns into one N-element column.
@@ -1310,7 +1370,7 @@ func (f Dataset) execGroupBy(groupCols []string, specs []AggSpec) Dataset {
 				return f.withError(err)
 			}
 
-			result, err := dispatchAgg(agg, spec.Fn, groupCol)
+			result, err := dispatchAgg(agg, spec, groupCol)
 			if err != nil {
 				return f.withError(err)
 			}

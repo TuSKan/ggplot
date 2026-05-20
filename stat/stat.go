@@ -20,6 +20,8 @@
 //   - [SortBy] — sort rows by column
 //   - [ReverseRows] — reverse row order
 //   - [TopN] — keep top/bottom N rows by column
-//   - [StackY] — cumulative Y stacking within a group
-//   - [GroupX] / [GroupY] — group-by with reducer (mean, sum, median, etc.)
+//   - [SelectRow] — keep a single row by mode (first, last, min, max)
+//   - [StackY] / [StackX] — cumulative stacking within a group
+//   - [GroupX] / [GroupY] — group-by with reducer (sum, mean, median,
+//     min, max, count, variance, deviation, first, last, mode)
 package stat

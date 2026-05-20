@@ -419,9 +419,13 @@ func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, h
 // --- Built convenience methods ---
 
 // DrawCanvas creates a new [canvas.GGCanvas] and draws the built plot onto it.
+// The caller owns the returned canvas and must call [canvas.GGCanvas.Close]
+// when finished to release GPU resources.
 func (b *Built) DrawCanvas(ctx context.Context, width, height int) (*canvas.GGCanvas, error) {
 	cv := canvas.NewGGCanvas(width, height)
 	if err := b.Draw(ctx, cv, width, height); err != nil {
+		_ = cv.Close()
+
 		return nil, err
 	}
 
@@ -485,6 +489,8 @@ func (b *Built) Save(ctx context.Context, filename string, width, height int, op
 
 	default:
 		cv := canvas.NewGGCanvas(sw, sh)
+		defer func() { _ = cv.Close() }()
+
 		if err := b.Draw(ctx, cv, sw, sh); err != nil {
 			return fmt.Errorf("ggplot: %w", err)
 		}
@@ -542,6 +548,8 @@ func (b *Built) WriteTo(ctx context.Context, w io.Writer, format string, width, 
 
 	case "png", "":
 		cv := canvas.NewGGCanvas(sw, sh)
+		defer func() { _ = cv.Close() }()
+
 		if err := b.Draw(ctx, cv, sw, sh); err != nil {
 			return 0, fmt.Errorf("ggplot: %w", err)
 		}
@@ -1105,6 +1113,10 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 		return BuiltPanel{}, err
 	}
 
+	// Apply hint-aware axis formatters from pipeline transforms.
+	// Only applies if the user hasn't explicitly set a formatter via scale overrides.
+	xScale, yScale = applyHintFormatters(p, resolved, xScale, yScale, xIsDiscrete)
+
 	return BuiltPanel{
 		Label:         label,
 		Layers:        resolved,
@@ -1540,6 +1552,160 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 	}
 
 	return xScale, yScale, xIsDiscrete, nil
+}
+
+// collectPipelineHints merges OutputHints from all transforms in a pipeline.
+// Later transforms' hints take precedence (last-writer-wins).
+func collectPipelineHints(pipeline []stat.Transform) map[string]stat.ChannelHint {
+	merged := make(map[string]stat.ChannelHint)
+
+	for _, t := range pipeline {
+		maps.Copy(merged, t.OutputHints())
+	}
+
+	return merged
+}
+
+// hintFormatter returns a tick-label formatting function for the given hint,
+// or nil if no special formatting applies.
+func hintFormatter(hint stat.ChannelHint) func(float64) string {
+	switch hint {
+	case stat.HintCount:
+		return func(v float64) string { return fmt.Sprintf("%.0f", v) }
+	case stat.HintProportion:
+		return func(v float64) string { return fmt.Sprintf("%.0f%%", v*100) } //nolint:mnd // 100 converts proportion to percentage.
+	case stat.HintProbability:
+		return func(v float64) string { return fmt.Sprintf("%.2f", v) }
+	case stat.HintCumulative:
+		return func(v float64) string { return fmt.Sprintf("%.1f", v) }
+	case stat.HintDeviation:
+		return func(v float64) string {
+			if v >= 0 {
+				return fmt.Sprintf("+%.2f", v)
+			}
+
+			return fmt.Sprintf("%.2f", v)
+		}
+	case stat.HintNone, stat.HintInterval:
+		return nil
+	}
+
+	return nil
+}
+
+// applyHintFormatters checks all pipeline layers for OutputHints and wraps the
+// X/Y scales with hint-based formatters. User-supplied formatter overrides are
+// respected — hints only apply when no explicit formatter is set.
+func applyHintFormatters(p *Plot, resolved []BuiltLayer, xScale, yScale scale.Scale, xIsDiscrete bool) (scale.Scale, scale.Scale) {
+	// Collect hints from all layers (last-writer-wins per channel).
+	allHints := make(map[string]stat.ChannelHint)
+
+	for _, rl := range resolved {
+		maps.Copy(allHints, collectPipelineHints(rl.Geom.Pipeline))
+	}
+
+	// Apply X hint (if present and no user override).
+	if xHint, ok := allHints["x"]; ok && !xIsDiscrete {
+		if fn := hintFormatter(xHint); fn != nil {
+			// Only apply if user hasn't set a custom formatter via scale overrides.
+			if _, hasXOverride := p.spec.ScaleOverrides["x"]; !hasXOverride {
+				xScale = scale.Configure(xScale, scale.WithFormatter(fn))
+			}
+		}
+	}
+
+	// Apply Y hint (if present and no user override).
+	if yHint, ok := allHints["y"]; ok {
+		if fn := hintFormatter(yHint); fn != nil {
+			if _, hasYOverride := p.spec.ScaleOverrides["y"]; !hasYOverride {
+				yScale = scale.Configure(yScale, scale.WithFormatter(fn))
+			}
+		}
+	}
+
+	return xScale, yScale
+}
+
+// --- Introspection ---
+
+// PipelineFor returns the ordered transform names for the given panel and layer.
+// Panel and layer indices are zero-based.
+func (b *Built) PipelineFor(panel, layer int) []string {
+	if panel < 0 || panel >= len(b.panels) {
+		return nil
+	}
+
+	bp := b.panels[panel]
+	if layer < 0 || layer >= len(bp.Layers) {
+		return nil
+	}
+
+	pipeline := bp.Layers[layer].Geom.Pipeline
+	names := make([]string, len(pipeline))
+
+	for i, t := range pipeline {
+		names[i] = t.Name()
+	}
+
+	return names
+}
+
+// Explain returns a human-readable summary of the built plot's structure,
+// including panels, layers, transform pipelines, and output hints.
+func (b *Built) Explain() string {
+	var sb strings.Builder
+
+	fmt.Fprintf(&sb, "Plot: %d panel(s), coord=%T\n", len(b.panels), b.coord)
+
+	for pi, bp := range b.panels {
+		fmt.Fprintf(&sb, "\nPanel %d", pi)
+
+		if bp.Label != "" {
+			fmt.Fprintf(&sb, " (%s)", bp.Label)
+		}
+
+		sb.WriteString(":\n")
+
+		for li, rl := range bp.Layers {
+			fmt.Fprintf(&sb, "  Layer %d: geom=%s", li, rl.Geom.Geom)
+
+			if len(rl.Geom.Pipeline) > 0 {
+				sb.WriteString(", pipeline=[")
+
+				for ti, t := range rl.Geom.Pipeline {
+					if ti > 0 {
+						sb.WriteString(" → ")
+					}
+
+					sb.WriteString(t.Name())
+
+					if hints := t.OutputHints(); len(hints) > 0 {
+						sb.WriteString("{")
+
+						first := true
+
+						for ch, h := range hints {
+							if !first {
+								sb.WriteString(", ")
+							}
+
+							fmt.Fprintf(&sb, "%s:%s", ch, h)
+
+							first = false
+						}
+
+						sb.WriteString("}")
+					}
+				}
+
+				sb.WriteString("]")
+			}
+
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String()
 }
 
 // ---------------------------------------------------------------------------
