@@ -1417,7 +1417,7 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 	// Ensure Y starts at 0 for bar/histogram/area/density/boxplot.
 	for _, rl := range resolved {
 		switch rl.Geom.Geom { //nolint:exhaustive // intentional subset; default case handles the rest.
-		case geom.TypeBar, geom.TypeHistogram, geom.TypeArea, geom.TypeDensity:
+		case geom.TypeBar, geom.TypeHistogram, geom.TypeRect, geom.TypeArea, geom.TypeDensity:
 			yMin, yMax := yScale.Bounds()
 			if yMin > 0 {
 				if bs, ok := yScale.(scale.BoundsSetter); ok {
@@ -1465,7 +1465,7 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 
 			for _, rl := range resolved {
 				switch rl.Geom.Geom { //nolint:exhaustive // intentional subset; default case handles the rest.
-				case geom.TypeBar, geom.TypeHistogram, geom.TypeBoxPlot:
+				case geom.TypeBar, geom.TypeHistogram, geom.TypeRect, geom.TypeBoxPlot:
 					hasBars = true
 				default:
 				}

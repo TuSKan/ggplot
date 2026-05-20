@@ -113,6 +113,7 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 **Geometries:** ✅ Point, Line, Path, Step, Bar, Histogram, Area, Density, Rug, HLine, VLine, Text, BoxPlot, Smooth
 
 **Statistics:** ✅ Identity, Bin/Count, Density (KDE), Smooth (LOESS + LM), Summary, BoxPlot
+- ✅ **Percentile reducers** (`"p10"`, `"p25"`, `"p50"`, `"p75"`, `"p90"`) in `GroupX`/`GroupY` and `Group` — dispatched via engine-native `AggPercentile`
 
 **Scales:** ✅ Linear, Log10, Sqrt, Reverse, Discrete + `scale.Resolve(name)` factory
 
@@ -207,6 +208,9 @@ The public, **stable-from-v0.5** extension API:
 - 🔲 `position.Position` — `Compute(data) data` (see 4.3)
 - 🔲 `coord.Coord` — `Transform(data, scales) data`, `Render(...)`, `IsLinear() bool`
 - 🔲 Document stability guarantees: 2 minor releases of deprecation before removal
+- ✅ `TypeRect` — unified rectangle mark replacing `TypeBar`/`TypeHistogram` for pipeline constructors (`RectY`, `RectX`, `Histogram`); inset controlled by `Params.Inset`
+- 🔲 `docs/MIGRATION.md` — migration guide for v0.7 deprecation of sugar constructors
+- 🔲 Backward-compat shim verification — verify all sugar constructors produce structurally-equivalent Layers
 
 #### 4.6 — Production Hardening (continued)
 
@@ -215,6 +219,7 @@ The public, **stable-from-v0.5** extension API:
 - ✅ Clone independence tests, deep-clone safety
 - ✅ Hot-path optimizations (`strconv` over `Sprintf`, `SelectRows` over `BoolMask`, `engine()` parent walk eliminated, `flatten()` exact capacity)
 - 🔲 **`Built`-level golden tests** — JSON snapshots of `Built` are platform-independent and orders of magnitude more sensitive than PNG goldens; PNG goldens stay as smoke tests
+- 🔲 **`Built.Diagnostics`** — typed warnings for deprecated stat paths (legacy `StatName` usage)
 - 🔲 **Performance CI gates** — track allocs/op and ns/op for ~10 canonical plots; fail PR on >10% regression
 - 🔲 **Typed error envelope** — `*ggplot.Error{Phase, Layer, Stage, Cause}` with `errors.Is`/`Unwrap` support
 - 🔲 **Real SIMD execution** — pending Go SIMD intrinsics that don't heap-escape `Vec[T]` through generic call sites ([golang/go#65592](https://github.com/golang/go/issues/65592)); current scalar loops + go-highway in `dmath`

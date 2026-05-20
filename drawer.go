@@ -82,6 +82,7 @@ func init() {
 	RegisterDrawer(geom.TypePolygon, DrawerFunc(drawPolygonFn))
 	RegisterDrawer(geom.TypeRibbon, DrawerFunc(drawRibbonFn))
 	RegisterDrawer(geom.TypeDifference, DrawerFunc(drawDifferenceFn))
+	RegisterDrawer(geom.TypeRect, DrawerFunc(drawRectFn))
 }
 
 // drawLayer dispatches rendering to the registered Drawer for the layer's geom type.
@@ -153,6 +154,11 @@ func drawHistogramFn(dc DrawContext) {
 	// Half-pixel inset per side → 1px total gap between adjacent bins,
 	// matching Observable Plot's continuous-bar default.
 	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, 0.5)
+}
+
+func drawRectFn(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, dc.Params.Inset)
 }
 
 func drawAreaFn(dc DrawContext) {

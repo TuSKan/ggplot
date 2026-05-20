@@ -63,6 +63,7 @@ const (
 	TypeABLine     Type = "abline"
 	TypeRibbon     Type = "ribbon"     // filled band between ymin/ymax
 	TypeDifference Type = "difference" // difference between two series
+	TypeRect       Type = "rect"       // unified rectangle mark (replaces TypeBar/TypeHistogram for pipeline constructors)
 )
 
 // Orientation controls which axis a directional geom extends along.
@@ -91,9 +92,10 @@ type Params struct {
 	Size  float64 // point radius in pixels (default = 3)
 	Shape string  // "circle", "square", "triangle", "diamond" (default = "circle")
 
-	// Bar/Histogram-specific
+	// Bar/Histogram/Rect-specific
 	Width float64 // relative bar width [0, 1] (default = 0.8)
 	Gap   float64 // gap between bars [0, 1] (0 = touching, 1 = invisible; default = 0.2)
+	Inset float64 // pixel inset per side between adjacent rects (default = 0; 0.5 for continuous bins)
 
 	// Text-specific
 	FontSize   float64 // text font size in points
@@ -162,6 +164,7 @@ var paramRelevance = map[Type]OptFlag{
 	TypeABLine:     OptColor | OptAlpha | OptLineWidth,
 	TypeRibbon:     OptColor | OptFill | OptAlpha | OptLineWidth,
 	TypeDifference: OptColor | OptFill | OptAlpha | OptLineWidth,
+	TypeRect:       OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptBins,
 }
 
 // RegisterGeomType registers a custom geometry type with its relevant option
@@ -331,7 +334,7 @@ func finalizePipeline(l *Layer) {
 	}
 
 	switch l.Geom { //nolint:exhaustive // Only histogram, smooth, density, and boxplot have stat pipelines.
-	case TypeHistogram:
+	case TypeHistogram, TypeRect:
 		var opts []stat.BinOption
 		if l.statCfg.bins > 0 {
 			opts = append(opts, stat.WithBins(l.statCfg.bins))
@@ -551,10 +554,10 @@ func Col(opts ...Opt) Layer {
 // Relevant options: WithColor, WithFill, WithAlpha, WithWidth, WithLineWidth.
 func Histogram(opts ...Opt) Layer {
 	l := Layer{
-		Geom:     TypeHistogram,
+		Geom:     TypeRect,
 		Pipeline: []stat.Transform{stat.BinX(stat.WithBins(30))},
 		Position: Stack(),
-		Params:   Params{Alpha: 1.0},
+		Params:   Params{Alpha: 1.0, Inset: 0.5},
 	}
 	applyOpts(&l, opts)
 
@@ -810,10 +813,10 @@ func ErrorBar(opts ...Opt) Layer {
 //	geom.RectY(stat.NormalizeY(), stat.BinX())  // proportions
 func RectY(pipeline []stat.Transform, opts ...Opt) Layer {
 	l := Layer{
-		Geom:     TypeBar,
+		Geom:     TypeRect,
 		Pipeline: pipeline,
 		Position: Stack(),
-		Params:   Params{Width: 0.8, Alpha: 0.85},
+		Params:   Params{Width: 0.8, Alpha: 0.85, Inset: 0.5},
 	}
 	applyOpts(&l, opts)
 
@@ -880,10 +883,10 @@ func PointY(pipeline []stat.Transform, opts ...Opt) Layer {
 //	geom.RectX([]stat.Transform{stat.Count()})                   // horizontal bar chart
 func RectX(pipeline []stat.Transform, opts ...Opt) Layer {
 	l := Layer{
-		Geom:     TypeBar,
+		Geom:     TypeRect,
 		Pipeline: pipeline,
 		Position: Stack(),
-		Params:   Params{Width: 0.8, Alpha: 0.85, Orientation: Horizontal},
+		Params:   Params{Width: 0.8, Alpha: 0.85, Inset: 0.5, Orientation: Horizontal},
 	}
 	applyOpts(&l, opts)
 
