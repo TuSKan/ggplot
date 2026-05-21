@@ -198,19 +198,19 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 
 > Granular `theme()` overrides and `theme.New(base, ...)` user composition stay in Phase 12; this phase establishes the substrate.
 
-#### 4.5 — Extension Contracts (formerly Phase 17 interfaces)
+#### 4.5 — Extension Contracts ✅ (formerly Phase 17 interfaces)
 
-The public, **stable-from-v0.5** extension API:
+The public extension API — implemented via Go interfaces + registration, not ggplot2-style class hierarchies:
 
-- 🔲 `geom.Geom` — `DefaultStat() Stat`, `DefaultPosition() Position`, `RequiredAes() []string`, `OptionalAes() []string`, `DrawPanel(...) []Grob`, `DrawKey(...) Grob`
-- 🔲 `stat.Stat` — `RequiredAes() []string`, `OutputAes() []string` (✅ via `OutputMapping`), `Compute(panel, group, params) []Row`
-- 🔲 `scale.Scale` — `Train()`, `Map()`, `Transform()`, `Breaks()`, `Labels()`, `Limits()`
-- 🔲 `position.Position` — `Compute(data) data` (see 4.3)
-- 🔲 `coord.Coord` — `Transform(data, scales) data`, `Render(...)`, `IsLinear() bool`
-- 🔲 Document stability guarantees: 2 minor releases of deprecation before removal
+- ✅ `stat.Transform` — `Name()`, `Apply(ctx, TransformInput) (TransformResult, error)`, `OutputMapping()`, `OutputSchema()`, `OutputHints()`; composable pipeline contract
+- ✅ `scale.Scale` — `Train()`, `Map()`, `Inverse()`, `Ticks()`, `Format()`, `Bounds()` + optional `BoundsSetter`
+- ✅ `geom.Pos` — `Adjust()`, `String()` + optional `Stacker`, `FillSetup`; extensible via `NewPos()` factory
+- ✅ `coord.Coord` — `Transform(x, y, w, h)`, `String()`; Cartesian + Polar implementations
+- ✅ Geometry extensibility via `RegisterDrawer(Type, Drawer)` + `RegisterGeomType(Type, OptFlag)` — no `geom.Geom` interface needed; registration is more idiomatic Go than a class hierarchy
 - ✅ `TypeRect` — unified rectangle mark replacing `TypeBar`/`TypeHistogram` for pipeline constructors (`RectY`, `RectX`, `Histogram`); inset controlled by `Params.Inset`
-- 🔲 `docs/MIGRATION.md` — migration guide for v0.7 deprecation of sugar constructors
-- ✅ Backward-compat shim verification — 11 table-driven tests in `geom/shim_test.go` verify all sugar constructors (`Histogram`, `Bar`, `Col`, `Smooth`, `Density`, `Boxplot`) produce structurally-equivalent Layers to pipeline counterparts
+- ✅ Backward-compat shim verification — 11 table-driven tests in `geom/shim_test.go` verify all sugar constructors produce structurally-equivalent Layers to pipeline counterparts
+
+> `docs/MIGRATION.md` and stability-guarantee policy deferred until an actual deprecation is planned.
 
 #### 4.6 — Production Hardening (continued)
 
