@@ -32,6 +32,7 @@ package ggplot
 import (
 	"context"
 	"fmt"
+	"image"
 	"image/color"
 	"io"
 	"maps"
@@ -44,6 +45,7 @@ import (
 	"strings"
 
 	"github.com/gogpu/gg"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/TuSKan/ggplot/aes"
 	"github.com/TuSKan/ggplot/canvas"
@@ -402,7 +404,7 @@ func WithCPU() RenderOpt {
 func (p *Plot) Save(ctx context.Context, filename string, width, height int, opts ...RenderOpt) error {
 	built, err := p.Build(ctx)
 	if err != nil {
-		return fmt.Errorf("ggplot: %w", err)
+		return Errorf(PhaseRender, -1, "build", err, "build failed")
 	}
 
 	return built.Save(ctx, filename, width, height, opts...)
@@ -418,7 +420,7 @@ func (p *Plot) Save(ctx context.Context, filename string, width, height int, opt
 func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, height int, opts ...RenderOpt) (int64, error) {
 	built, err := p.Build(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("ggplot: %w", err)
+		return 0, Errorf(PhaseRender, -1, "build", err, "build failed")
 	}
 
 	return built.WriteTo(ctx, w, format, width, height, opts...)
@@ -471,14 +473,14 @@ func (b *Built) Save(ctx context.Context, filename string, width, height int, op
 	case ".svg", ".pdf":
 		cv := canvas.NewRecordingCanvas(sw, sh)
 		if err := b.Draw(ctx, cv, sw, sh); err != nil {
-			return fmt.Errorf("ggplot: %w", err)
+			return Errorf(PhaseRender, -1, "draw", err, "draw to %s canvas", ext)
 		}
 
 		rec := cv.FinishRecording()
 
 		f, err := os.Create(filename) //nolint:gosec // G304: user-provided plot output path.
 		if err != nil {
-			return fmt.Errorf("ggplot: %w", err)
+			return Errorf(PhaseRender, -1, "io", err, "create %s", filename)
 		}
 		defer func() { _ = f.Close() }()
 
@@ -490,7 +492,7 @@ func (b *Built) Save(ctx context.Context, filename string, width, height int, op
 		}
 
 		if err != nil {
-			return fmt.Errorf("ggplot: %w", err)
+			return Errorf(PhaseRender, -1, "export", err, "export %s", ext)
 		}
 
 		return nil
@@ -505,11 +507,11 @@ func (b *Built) Save(ctx context.Context, filename string, width, height int, op
 		defer func() { _ = cv.Close() }()
 
 		if err := b.Draw(ctx, cv, sw, sh); err != nil {
-			return fmt.Errorf("ggplot: %w", err)
+			return Errorf(PhaseRender, -1, "draw", err, "draw to png canvas")
 		}
 
 		if err := cv.SavePNG(filename); err != nil {
-			return fmt.Errorf("ggplot: %w", err)
+			return Errorf(PhaseRender, -1, "io", err, "save png %s", filename)
 		}
 
 		return nil
@@ -537,7 +539,7 @@ func (b *Built) WriteTo(ctx context.Context, w io.Writer, format string, width, 
 	case "svg", "pdf":
 		cv := canvas.NewRecordingCanvas(sw, sh)
 		if err := b.Draw(ctx, cv, sw, sh); err != nil {
-			return 0, fmt.Errorf("ggplot: %w", err)
+			return 0, Errorf(PhaseRender, -1, "draw", err, "draw to %s canvas", format)
 		}
 
 		rec := cv.FinishRecording()
@@ -546,14 +548,14 @@ func (b *Built) WriteTo(ctx context.Context, w io.Writer, format string, width, 
 		case "svg":
 			n, err := canvas.ExportSVG(rec, w)
 			if err != nil {
-				return n, fmt.Errorf("ggplot: %w", err)
+				return n, Errorf(PhaseRender, -1, "export", err, "export svg")
 			}
 
 			return n, nil
 		default: // pdf
 			n, err := canvas.ExportPDF(rec, w)
 			if err != nil {
-				return n, fmt.Errorf("ggplot: %w", err)
+				return n, Errorf(PhaseRender, -1, "export", err, "export pdf")
 			}
 
 			return n, nil
@@ -569,18 +571,18 @@ func (b *Built) WriteTo(ctx context.Context, w io.Writer, format string, width, 
 		defer func() { _ = cv.Close() }()
 
 		if err := b.Draw(ctx, cv, sw, sh); err != nil {
-			return 0, fmt.Errorf("ggplot: %w", err)
+			return 0, Errorf(PhaseRender, -1, "draw", err, "draw to png canvas")
 		}
 
 		cw := &countWriter{w: w}
 		if err := cv.EncodePNG(cw); err != nil {
-			return cw.n, fmt.Errorf("ggplot: %w", err)
+			return cw.n, Errorf(PhaseRender, -1, "encode", err, "encode png")
 		}
 
 		return cw.n, nil
 
 	default:
-		return 0, fmt.Errorf("ggplot: unsupported format %q (supported: png, svg, pdf): %w", format, ErrRenderFailed)
+		return 0, Errorf(PhaseRender, -1, "format", ErrUnsupportedFormat, "unsupported format %q", format)
 	}
 }
 
@@ -595,7 +597,7 @@ func (cw *countWriter) Write(p []byte) (int, error) {
 	cw.n += int64(n)
 
 	if err != nil {
-		return n, fmt.Errorf("ggplot: %w", err)
+		return n, Errorf(PhaseRender, -1, "io", err, "write")
 	}
 
 	return n, nil
@@ -631,7 +633,7 @@ func (b *Built) autoHeight(width int) int {
 func groupByColumn(_ context.Context, ds dataset.Dataset, colName string) ([]string, []dataset.Dataset, error) {
 	col, err := ds.Column(colName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("column %q: %w", colName, err)
+		return nil, nil, Errorf(PhaseBuild, -1, "group", err, "column %q", colName)
 	}
 
 	// Extract string labels from the column.
@@ -656,7 +658,7 @@ func groupByColumn(_ context.Context, ds dataset.Dataset, colName string) ([]str
 			vals[i] = strconv.FormatInt(v, 10)
 		}
 	default:
-		return nil, nil, fmt.Errorf("unsupported column type %T for %q: %w", col, colName, ErrRenderFailed)
+		return nil, nil, Errorf(PhaseBuild, -1, "group", ErrRenderFailed, "unsupported column type %T for %q", col, colName)
 	}
 
 	// Build index groups: map[label] -> []rowIndex.
@@ -677,7 +679,7 @@ func groupByColumn(_ context.Context, ds dataset.Dataset, colName string) ([]str
 	for i, label := range order {
 		subset, serr := ds.SelectRows(groupIndices[label])
 		if serr != nil {
-			return nil, nil, fmt.Errorf("select group %q: %w", label, serr)
+			return nil, nil, Errorf(PhaseBuild, -1, "group", serr, "select group %q", label)
 		}
 
 		subsets[i] = subset
@@ -827,34 +829,34 @@ func (b *Built) PanelLayout() Layout { return b.layout }
 // This is the Go equivalent of ggplot2's ggplot_build(plot).
 func (p *Plot) Build(ctx context.Context) (*Built, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("ggplot: %w", err)
+		return nil, Errorf(PhaseBuild, -1, "context", err, "context cancelled")
 	}
 
 	if len(p.spec.Layers) == 0 {
-		return nil, fmt.Errorf("plot has no layers: %w", ErrRenderFailed)
+		return nil, Errorf(PhaseBuild, -1, "validate", ErrNoLayers, "plot has no layers")
 	}
 
 	// Materialise any lazy Dataset chain.
 	collectedDS, collectErr := p.spec.Dataset.Collect(ctx)
 	if collectErr != nil {
-		return nil, fmt.Errorf("ggplot: collect dataset: %w", collectErr)
+		return nil, Errorf(PhaseBuild, -1, "collect", collectErr, "collect dataset")
 	}
 
 	p.spec.Dataset = collectedDS
 
 	if p.spec.Dataset.Table() == nil {
-		return nil, fmt.Errorf("plot has no dataset: %w", ErrRenderFailed)
+		return nil, Errorf(PhaseBuild, -1, "validate", ErrRenderFailed, "plot has no dataset")
 	}
 
 	th, err := theme.Resolve(p.spec.ThemeName)
 	if err != nil {
-		return nil, fmt.Errorf("ggplot: %w", err)
+		return nil, Errorf(PhaseBuild, -1, "theme", err, "resolve theme")
 	}
 
 	// 1. Facet.
 	facetPanels, err := p.spec.Facet.Split(ctx, p.spec.Dataset)
 	if err != nil {
-		return nil, fmt.Errorf("ggplot: facet split: %w", err)
+		return nil, Errorf(PhaseBuild, -1, "facet", err, "facet split")
 	}
 
 	rows, cols := p.spec.Facet.GridDims(len(facetPanels))
@@ -874,29 +876,55 @@ func (p *Plot) Build(ctx context.Context) (*Built, error) {
 		if panelCol != nil {
 			augmented, cerr := facetPanels[pi].Dataset.WithColumn(panelCol).Collect(ctx)
 			if cerr != nil {
-				return nil, fmt.Errorf("ggplot: inject PANEL column: %w", cerr)
+				return nil, Errorf(PhaseBuild, -1, "facet", cerr, "inject PANEL column")
 			}
 
 			facetPanels[pi].Dataset = augmented
 		}
 	}
 
-	// 3. Build each facet panel.
+	// 3. Build each facet panel (parallel when >1 panel).
 	builtPanels := make([]BuiltPanel, len(facetPanels))
 	panelLayouts := make([]PanelLayout, len(facetPanels))
 
-	for pi, panel := range facetPanels {
-		bp, err := p.buildPanel(ctx, pi, panel.Dataset, panel.Label, th)
+	if len(facetPanels) == 1 {
+		// Single-panel fast path — no errgroup overhead.
+		bp, err := p.buildPanel(ctx, 0, facetPanels[0].Dataset, facetPanels[0].Label, th)
 		if err != nil {
 			return nil, err
 		}
 
-		builtPanels[pi] = bp
-		panelLayouts[pi] = PanelLayout{
-			Row:    pi / cols,
-			Col:    pi % cols,
+		builtPanels[0] = bp
+		panelLayouts[0] = PanelLayout{
+			Row:    0,
+			Col:    0,
 			XScale: bp.XScale,
 			YScale: bp.YScale,
+		}
+	} else {
+		g, gctx := errgroup.WithContext(ctx)
+
+		for pi, panel := range facetPanels {
+			g.Go(func() error {
+				bp, err := p.buildPanel(gctx, pi, panel.Dataset, panel.Label, th)
+				if err != nil {
+					return err
+				}
+
+				builtPanels[pi] = bp
+				panelLayouts[pi] = PanelLayout{
+					Row:    pi / cols,
+					Col:    pi % cols,
+					XScale: bp.XScale,
+					YScale: bp.YScale,
+				}
+
+				return nil
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			return nil, Errorf(PhaseBuild, -1, "panel", err, "parallel panel build")
 		}
 	}
 
@@ -929,7 +957,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 
 	var colorBarSpec *ColorBarSpec
 
-	for _, layer := range p.spec.Layers {
+	for li, layer := range p.spec.Layers {
 		layerStart := len(resolved) // track where this layer's BuiltLayers start
 		merged := layer.Mapping.Merge(p.spec.GlobalMapping)
 		pipeline := layer.Geom.Pipeline
@@ -971,7 +999,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 
 			groups, subsets, err := groupByColumn(ctx, ds, groupCol)
 			if err != nil {
-				return BuiltPanel{}, fmt.Errorf("ggplot: group split by %q: %w", groupCol, err)
+				return BuiltPanel{}, Errorf(PhaseBuild, li, "group", err, "group split by %q", groupCol)
 			}
 
 			if legendTitle == "" && colorCol != "" {
@@ -989,16 +1017,16 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 				if len(pipeline) > 0 {
 					pipelineData, pipelineMapping, err := stat.RunPipeline(ctx, pipeline, grpDS, grpMerged)
 					if err != nil {
-						return BuiltPanel{}, fmt.Errorf("ggplot: transform pipeline failed for group %q: %w",
-							grpLabel, err)
+						return BuiltPanel{}, Errorf(PhaseBuild, li, "transform", err, "pipeline failed for group %q",
+							grpLabel)
 					}
 
 					if pipelineData.Table() == nil {
 						// Lazy pipeline — materialize at Draw time.
 						pipelineData, err = pipelineData.Collect(ctx)
 						if err != nil {
-							return BuiltPanel{}, fmt.Errorf("ggplot: transform pipeline collect failed for group %q: %w",
-								grpLabel, err)
+							return BuiltPanel{}, Errorf(PhaseBuild, li, "transform", err, "pipeline collect failed for group %q",
+								grpLabel)
 						}
 					}
 
@@ -1023,7 +1051,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 				if grpCol != nil {
 					augmented, cerr := grpDS.WithColumn(grpCol).Collect(ctx)
 					if cerr != nil {
-						return BuiltPanel{}, fmt.Errorf("ggplot: inject group column: %w", cerr)
+						return BuiltPanel{}, Errorf(PhaseBuild, li, "group", cerr, "inject group column")
 					}
 
 					grpDS = augmented
@@ -1064,14 +1092,14 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 			if len(pipeline) > 0 {
 				pipelineData, pipelineMapping, err := stat.RunPipeline(ctx, pipeline, ds, merged)
 				if err != nil {
-					return BuiltPanel{}, fmt.Errorf("ggplot: transform pipeline failed: %w", err)
+					return BuiltPanel{}, Errorf(PhaseBuild, li, "transform", err, "pipeline failed")
 				}
 
 				if pipelineData.Table() == nil {
 					// Lazy pipeline — materialize at Draw time.
 					pipelineData, err = pipelineData.Collect(ctx)
 					if err != nil {
-						return BuiltPanel{}, fmt.Errorf("ggplot: transform pipeline collect failed: %w", err)
+						return BuiltPanel{}, Errorf(PhaseBuild, li, "transform", err, "pipeline collect failed")
 					}
 				}
 
@@ -1154,6 +1182,17 @@ type layerSpan struct {
 	start, end int
 	pos        geom.Pos
 	mapping    AesMap
+}
+
+// panelRenderInfo captures per-panel layout data for parallel data-layer
+// rendering in [Built.Draw]. Chrome (grid, axes, legend) is drawn
+// sequentially; only the data layers are rendered in parallel.
+type panelRenderInfo struct {
+	panelIdx       int
+	bp             BuiltPanel
+	xScale, yScale scale.Scale
+	dataX, dataY   float64
+	cellW, cellH   float64
 }
 
 // applyPositionAdjust applies the layer's position adjustment across groups.
@@ -1245,7 +1284,7 @@ func applyPositionAdjust(ctx context.Context, layers []BuiltLayer, layerPos geom
 
 		collected, err := adjusted.Collect(ctx)
 		if err != nil {
-			return fmt.Errorf("ggplot: position adjust group %d: %w", gi, err)
+			return Errorf(PhaseBuild, -1, "position", err, "position adjust group %d", gi)
 		}
 
 		layers[gi].Data = collected
@@ -1310,7 +1349,7 @@ func computeBinWidth(allXs [][]float64) float64 {
 func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, spans []layerSpan) (xScale, yScale scale.Scale, xIsDiscrete bool, err error) { //nolint:gocognit,cyclop // scale training is inherently complex — splitting further reduces clarity.
 	yScale, err = scale.Resolve(p.spec.ScaleOverrides["y"].Type)
 	if err != nil {
-		return nil, nil, false, fmt.Errorf("ggplot: %w", err)
+		return nil, nil, false, Errorf(PhaseBuild, -1, "scale", err, "resolve y scale")
 	}
 
 	if yOpts := p.spec.ScaleOverrides["y"].Opts; len(yOpts) > 0 {
@@ -1369,7 +1408,7 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 	} else {
 		xScale, err = scale.Resolve(p.spec.ScaleOverrides["x"].Type)
 		if err != nil {
-			return nil, nil, false, fmt.Errorf("ggplot: %w", err)
+			return nil, nil, false, Errorf(PhaseBuild, -1, "scale", err, "resolve x scale")
 		}
 
 		if xOpts := p.spec.ScaleOverrides["x"].Opts; len(xOpts) > 0 {
@@ -1735,7 +1774,7 @@ func (b *Built) Explain() string {
 // This is the Go equivalent of ggplot2's grid.draw(ggplot_gtable(built)).
 func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) error { //nolint:gocognit,cyclop // Draw is a complex rendering pipeline — splitting further reduces clarity.
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("ggplot: %w", err)
+		return Errorf(PhaseDraw, -1, "context", err, "context cancelled")
 	}
 
 	th := b.theme
@@ -1750,6 +1789,9 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		legendPos                                                           string
 		hasLegend                                                           bool
 	)
+
+	// panelRenderInfos collects per-panel data for parallel data-layer rendering.
+	var panelRenderInfos []panelRenderInfo
 
 	for pi, bp := range b.panels {
 		xScale := bp.XScale
@@ -1943,22 +1985,17 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 			cv.Stroke()
 		}
 
-		// Draw data layers.
-		cv.Save()
-		cv.Translate(dataX, dataY)
-		cv.DrawRectangle(0, 0, cellW, cellH)
-		cv.Clip()
-
-		xMin, xMax := xScale.Bounds()
-
-		yMin, yMax := yScale.Bounds()
-		for _, rl := range bp.Layers {
-			drawLayer(cv, b.coord, rl.Data, rl.Geom, rl.Mapping,
-				rl.ContColorCol, rl.ContColScale,
-				cellW, cellH, xMin, xMax, yMin, yMax, th)
-		}
-
-		cv.Restore()
+		// Store panel data rendering info for parallel execution.
+		panelRenderInfos = append(panelRenderInfos, panelRenderInfo{
+			panelIdx: pi,
+			bp:       bp,
+			xScale:   xScale,
+			yScale:   yScale,
+			dataX:    dataX,
+			dataY:    dataY,
+			cellW:    cellW,
+			cellH:    cellH,
+		})
 
 		// Draw axes.
 		isMultiPanel := len(b.panels) > 1
@@ -1976,6 +2013,90 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		// Legend.
 		if hasLegend {
 			b.drawLegend(cv, bp, legendPos, dataX, dataY, cellW, cellH, mBottom, legendW, th)
+		}
+	}
+
+	// Render data layers — parallel when multiple panels, sequential otherwise.
+	if len(panelRenderInfos) == 1 {
+		// Single panel: draw directly onto main canvas, no sub-canvas overhead.
+		pri := panelRenderInfos[0]
+
+		cv.Save()
+		cv.Translate(pri.dataX, pri.dataY)
+		cv.DrawRectangle(0, 0, pri.cellW, pri.cellH)
+		cv.Clip()
+
+		xMin, xMax := pri.xScale.Bounds()
+		yMin, yMax := pri.yScale.Bounds()
+
+		for _, rl := range pri.bp.Layers {
+			drawLayer(cv, b.coord, rl.Data, rl.Geom, rl.Mapping,
+				rl.ContColorCol, rl.ContColScale,
+				pri.cellW, pri.cellH, xMin, xMax, yMin, yMax, th)
+		}
+
+		cv.Restore()
+	} else if len(panelRenderInfos) > 1 {
+		// Multi-panel: render each panel's data layers to a sub-canvas
+		// in parallel, then composite onto the main canvas.
+		type subResult struct {
+			idx  int
+			img  image.Image
+			x, y float64
+		}
+
+		results := make([]subResult, len(panelRenderInfos))
+
+		g, gctx := errgroup.WithContext(ctx)
+
+		for i, pri := range panelRenderInfos {
+			g.Go(func() error {
+				if err := gctx.Err(); err != nil {
+					return Errorf(PhaseDraw, -1, "context", err, "panel %d cancelled", i)
+				}
+
+				cw := int(pri.cellW + 0.5) //nolint:mnd // Round to nearest pixel.
+				ch := int(pri.cellH + 0.5) //nolint:mnd // Round to nearest pixel.
+
+				if cw < 1 {
+					cw = 1
+				}
+
+				if ch < 1 {
+					ch = 1
+				}
+
+				sub := canvas.NewGGCanvasCPU(cw, ch)
+
+				xMin, xMax := pri.xScale.Bounds()
+				yMin, yMax := pri.yScale.Bounds()
+
+				for _, rl := range pri.bp.Layers {
+					drawLayer(sub, b.coord, rl.Data, rl.Geom, rl.Mapping,
+						rl.ContColorCol, rl.ContColScale,
+						pri.cellW, pri.cellH, xMin, xMax, yMin, yMax, th)
+				}
+
+				results[i] = subResult{
+					idx: i,
+					img: sub.Image(),
+					x:   pri.dataX,
+					y:   pri.dataY,
+				}
+
+				_ = sub.Close()
+
+				return nil
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			return Errorf(PhaseDraw, -1, "panel", err, "parallel panel rendering")
+		}
+
+		// Composite sub-images onto main canvas.
+		for _, r := range results {
+			cv.DrawImage(r.img, r.x, r.y)
 		}
 	}
 

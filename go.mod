@@ -9,6 +9,7 @@ require (
 	github.com/gogpu/gg v0.46.11
 	github.com/parquet-go/parquet-go v0.29.0
 	golang.org/x/image v0.40.0
+	golang.org/x/sync v0.20.0
 	google.golang.org/api v0.279.0
 	google.golang.org/protobuf v1.36.11
 )
@@ -57,7 +58,6 @@ require (
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260409153401-be6f6cb8b1fa // indirect
 	golang.org/x/text v0.37.0 // indirect

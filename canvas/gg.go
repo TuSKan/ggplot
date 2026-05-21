@@ -265,6 +265,12 @@ func (c *GGCanvas) EncodePNG(w io.Writer) error {
 	return nil
 }
 
+// DrawImage composites img onto the canvas at pixel position (x, y).
+func (c *GGCanvas) DrawImage(img image.Image, x, y float64) {
+	buf := gg.ImageBufFromImage(img)
+	c.ctx.DrawImage(buf, x, y)
+}
+
 // Image returns the underlying image.
 func (c *GGCanvas) Image() image.Image {
 	return c.ctx.Image()

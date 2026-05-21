@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"image"
 	"image/color"
 	"io"
 
@@ -195,6 +196,11 @@ func (c *RecordingCanvas) Width() int { return c.rec.Width() }
 
 // Height returns the canvas height in pixels.
 func (c *RecordingCanvas) Height() int { return c.rec.Height() }
+
+// DrawImage is a no-op for RecordingCanvas. SVG/PDF recording does not
+// support raster compositing; parallel panel rendering is only used by
+// raster backends (GGCanvas).
+func (c *RecordingCanvas) DrawImage(_ image.Image, _, _ float64) {}
 
 // Close is a no-op for RecordingCanvas (no GPU resources to release).
 func (c *RecordingCanvas) Close() error { return nil }

@@ -3,7 +3,10 @@
 // geometry rendering from the specific graphics library (gogpu/gg, SVG, etc.).
 package canvas
 
-import "image/color"
+import (
+	"image"
+	"image/color"
+)
 
 // Canvas is the core rendering abstraction. Implementations provide the
 // actual drawing primitives targeting specific backends (CPU rasterizer,
@@ -96,6 +99,9 @@ type Canvas interface {
 	Width() int
 	// Height returns the canvas height in pixels.
 	Height() int
+	// DrawImage composites the given image onto the canvas at position (x, y).
+	// Used for compositing panel sub-canvases during parallel rendering.
+	DrawImage(img image.Image, x, y float64)
 
 	// Close releases backend resources (GPU buffers, etc.).
 	// Implementations that hold no resources may return nil.
