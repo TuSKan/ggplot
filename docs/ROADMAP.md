@@ -210,7 +210,7 @@ The public, **stable-from-v0.5** extension API:
 - 🔲 Document stability guarantees: 2 minor releases of deprecation before removal
 - ✅ `TypeRect` — unified rectangle mark replacing `TypeBar`/`TypeHistogram` for pipeline constructors (`RectY`, `RectX`, `Histogram`); inset controlled by `Params.Inset`
 - 🔲 `docs/MIGRATION.md` — migration guide for v0.7 deprecation of sugar constructors
-- 🔲 Backward-compat shim verification — verify all sugar constructors produce structurally-equivalent Layers
+- ✅ Backward-compat shim verification — 11 table-driven tests in `geom/shim_test.go` verify all sugar constructors (`Histogram`, `Bar`, `Col`, `Smooth`, `Density`, `Boxplot`) produce structurally-equivalent Layers to pipeline counterparts
 
 #### 4.6 — Production Hardening (continued)
 

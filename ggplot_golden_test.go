@@ -90,12 +90,15 @@ func sha256hex(data []byte) string {
 }
 
 // renderPNG is a helper that renders a plot to PNG bytes.
+// Uses WithCPU() to force deterministic CPU-only rasterization — the GPU
+// accelerator produces blank output when multiple canvases are created
+// in a single process (golden tests run sequentially in one go test binary).
 func renderPNG(t *testing.T, p *ggplot.Plot, w, h int) []byte {
 	t.Helper()
 
 	var buf bytes.Buffer
 
-	_, err := p.WriteTo(context.Background(), &buf, "png", w, h)
+	_, err := p.WriteTo(context.Background(), &buf, "png", w, h, ggplot.WithCPU())
 	if err != nil {
 		t.Fatalf("render PNG: %v", err)
 	}
@@ -119,9 +122,7 @@ func renderPNG(t *testing.T, p *ggplot.Plot, w, h int) []byte {
 //   go test -run TestGolden                     # validate against goldens
 //   go test -run TestGolden -update-goldens     # regenerate goldens
 
-func TestGolden_ScatterPlot(t *testing.T) {
-	t.Parallel()
-
+func TestGolden_ScatterPlot(t *testing.T) { //nolint:paralleltest // Sequential for deterministic CPU rendering.
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -144,9 +145,7 @@ func TestGolden_ScatterPlot(t *testing.T) {
 	assertGolden(t, "scatter_plot", got)
 }
 
-func TestGolden_BarChart(t *testing.T) {
-	t.Parallel()
-
+func TestGolden_BarChart(t *testing.T) { //nolint:paralleltest // Sequential for deterministic CPU rendering.
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -169,9 +168,7 @@ func TestGolden_BarChart(t *testing.T) {
 	assertGolden(t, "bar_chart", got)
 }
 
-func TestGolden_MultiLayer(t *testing.T) {
-	t.Parallel()
-
+func TestGolden_MultiLayer(t *testing.T) { //nolint:paralleltest // Sequential for deterministic CPU rendering.
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -195,9 +192,7 @@ func TestGolden_MultiLayer(t *testing.T) {
 	assertGolden(t, "multi_layer", got)
 }
 
-func TestGolden_GroupedColor(t *testing.T) {
-	t.Parallel()
-
+func TestGolden_GroupedColor(t *testing.T) { //nolint:paralleltest // Sequential for deterministic CPU rendering.
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -217,9 +212,7 @@ func TestGolden_GroupedColor(t *testing.T) {
 	assertGolden(t, "grouped_color", got)
 }
 
-func TestGolden_Histogram(t *testing.T) {
-	t.Parallel()
-
+func TestGolden_Histogram(t *testing.T) { //nolint:paralleltest // Sequential for deterministic CPU rendering.
 	// Deterministic histogram data (not random).
 	xs := make([]float64, 200)
 	for i := range xs {
@@ -242,9 +235,7 @@ func TestGolden_Histogram(t *testing.T) {
 	assertGolden(t, "histogram", got)
 }
 
-func TestGolden_LabelsAndTheme(t *testing.T) {
-	t.Parallel()
-
+func TestGolden_LabelsAndTheme(t *testing.T) { //nolint:paralleltest // Sequential for deterministic CPU rendering.
 	eng := memory.NewEngine(context.Background())
 
 	ds, err := dataset.NewDataset(eng,
@@ -274,9 +265,7 @@ func TestGolden_LabelsAndTheme(t *testing.T) {
 }
 
 // TestGolden_Summary prints the golden directory and file count for CI visibility.
-func TestGolden_Summary(t *testing.T) {
-	t.Parallel()
-
+func TestGolden_Summary(t *testing.T) { //nolint:paralleltest // Sequential for deterministic CPU rendering.
 	dir := goldenDir()
 
 	entries, err := os.ReadDir(dir)

@@ -61,6 +61,19 @@ func NewGGCanvas(width, height int) *GGCanvas {
 	return c
 }
 
+// NewGGCanvasCPU creates a Canvas that uses pure-CPU analytic rasterization,
+// bypassing the GPU accelerator. This produces deterministic output even
+// when multiple canvases are created in a single process (useful for tests).
+func NewGGCanvasCPU(width, height int) *GGCanvas {
+	initFonts()
+
+	c := &GGCanvas{ctx: gg.NewContext(width, height)}
+	c.ctx.SetRasterizerMode(gg.RasterizerAnalytic)
+	c.SetFontSize(12)
+
+	return c
+}
+
 // FromGGContext wraps an existing gg.Context.
 func FromGGContext(ctx *gg.Context) *GGCanvas {
 	initFonts()

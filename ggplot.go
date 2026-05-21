@@ -366,6 +366,7 @@ type RenderOpt func(*renderConfig)
 
 type renderConfig struct {
 	scale float64
+	cpu   bool // force pure-CPU rasterization (no GPU)
 }
 
 func defaultRenderConfig() renderConfig {
@@ -380,6 +381,13 @@ func WithScale(s float64) RenderOpt {
 			c.scale = s
 		}
 	}
+}
+
+// WithCPU forces pure-CPU analytic rasterization, bypassing the GPU
+// accelerator. This produces deterministic output across multiple
+// renders in a single process and is useful for golden/snapshot tests.
+func WithCPU() RenderOpt {
+	return func(c *renderConfig) { c.cpu = true }
 }
 
 // Save renders the plot to a file at the given dimensions.
@@ -488,7 +496,12 @@ func (b *Built) Save(ctx context.Context, filename string, width, height int, op
 		return nil
 
 	default:
-		cv := canvas.NewGGCanvas(sw, sh)
+		var cv *canvas.GGCanvas
+		if cfg.cpu {
+			cv = canvas.NewGGCanvasCPU(sw, sh)
+		} else {
+			cv = canvas.NewGGCanvas(sw, sh)
+		}
 		defer func() { _ = cv.Close() }()
 
 		if err := b.Draw(ctx, cv, sw, sh); err != nil {
@@ -547,7 +560,12 @@ func (b *Built) WriteTo(ctx context.Context, w io.Writer, format string, width, 
 		}
 
 	case "png", "":
-		cv := canvas.NewGGCanvas(sw, sh)
+		var cv *canvas.GGCanvas
+		if cfg.cpu {
+			cv = canvas.NewGGCanvasCPU(sw, sh)
+		} else {
+			cv = canvas.NewGGCanvas(sw, sh)
+		}
 		defer func() { _ = cv.Close() }()
 
 		if err := b.Draw(ctx, cv, sw, sh); err != nil {
