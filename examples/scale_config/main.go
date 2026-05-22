@@ -1,5 +1,5 @@
 // Phase 5a: Scale Configuration — Breaks, Labels, Formatter, Expand,
-// MinorBreaks, and ClipBounds.
+// MinorBreaks, ClipBounds, and Binned.
 package main
 
 import (
@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"path/filepath"
 	"runtime"
 
@@ -28,6 +29,7 @@ func main() {
 	minorGridLines(dir)
 	clipBoundsZoom(dir)
 	composedFeatures(dir)
+	binnedScale(dir)
 }
 
 func save(p *ggplot.Plot, dir, name string, w, h int) {
@@ -282,4 +284,38 @@ func composedFeatures(dir string) {
 		).
 		Theme("seaborn_whitegrid")
 	save(p, dir, "08_composed", 1000, 600)
+}
+
+// ── 9. BinnedScale ──────────────────────────────────────────────────────
+// Discretize a continuous X axis into range-labeled bins.
+func binnedScale(dir string) {
+	rng := rand.New(rand.NewSource(42)) //nolint:mnd // Example uses deterministic seed.
+	n := 150                            //nolint:mnd // number of students.
+
+	scores := make([]float64, n)
+	grades := make([]float64, n)
+
+	for i := range n {
+		scores[i] = 40 + rng.Float64()*60               //nolint:mnd // exam scores 40–100.
+		grades[i] = scores[i]*0.8 + rng.NormFloat64()*8 //nolint:mnd // correlated course grade.
+	}
+
+	eng := memory.NewEngine(context.Background())
+
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("exam_score", scores),
+		eng.NewFloat64Column("course_grade", grades),
+	)
+
+	p := ggplot.New(ds, aes.X("exam_score"), aes.Y("course_grade")).
+		Layer(geom.Point(geom.WithSize(2.5), geom.WithColor("#3498DB"), geom.WithAlpha(0.6))).
+		ScaleX(scale.Binned, scale.WithBinBreaks([]float64{40, 50, 60, 70, 80, 90, 100})).
+		Labs(
+			ggplot.Title("Exam Score Bins"),
+			ggplot.Subtitle("ScaleX(scale.Binned) — continuous axis grouped into range labels"),
+			ggplot.XLab("Exam Score Range"),
+			ggplot.YLab("Course Grade"),
+		).
+		Theme("seaborn_whitegrid")
+	save(p, dir, "09_binned", 900, 550)
 }

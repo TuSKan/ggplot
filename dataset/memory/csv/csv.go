@@ -1,4 +1,5 @@
-package memory
+// Package csv provides the Memory CSV engine driver.
+package csv
 
 import (
 	"context"
@@ -10,10 +11,18 @@ import (
 	"strings"
 
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 )
 
-// ReadCSV reads CSV data using go-simdcsv with schema inference.
-func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) (dataset.Table, error) {
+type memoryCSVHandler struct{}
+
+// ReadCSV reads CSV data using encoding/csv (stdlib) with schema inference.
+func (h *memoryCSVHandler) ReadCSV(_ context.Context, eng dataset.Engine, r io.Reader, cfg dataset.CSVConfig) (dataset.Table, error) {
+	e, ok := eng.(*memory.Engine)
+	if !ok {
+		return nil, fmt.Errorf("memory/csv: expected *memory.Engine, got %T: %w", eng, dataset.ErrUnsupportedEngine)
+	}
+
 	reader := csv.NewReader(r)
 
 	reader.Comma = cfg.Comma
@@ -27,7 +36,12 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 	}
 
 	if len(records) == 0 {
-		return e.FromColumns(dataset.NewSchema())
+		tbl, err := e.FromColumns(dataset.NewSchema())
+		if err != nil {
+			return nil, fmt.Errorf("memory/csv: %w", err)
+		}
+
+		return tbl, nil
 	}
 
 	// Extract headers.
@@ -59,7 +73,12 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 			cols[i] = e.NewStringColumn(name, nil)
 		}
 
-		return e.FromColumns(dataset.NewSchema(fields...), cols...)
+		tbl, err := e.FromColumns(dataset.NewSchema(fields...), cols...)
+		if err != nil {
+			return nil, fmt.Errorf("memory/csv: %w", err)
+		}
+
+		return tbl, nil
 	}
 
 	// Build null set.
@@ -90,46 +109,19 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 		dtype := inferType(rawCols[i], nullSet)
 		switch dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case dataset.DTypeFloat64:
-			data := make([]float64, nRows)
-
-			for j, s := range rawCols[i] {
-				if nullSet[s] {
-					data[j] = math.NaN()
-				} else {
-					v, err := strconv.ParseFloat(s, 64)
-					if err != nil {
-						data[j] = math.NaN()
-					} else {
-						data[j] = v
-					}
-				}
-			}
+			data := parseFloat64Column(rawCols[i], nullSet)
 
 			fields = append(fields, dataset.FloatCol(name))
 			cols = append(cols, e.NewFloat64Column(name, data))
 
 		case dataset.DTypeInt64:
-			data := make([]int64, nRows)
-
-			for j, s := range rawCols[i] {
-				if !nullSet[s] {
-					v, _ := strconv.ParseInt(s, 10, 64)
-					data[j] = v
-				}
-			}
+			data := parseInt64Column(rawCols[i], nullSet)
 
 			fields = append(fields, dataset.IntCol(name))
 			cols = append(cols, e.NewInt64Column(name, data))
 
 		case dataset.DTypeBool:
-			data := make([]bool, nRows)
-
-			for j, s := range rawCols[i] {
-				if !nullSet[s] {
-					v, _ := strconv.ParseBool(s)
-					data[j] = v
-				}
-			}
+			data := parseBoolColumn(rawCols[i], nullSet)
 
 			fields = append(fields, dataset.BoolCol(name))
 			cols = append(cols, e.NewBoolColumn(name, data))
@@ -145,11 +137,20 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 
 	schema := dataset.NewSchema(fields...)
 
-	return e.FromColumns(schema, cols...)
+	tbl, err := e.FromColumns(schema, cols...)
+	if err != nil {
+		return nil, fmt.Errorf("memory/csv: %w", err)
+	}
+
+	return tbl, nil
 }
 
-// WriteCSV writes a Dataset as CSV using go-simdcsv.
-func (e *Engine) WriteCSV(_ context.Context, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
+// WriteCSV writes a Dataset as CSV using stdlib encoding/csv.
+func (h *memoryCSVHandler) WriteCSV(_ context.Context, eng dataset.Engine, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
+	if _, ok := eng.(*memory.Engine); !ok {
+		return fmt.Errorf("memory/csv: expected *memory.Engine, got %T: %w", eng, dataset.ErrUnsupportedEngine)
+	}
+
 	writer := csv.NewWriter(w)
 
 	writer.Comma = cfg.Comma
@@ -293,4 +294,52 @@ func inferType(vals []string, nullSet map[string]bool) dataset.DType {
 	}
 
 	return dataset.DTypeString
+}
+
+func init() {
+	h := &memoryCSVHandler{}
+	dataset.RegisterCSVReader("memory", h)
+	dataset.RegisterCSVWriter("memory", h)
+}
+
+func parseFloat64Column(raw []string, nullSet map[string]bool) []float64 {
+	data := make([]float64, len(raw))
+	for j, s := range raw {
+		if nullSet[s] {
+			data[j] = math.NaN()
+		} else {
+			v, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				data[j] = math.NaN()
+			} else {
+				data[j] = v
+			}
+		}
+	}
+
+	return data
+}
+
+func parseInt64Column(raw []string, nullSet map[string]bool) []int64 {
+	data := make([]int64, len(raw))
+	for j, s := range raw {
+		if !nullSet[s] {
+			v, _ := strconv.ParseInt(s, 10, 64)
+			data[j] = v
+		}
+	}
+
+	return data
+}
+
+func parseBoolColumn(raw []string, nullSet map[string]bool) []bool {
+	data := make([]bool, len(raw))
+	for j, s := range raw {
+		if !nullSet[s] {
+			v, _ := strconv.ParseBool(s)
+			data[j] = v
+		}
+	}
+
+	return data
 }

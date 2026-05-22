@@ -16,11 +16,11 @@ func TestResolveAllNames(t *testing.T) {
 			t.Errorf("Resolve(%q) returned error: %v", n, err)
 			continue
 		}
-		// Default is an alias for ggplot, so its resolved Name field
-		// is "ggplot" — accept that one mismatch.
+		// Default is an alias for dashboard, so its resolved Name field
+		// is "dashboard" — accept that one mismatch.
 		if n == Default {
-			if th.Name != string(Ggplot) {
-				t.Errorf("Resolve(Default) Name = %q, want %q", th.Name, Ggplot)
+			if th.Name != string(Dashboard) {
+				t.Errorf("Resolve(Default) Name = %q, want %q", th.Name, Dashboard)
 			}
 
 			continue
@@ -41,7 +41,7 @@ func TestResolveAllNames(t *testing.T) {
 }
 
 // TestResolveEmpty checks that the empty name resolves to the default
-// (ggplot) preset.
+// (dashboard) preset.
 func TestResolveEmpty(t *testing.T) {
 	t.Parallel()
 
@@ -50,8 +50,8 @@ func TestResolveEmpty(t *testing.T) {
 		t.Fatalf("Resolve(\"\") error: %v", err)
 	}
 
-	if th.Name != string(Ggplot) {
-		t.Errorf("Resolve(\"\") Name = %q, want %q", th.Name, Ggplot)
+	if th.Name != string(Dashboard) {
+		t.Errorf("Resolve(\"\") Name = %q, want %q", th.Name, Dashboard)
 	}
 }
 

@@ -13,9 +13,6 @@ import (
 	"golang.org/x/image/font/gofont/goregular"
 
 	"github.com/TuSKan/ggplot/fonts"
-
-	// opt-in GPU acceleration
-	_ "github.com/gogpu/gg/gpu"
 )
 
 // fontState holds the shared, lazily-initialized font resolver.

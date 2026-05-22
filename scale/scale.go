@@ -20,10 +20,12 @@ type Type string
 
 // Linear is the standard linear scale type.
 const (
-	Linear  Type = "linear"
-	Log10   Type = "log10"
-	Sqrt    Type = "sqrt"
-	Reverse Type = "reverse"
+	Linear   Type = "linear"
+	Log10    Type = "log10"
+	Sqrt     Type = "sqrt"
+	Reverse  Type = "reverse"
+	DateTime Type = "datetime"
+	Binned   Type = "binned"
 )
 
 // Scale defines the interface for all scale types.
@@ -398,6 +400,10 @@ func Resolve(t Type) (Scale, error) {
 		return NewSqrt(), nil
 	case Reverse:
 		return NewReverse(), nil
+	case DateTime:
+		return NewDateTime(), nil
+	case Binned:
+		return NewBinned(), nil
 	default:
 		return nil, fmt.Errorf("scale: unknown type %q: %w", t, ErrUnsupportedScale)
 	}

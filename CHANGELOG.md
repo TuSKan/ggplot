@@ -6,6 +6,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.6] — 2026-05-22
+
+### Added
+
+#### Temporal Data Types (Phase 1)
+- **`DTypeTimestamp`**, **`DTypeDate`**, **`DTypeTime`** — first-class temporal column types stored as `int64` (nanoseconds or days-since-epoch).
+- **Memory engine**: `NewTimestampColumn(name, []time.Time)`, `NewDateColumn(name, []date.Date)`, `NewTimeColumn(name, []dataset.TimeOfDay)`.
+- **Arrow engine**: Maps `arrow.Timestamp`, `Date32`, `Date64`, `Time32`, `Time64` → ggplot `DType`.
+- **BigQuery engine**: Maps `DateFieldType` → `DTypeDate`, `TimeFieldType` → `DTypeTime`, `TimestampFieldType` → `DTypeTimestamp`.
+- **`dataset.ParseTimestamp`/`ParseDate`**: Convenience parsers using `dateparse` and `rickb777/date/v2`.
+
+#### DateTime Scale (Phase 5)
+- **`scale.DateTime`** — auto-detecting time-series scale with calendar-aligned ticks.
+- Granularity detection: second → minute → hour → day → month → year.
+- Intraday spans (<2 days) show time-only labels (`"15:04"`).
+- Uses `time.Local` timezone for tick formatting.
+
+#### Binned Scale (Phase 5)
+- **`scale.Binned`** — discretize continuous axes into range-labeled bins.
+- **`scale.WithBins(n)`** — `scale.Opt` for explicit bin count.
+- **`scale.WithBinBreaks([]float64)`** — `scale.Opt` for explicit bin edges.
+- Default: 7 bins via Sturges heuristic.
+- `Format()` returns `[lo, hi)` range labels (last bin `[lo, hi]`).
+
+#### Out-of-Bounds Policies (Phase 5)
+- **`scale.OOBPolicy`** type: `OOBKeep` (default), `OOBSquish`, `OOBCensor`.
+- **`scale.WithOOB(policy)`** — composable with `WithClipBounds`.
+
+#### Opt-in Driver Packages
+- **`canvas/gpu`** — blank-import package for GPU acceleration (moved from `canvas/gg.go`).
+- **`dataset/memory/csv`** — CSV handler for memory engine.
+- **`dataset/memory/parquet`** — Parquet handler for memory engine.
+- **`dataset/arrow/csv`** — CSV handler for Arrow engine.
+- **`dataset/arrow/parquet`** — Parquet handler for Arrow engine.
+
+#### Axis Text Rotation
+- **`theme.ElementText.Angle`** — axis label rotation angle (degrees), rendered via right-aligned anchor for overlap prevention.
+
+#### Examples
+- **`examples/temporal/`** — timestamp, date, time, and datetime scale examples.
+- **`examples/scale_config/09_binned.png`** — binned scale example with explicit breaks.
+
+### Changed
+- GPU import removed from `canvas/gg.go` — default binary is CPU-only (~8 MB stripped).
+- CSV/Parquet handlers extracted from `dataset/memory` and `dataset/arrow` into subpackages; engine packages focused on column construction.
+- `dataset.Engine` interface extended with `RegisterCSVHandler` and `RegisterParquetHandler` for driver registration.
+- Golden test PNGs updated for rendering improvements.
+
+### Fixed
+- **BinnedScale rendering**: `Bounds()` now returns data-space domain instead of index-space, fixing blank/mispositioned points in the rendering pipeline.
+- **Intraday DateTime labels**: `detectGranularity` uses `"15:04"` format for spans under 2 days.
+
 ## [0.0.5] — 2026-05-20
 
 ### Added

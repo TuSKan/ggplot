@@ -39,6 +39,10 @@ func ScalarFloat64(col AnyColumn) (float64, bool) {
 // transformed by a chain of Float64Opts. With no opts, the returned slice
 // aliases the underlying column data (zero-copy). Any opt forces a copy
 // before the chain runs, so callers may freely mutate the result.
+//
+// If the column is int64-backed (DTypeInt64, DTypeTimestamp, DTypeDate,
+// DTypeTime), the values are converted to float64 automatically. This
+// enables all draw functions to work with temporal data without changes.
 func (d Dataset) Float64(name string, opts ...Float64Opt) ([]float64, error) {
 	if d.tbl == nil {
 		return nil, fmt.Errorf("Float64() on uncollected Dataset — call Collect(ctx) first: %w", ErrUnsupportedDType)
@@ -49,16 +53,33 @@ func (d Dataset) Float64(name string, opts ...Float64Opt) ([]float64, error) {
 	}
 
 	col, err := GetColumn[float64](d.tbl, name)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		vals := col.Values()
+		if len(opts) > 0 {
+			vals = slices.Clone(vals) // copy once, opts mutate freely
+			for _, opt := range opts {
+				vals = opt(vals)
+			}
+		}
+
+		return vals, nil
 	}
 
-	vals := col.Values()
-	if len(opts) > 0 {
-		vals = slices.Clone(vals) // copy once, opts mutate freely
-		for _, opt := range opts {
-			vals = opt(vals)
-		}
+	// Fallback: int64-backed columns (timestamps, dates, times, plain int64).
+	icol, ierr := GetColumn[int64](d.tbl, name)
+	if ierr != nil {
+		return nil, err // return original float64 error — more informative
+	}
+
+	ivals := icol.Values()
+	vals := make([]float64, len(ivals))
+
+	for i, v := range ivals {
+		vals[i] = float64(v)
+	}
+
+	for _, opt := range opts {
+		vals = opt(vals)
 	}
 
 	return vals, nil

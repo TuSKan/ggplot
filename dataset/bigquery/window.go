@@ -239,6 +239,10 @@ func DtypeToBQSQL(dt dataset.DType) string {
 		return "BOOL"
 	case dataset.DTypeTimestamp:
 		return "TIMESTAMP"
+	case dataset.DTypeDate:
+		return "DATE"
+	case dataset.DTypeTime:
+		return "TIME"
 	default:
 		return "STRING"
 	}

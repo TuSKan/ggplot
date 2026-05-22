@@ -17,11 +17,12 @@ import (
 )
 
 func main() {
-	rng := rand.New(rand.NewSource(42)) //nolint:gosec // Example uses deterministic seed.
-
-	var xs, ys []float64
+	rng := rand.New(rand.NewSource(42)) //nolint:mnd // Example uses deterministic seed.
 
 	means := []float64{50, 65, 55}
+	xs := make([]float64, 0, 50*len(means)) //nolint:mnd // 50 samples per group.
+	ys := make([]float64, 0, 50*len(means)) //nolint:mnd // 50 samples per group.
+
 	for g, m := range means {
 		for range 50 {
 			xs = append(xs, float64(g+1))

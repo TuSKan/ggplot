@@ -19,6 +19,10 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"time"
+
+	"github.com/araddon/dateparse"
+	"github.com/rickb777/date/v2"
 
 	"github.com/TuSKan/ggplot/dataset"
 	simd "github.com/TuSKan/ggplot/dataset/compute"
@@ -72,6 +76,79 @@ func (e *Engine) NewTimestampColumn(name string, data []int64) dataset.AnyColumn
 	return &int64Column{name: name, data: data, dtype: dataset.DTypeTimestamp}
 }
 
+// NewTimestampFromTime creates a timestamp column from Go time.Time values.
+// Each value is converted to UnixNano (int64 nanoseconds since epoch).
+func (e *Engine) NewTimestampFromTime(name string, times []time.Time) dataset.AnyColumn {
+	data := make([]int64, len(times))
+	for i, t := range times {
+		data[i] = t.UnixNano()
+	}
+
+	return &int64Column{name: name, data: data, dtype: dataset.DTypeTimestamp}
+}
+
+// NewDateColumn creates a date-only column from int64 days since the Unix epoch
+// (1970-01-01). Compatible with Arrow DATE32.
+func (e *Engine) NewDateColumn(name string, days []int64) dataset.AnyColumn {
+	return &int64Column{name: name, data: days, dtype: dataset.DTypeDate}
+}
+
+// NewDateFromTime creates a date column from Go time.Time values.
+// Each value is truncated to midnight UTC and stored as days since epoch.
+func (e *Engine) NewDateFromTime(name string, times []time.Time) dataset.AnyColumn {
+	data := make([]int64, len(times))
+	for i, t := range times {
+		data[i] = t.Unix() / 86400 //nolint:mnd // seconds-per-day is a domain constant.
+	}
+
+	return &int64Column{name: name, data: data, dtype: dataset.DTypeDate}
+}
+
+// NewTimeColumn creates a time-of-day column from int64 nanoseconds since
+// midnight (00:00:00.000000000). Compatible with Arrow TIME64(ns).
+func (e *Engine) NewTimeColumn(name string, nanos []int64) dataset.AnyColumn {
+	return &int64Column{name: name, data: nanos, dtype: dataset.DTypeTime}
+}
+
+// NewTimestampFromString creates a timestamp column by parsing date/time
+// strings. Tries RFC3339 first, then ISO 8601 date (via rickb777/date),
+// then common layouts. Returns an error if any value fails to parse.
+func (e *Engine) NewTimestampFromString(name string, values []string) (dataset.AnyColumn, error) {
+	data := make([]int64, len(values))
+
+	for i, s := range values {
+		ns, err := parseTimestamp(s)
+		if err != nil {
+			return nil, fmt.Errorf("memory: NewTimestampFromString %q index %d: %w", name, i, err)
+		}
+
+		data[i] = ns
+	}
+
+	return &int64Column{name: name, data: data, dtype: dataset.DTypeTimestamp}, nil
+}
+
+// NewDateFromString creates a date column by parsing date strings using
+// rickb777/date. Supports ISO 8601 ("2006-01-02", "20060102").
+// Returns an error if any value fails to parse.
+func (e *Engine) NewDateFromString(name string, values []string) (dataset.AnyColumn, error) {
+	data := make([]int64, len(values))
+
+	for i, s := range values {
+		d, err := date.ParseISO(s)
+		if err != nil {
+			return nil, fmt.Errorf("memory: NewDateFromString %q index %d: %w", name, i, err)
+		}
+
+		// Convert to days since Unix epoch (1970-01-01).
+		// Date in v2 is days since year zero; MidnightUTC() gives a time.Time.
+		t := d.MidnightUTC()
+		data[i] = t.Unix() / 86400 //nolint:mnd // seconds-per-day is a domain constant.
+	}
+
+	return &int64Column{name: name, data: data, dtype: dataset.DTypeDate}, nil
+}
+
 // FromColumns constructs a Table from a schema and pre-built columns.
 func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) (dataset.Table, error) {
 	if len(cols) == 0 {
@@ -105,7 +182,7 @@ func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 		switch f.Dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case dataset.DTypeFloat64:
 			b.appenders[f.Name] = &memFloat64Appender{}
-		case dataset.DTypeInt64, dataset.DTypeTimestamp:
+		case dataset.DTypeInt64, dataset.DTypeTimestamp, dataset.DTypeDate, dataset.DTypeTime:
 			b.appenders[f.Name] = &memInt64Appender{}
 		case dataset.DTypeString:
 			b.appenders[f.Name] = &memStringAppender{}
@@ -563,7 +640,7 @@ func (c *float64Column) IsNull() []bool {
 type int64Column struct {
 	name  string
 	data  []int64
-	dtype dataset.DType // DTypeInt64 or DTypeTimestamp
+	dtype dataset.DType // DTypeInt64, DTypeTimestamp, DTypeDate, or DTypeTime
 }
 
 func (c *int64Column) Name() string { return c.name }
@@ -633,12 +710,15 @@ type memBuilder struct {
 func (b *memBuilder) Float64(col string) dataset.Float64Appender {
 	return b.appenders[col].(*memFloat64Appender) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
+
 func (b *memBuilder) Int64(col string) dataset.Int64Appender {
 	return b.appenders[col].(*memInt64Appender) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
+
 func (b *memBuilder) String(col string) dataset.StringAppender {
 	return b.appenders[col].(*memStringAppender) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
+
 func (b *memBuilder) Bool(col string) dataset.BoolAppender {
 	return b.appenders[col].(*memBoolAppender) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 }
@@ -655,7 +735,7 @@ func (b *memBuilder) Build() (dataset.Table, error) {
 			}
 
 			cols[i] = &float64Column{name: f.Name, data: a.data}
-		case dataset.DTypeInt64, dataset.DTypeTimestamp:
+		case dataset.DTypeInt64, dataset.DTypeTimestamp, dataset.DTypeDate, dataset.DTypeTime:
 			a, ok := b.appenders[f.Name].(*memInt64Appender)
 			if !ok {
 				return nil, fmt.Errorf("expected *memInt64Appender, got %T: %w", b.appenders[f.Name], ErrTakeTypeMismatch)
@@ -861,6 +941,10 @@ func (e *Engine) Filter(ds dataset.Table, mask dataset.Masker) (dataset.Table, e
 				cols[i] = e.NewBoolColumn(f.Name, nil)
 			case dataset.DTypeTimestamp:
 				cols[i] = e.NewTimestampColumn(f.Name, nil)
+			case dataset.DTypeDate:
+				cols[i] = e.NewDateColumn(f.Name, nil)
+			case dataset.DTypeTime:
+				cols[i] = e.NewTimeColumn(f.Name, nil)
 			default:
 			}
 		}
@@ -1161,7 +1245,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 			}
 
 			cols[ci] = e.NewBoolColumn(name, vals)
-		case dataset.DTypeTimestamp:
+		case dataset.DTypeTimestamp, dataset.DTypeDate, dataset.DTypeTime:
 			vals := make([]int64, 0, totalLen)
 
 			for _, ds := range datasets {
@@ -1169,7 +1253,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 				vals = append(vals, col.(dataset.Column[int64]).Values()...) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 			}
 
-			cols[ci] = e.NewTimestampColumn(name, vals)
+			cols[ci] = &int64Column{name: name, data: vals, dtype: schema.Field(ci).Dtype}
 		default:
 		}
 	}
@@ -1478,6 +1562,18 @@ func (e *Engine) RowNumber(n int) (dataset.AnyColumn, error) {
 	}
 
 	return &int64Column{name: "row_number", data: out}, nil
+}
+
+// parseTimestamp uses araddon/dateparse to automatically detect and parse
+// date/time strings into nanoseconds since epoch. Supports a wide variety of
+// formats including ISO 8601, RFC3339, US/EU date styles, and many more.
+func parseTimestamp(s string) (int64, error) {
+	t, err := dateparse.ParseAny(s)
+	if err != nil {
+		return 0, fmt.Errorf("cannot parse %q as timestamp: %w", s, err)
+	}
+
+	return t.UnixNano(), nil
 }
 
 // Compile-time interface assertions.

@@ -8,7 +8,9 @@ import (
 
 	"github.com/TuSKan/ggplot/dataset"
 	arrowEngine "github.com/TuSKan/ggplot/dataset/arrow"
+	_ "github.com/TuSKan/ggplot/dataset/arrow/parquet"
 	memEngine "github.com/TuSKan/ggplot/dataset/memory"
+	_ "github.com/TuSKan/ggplot/dataset/memory/parquet"
 
 	"github.com/apache/arrow-go/v18/arrow/memory"
 )

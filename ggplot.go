@@ -1359,10 +1359,18 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 	xIsDiscrete = false
 
 	// Probe the first resolved layer's X column to decide scale type.
+	var xDType dataset.DType
+
 	for _, rl := range resolved {
 		if colName, ok := rl.Mapping["x"]; ok {
 			if col, err := rl.Data.Column(colName); err == nil {
-				if col.DType() != dataset.DTypeFloat64 && col.DType() != dataset.DTypeInt64 {
+				xDType = col.DType()
+
+				switch xDType { //nolint:exhaustive // only numeric and temporal types are continuous.
+				case dataset.DTypeFloat64, dataset.DTypeInt64,
+					dataset.DTypeTimestamp, dataset.DTypeDate, dataset.DTypeTime:
+					// continuous
+				default:
 					xIsDiscrete = true
 				}
 			}
@@ -1406,9 +1414,22 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 
 		xScale = ds
 	} else {
-		xScale, err = scale.Resolve(p.spec.ScaleOverrides["x"].Type)
-		if err != nil {
-			return nil, nil, false, Errorf(PhaseBuild, -1, "scale", err, "resolve x scale")
+		// Auto-detect DateTime scale for temporal X columns.
+		if _, hasXOverride := p.spec.ScaleOverrides["x"]; !hasXOverride {
+			switch xDType { //nolint:exhaustive // only temporal types need DateTime scale; default handles the rest.
+			case dataset.DTypeTimestamp, dataset.DTypeDate, dataset.DTypeTime:
+				xScale = scale.NewDateTime()
+			default:
+				xScale, err = scale.Resolve(p.spec.ScaleOverrides["x"].Type)
+				if err != nil {
+					return nil, nil, false, Errorf(PhaseBuild, -1, "scale", err, "resolve x scale")
+				}
+			}
+		} else {
+			xScale, err = scale.Resolve(p.spec.ScaleOverrides["x"].Type)
+			if err != nil {
+				return nil, nil, false, Errorf(PhaseBuild, -1, "scale", err, "resolve x scale")
+			}
 		}
 
 		if xOpts := p.spec.ScaleOverrides["x"].Opts; len(xOpts) > 0 {
@@ -2212,6 +2233,9 @@ func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, 
 	cv.Stroke()
 
 	xMin, xMax := sc.Bounds()
+	angle := th.AxisTextElem().Angle
+	labelY := y + tickLen + 12 //nolint:mnd // Tick-to-label gap in pixels.
+
 	for _, v := range ticks {
 		frac := (v - xMin) / (xMax - xMin)
 		if frac < 0 || frac > 1 {
@@ -2229,7 +2253,18 @@ func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, 
 		cv.SetRGBA(tr, tg, tb, 1)
 		cv.SetFontSize(th.AxisTextElem().Size)
 		cv.SetTabularNums(true)
-		cv.DrawStringAnchored(sc.Format(v), px, y+tickLen+12, 0.5, 0.5)
+
+		if angle != 0 {
+			cv.Save()
+			cv.Translate(px, labelY)
+			cv.Rotate(angle * math.Pi / 180) //nolint:mnd // degrees-to-radians conversion.
+			// Right-aligned anchor for rotated text so labels don't overlap the axis.
+			cv.DrawStringAnchored(sc.Format(v), 0, 0, 1.0, 0.5)
+			cv.Restore()
+		} else {
+			cv.DrawStringAnchored(sc.Format(v), px, labelY, 0.5, 0.5)
+		}
+
 		cv.SetTabularNums(false)
 	}
 

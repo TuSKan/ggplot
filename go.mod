@@ -6,8 +6,10 @@ require (
 	cloud.google.com/go/bigquery v1.77.0
 	github.com/ajroetker/go-highway v0.0.12
 	github.com/apache/arrow-go/v18 v18.6.0
+	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/gogpu/gg v0.46.11
 	github.com/parquet-go/parquet-go v0.29.0
+	github.com/rickb777/date/v2 v2.3.11
 	golang.org/x/image v0.40.0
 	golang.org/x/sync v0.20.0
 	google.golang.org/api v0.279.0
@@ -39,11 +41,14 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
+	github.com/govalues/decimal v0.1.36 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/parquet-go/bitpack v1.0.0 // indirect
 	github.com/parquet-go/jsonlite v1.0.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.26 // indirect
+	github.com/rickb777/period v1.0.27 // indirect
+	github.com/rickb777/plural v1.4.10 // indirect
 	github.com/twpayne/go-geom v1.6.1 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect

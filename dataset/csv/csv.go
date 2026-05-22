@@ -68,14 +68,14 @@ func buildConfig(opts []Option) dataset.CSVConfig {
 }
 
 // Read reads a CSV from r using the given engine.
-// The engine must implement [dataset.CSVReader].
+// The engine must have a registered CSVReader.
 func Read(ctx context.Context, r io.Reader, eng dataset.Engine, opts ...Option) (dataset.Dataset, error) {
-	reader, ok := eng.(dataset.CSVReader)
+	reader, ok := dataset.GetCSVReader(eng.Name())
 	if !ok {
-		return dataset.Dataset{}, fmt.Errorf("csv: engine %q does not implement CSVReader: %w", eng.Name(), ErrUnsupportedType)
+		return dataset.Dataset{}, fmt.Errorf("csv: engine %q does not have a registered CSVReader: %w", eng.Name(), ErrUnsupportedType)
 	}
 
-	tbl, err := reader.ReadCSV(ctx, r, buildConfig(opts))
+	tbl, err := reader.ReadCSV(ctx, eng, r, buildConfig(opts))
 	if err != nil {
 		return dataset.Dataset{}, fmt.Errorf("csv: %w", err)
 	}
@@ -84,14 +84,14 @@ func Read(ctx context.Context, r io.Reader, eng dataset.Engine, opts ...Option) 
 }
 
 // Write writes a Dataset as CSV to w using the given engine.
-// The engine must implement [dataset.CSVWriter].
+// The engine must have a registered CSVWriter.
 func Write(ctx context.Context, w io.Writer, ds dataset.Dataset, eng dataset.Engine, opts ...Option) error {
-	writer, ok := eng.(dataset.CSVWriter)
+	writer, ok := dataset.GetCSVWriter(eng.Name())
 	if !ok {
-		return fmt.Errorf("csv: engine %q does not implement CSVWriter: %w", eng.Name(), ErrUnsupportedType)
+		return fmt.Errorf("csv: engine %q does not have a registered CSVWriter: %w", eng.Name(), ErrUnsupportedType)
 	}
 
-	if err := writer.WriteCSV(ctx, w, ds.Table(), buildConfig(opts)); err != nil {
+	if err := writer.WriteCSV(ctx, eng, w, ds.Table(), buildConfig(opts)); err != nil {
 		return fmt.Errorf("csv: %w", err)
 	}
 

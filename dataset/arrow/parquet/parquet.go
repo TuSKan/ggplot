@@ -1,4 +1,5 @@
-package arrow
+// Package parquet provides the Arrow Parquet engine driver.
+package parquet
 
 import (
 	"context"
@@ -7,6 +8,7 @@ import (
 	"math"
 
 	"github.com/TuSKan/ggplot/dataset"
+	ggplotarrow "github.com/TuSKan/ggplot/dataset/arrow"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	arrowarray "github.com/apache/arrow-go/v18/arrow/array"
@@ -14,8 +16,15 @@ import (
 	"github.com/apache/arrow-go/v18/parquet/pqarrow"
 )
 
+type arrowParquetHandler struct{}
+
 // ReadParquet reads Parquet data using pqarrow for zero-copy columnar ingest.
-func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, _ dataset.ParquetConfig) (dataset.Table, error) {
+func (h *arrowParquetHandler) ReadParquet(ctx context.Context, eng dataset.Engine, r io.ReaderAt, size int64, _ dataset.ParquetConfig) (dataset.Table, error) {
+	e, ok := eng.(*ggplotarrow.Engine)
+	if !ok {
+		return nil, fmt.Errorf("arrow/parquet: expected *arrow.Engine, got %T: %w", eng, dataset.ErrUnsupportedEngine)
+	}
+
 	sr := io.NewSectionReader(r, 0, size)
 
 	pf, err := file.NewParquetReader(sr)
@@ -24,7 +33,7 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, _ d
 	}
 	defer func() { _ = pf.Close() }()
 
-	arrowRdr, err := pqarrow.NewFileReader(pf, pqarrow.ArrowReadProperties{}, e.alloc)
+	arrowRdr, err := pqarrow.NewFileReader(pf, pqarrow.ArrowReadProperties{}, e.Alloc())
 	if err != nil {
 		return nil, fmt.Errorf("arrow: parquet reader: %w", err)
 	}
@@ -39,13 +48,18 @@ func (e *Engine) ReadParquet(ctx context.Context, r io.ReaderAt, size int64, _ d
 }
 
 // arrowTableToDataset converts an arrow.Table into a dataset.Dataset.
-func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
+func arrowTableToDataset(eng *ggplotarrow.Engine, tbl arrow.Table) (dataset.Table, error) {
 	schema := tbl.Schema()
 	nCols := int(tbl.NumCols())
 	nRows := int(tbl.NumRows())
 
 	if nCols == 0 || nRows == 0 {
-		return eng.FromColumns(dataset.NewSchema())
+		res, err := eng.FromColumns(dataset.NewSchema())
+		if err != nil {
+			return nil, fmt.Errorf("arrow/parquet: %w", err)
+		}
+
+		return res, nil
 	}
 
 	var (
@@ -116,11 +130,21 @@ func arrowTableToDataset(eng *Engine, tbl arrow.Table) (dataset.Table, error) {
 		}
 	}
 
-	return eng.FromColumns(dataset.NewSchema(fields...), cols...)
+	res, err := eng.FromColumns(dataset.NewSchema(fields...), cols...)
+	if err != nil {
+		return nil, fmt.Errorf("arrow/parquet: %w", err)
+	}
+
+	return res, nil
 }
 
 // WriteParquet writes a Dataset as Parquet using pqarrow.WriteTable.
-func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, _ dataset.ParquetConfig) error {
+func (h *arrowParquetHandler) WriteParquet(_ context.Context, eng dataset.Engine, w io.Writer, ds dataset.Table, _ dataset.ParquetConfig) error {
+	e, ok := eng.(*ggplotarrow.Engine)
+	if !ok {
+		return fmt.Errorf("arrow/parquet: expected *arrow.Engine, got %T: %w", eng, dataset.ErrUnsupportedEngine)
+	}
+
 	schema := ds.Schema()
 	nCols := schema.NumFields()
 	nRows := int(ds.NumRows())
@@ -135,7 +159,7 @@ func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, 
 	arrowSchema := arrow.NewSchema(arrowFields, nil)
 
 	// Build arrow record batch.
-	bld := arrowarray.NewRecordBuilder(e.alloc, arrowSchema)
+	bld := arrowarray.NewRecordBuilder(e.Alloc(), arrowSchema)
 	defer bld.Release()
 
 	for i := range nCols {
@@ -204,4 +228,10 @@ func appendToBuilder(bldr arrowarray.Builder, col dataset.AnyColumn, _ int) {
 			sb.Append(v)
 		}
 	}
+}
+
+func init() {
+	h := &arrowParquetHandler{}
+	dataset.RegisterParquetReader("arrow", h)
+	dataset.RegisterParquetWriter("arrow", h)
 }

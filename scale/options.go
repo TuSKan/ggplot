@@ -77,6 +77,38 @@ func WithClipBounds(lo, hi float64) Opt {
 	}
 }
 
+// WithOOB sets the out-of-bounds policy for normalized values.
+// See [OOBKeep], [OOBCensor], [OOBSquish].
+func WithOOB(policy OOBPolicy) Opt {
+	return func(c *ConfiguredScale) { c.oob = policy }
+}
+
+// WithBins sets the number of bins for a [BinnedScale].
+// Has no effect on other scale types.
+//
+//	ScaleX(scale.Binned, scale.WithBins(6))
+func WithBins(n int) Opt {
+	return func(c *ConfiguredScale) {
+		if bs, ok := c.inner.(*BinnedScale); ok {
+			bs.nbins = n
+		}
+	}
+}
+
+// WithBinBreaks sets explicit bin edges for a [BinnedScale].
+// The slice must be sorted and have at least 2 elements.
+// Has no effect on other scale types.
+//
+//	ScaleX(scale.Binned, scale.WithBinBreaks([]float64{40, 50, 60, 70, 80, 90, 100}))
+func WithBinBreaks(edges []float64) Opt {
+	return func(c *ConfiguredScale) {
+		if bs, ok := c.inner.(*BinnedScale); ok {
+			bs.breaks = make([]float64, len(edges))
+			copy(bs.breaks, edges)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 
 // Configure wraps an existing [Scale] with the given options.
@@ -108,6 +140,7 @@ type ConfiguredScale struct {
 	minorBreaks []float64            // WithMinorBreaks
 	clipMin     *float64             // WithClipBounds min
 	clipMax     *float64             // WithClipBounds max
+	oob         OOBPolicy            // WithOOB (default: OOBKeep)
 }
 
 // Inner returns the underlying scale.
@@ -132,7 +165,19 @@ func (c *ConfiguredScale) Map(v float64) float64 {
 		return 0.5
 	}
 
-	return (v - mn) / (mx - mn)
+	// Delegate to inner scale for the domain→[0,1] mapping.
+	norm := c.inner.Map(v)
+
+	// If effective bounds differ from inner (due to expand/clip), rescale.
+	iMn, iMx := c.inner.Bounds()
+	if iMn != mn || iMx != mx {
+		// Convert inner [0,1] back to bounds-space, then re-normalize
+		// through effective bounds.
+		val := iMn + norm*(iMx-iMn)
+		norm = (val - mn) / (mx - mn)
+	}
+
+	return applyOOB(norm, c.oob)
 }
 
 // Inverse maps a [0,1] normalized value back to data space using the

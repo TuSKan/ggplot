@@ -1010,7 +1010,7 @@ func mergeAggResults(factory ColumnFactory, name string, results []AnyColumn) (A
 		}
 
 		return factory.NewStringColumn(name, vals), nil
-	case DTypeTimestamp:
+	case DTypeTimestamp, DTypeDate, DTypeTime:
 		vals := make([]int64, n)
 
 		for i, r := range results {
@@ -1178,7 +1178,7 @@ func (rh *rowHasher) hash(row int) uint64 {
 		case DTypeFloat64:
 			binary.LittleEndian.PutUint64(rh.buf[:], math.Float64bits(rh.float[i][row]))
 			_, _ = rh.h.Write(rh.buf[:])
-		case DTypeInt64, DTypeTimestamp:
+		case DTypeInt64, DTypeTimestamp, DTypeDate, DTypeTime:
 			binary.LittleEndian.PutUint64(rh.buf[:], uint64(rh.intv[i][row])) //nolint:gosec // G115: int64 row values are non-negative.
 			_, _ = rh.h.Write(rh.buf[:])
 		case DTypeString:
@@ -1268,7 +1268,7 @@ func renameColumn(col AnyColumn, name string) AnyColumn {
 	switch col.DType() { //nolint:exhaustive // intentional subset; default case handles the rest.
 	case DTypeFloat64:
 		return &renamedFloat64Column{renamedColumn: base}
-	case DTypeInt64, DTypeTimestamp:
+	case DTypeInt64, DTypeTimestamp, DTypeDate, DTypeTime:
 		return &renamedInt64Column{renamedColumn: base}
 	case DTypeString:
 		return &renamedStringColumn{renamedColumn: base}

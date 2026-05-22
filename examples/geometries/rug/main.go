@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	rng := rand.New(rand.NewSource(42)) //nolint:gosec // Example uses deterministic seed.
+	rng := rand.New(rand.NewSource(42)) //nolint:mnd // Example uses deterministic seed.
 	n := 80
 	xs := make([]float64, n)
 	ys := make([]float64, n)

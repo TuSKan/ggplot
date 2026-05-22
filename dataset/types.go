@@ -17,6 +17,12 @@ const (
 	// since the Unix epoch (1970-01-01T00:00:00Z). This representation
 	// is zero-copy compatible with Arrow's TIMESTAMP(ns) type.
 	DTypeTimestamp
+	// DTypeDate is a date-only column stored as int64 days since the
+	// Unix epoch (1970-01-01). Compatible with Arrow's DATE32 type.
+	DTypeDate
+	// DTypeTime is a time-of-day column stored as int64 nanoseconds
+	// since midnight (00:00:00.000000000). Compatible with Arrow's TIME64(ns).
+	DTypeTime
 	// DTypeUnknown is an unrecognized type.
 	DTypeUnknown
 )
@@ -34,6 +40,10 @@ func (d DType) String() string {
 		return "bool"
 	case DTypeTimestamp:
 		return "timestamp[ns]"
+	case DTypeDate:
+		return "date"
+	case DTypeTime:
+		return "time[ns]"
 	default:
 		return "unknown"
 	}

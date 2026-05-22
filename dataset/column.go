@@ -35,6 +35,12 @@ func BoolCol(name string) Field { return Field{Name: name, Dtype: DTypeBool} }
 // TimestampCol creates a timestamp field descriptor.
 func TimestampCol(name string) Field { return Field{Name: name, Dtype: DTypeTimestamp} }
 
+// DateCol creates a date-only field descriptor (days since epoch).
+func DateCol(name string) Field { return Field{Name: name, Dtype: DTypeDate} }
+
+// TimeCol creates a time-of-day field descriptor (ns since midnight).
+func TimeCol(name string) Field { return Field{Name: name, Dtype: DTypeTime} }
+
 // NullableFloatCol creates a nullable float64 field.
 func NullableFloatCol(name string) Field {
 	return Field{Name: name, Dtype: DTypeFloat64, Nullable: true}

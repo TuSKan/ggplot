@@ -21,50 +21,70 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 |---|---|
 | **Geometries** | Point, Line, Step, Bar, Col, Histogram, Area, Density, Polygon, Rug, HLine, VLine, Segment, Text, BoxPlot, Smooth, Tile, ErrorBar |
 | **Statistics** | Identity, Bin/Count, Density (KDE), Smooth (LOESS + lm), Summary, BoxPlot (Tukey/range whiskers, notch CI) |
-| **Scales** | Linear, Log10, Sqrt, Reverse, Discrete |
+| **Scales** | Linear, Log10, Sqrt, Reverse, Discrete, DateTime, Binned |
 | **Color Palettes** | 60+ built-in palettes — Viridis, ColorBrewer, Tab10, Observable, Seaborn, and more |
 | **Faceting** | Grid (row ~ col), Wrap (NCols/NRows) |
 | **Data Backends** | Native Memory, Apache Arrow IPC/Parquet, BigQuery SQL pushdown |
+| **Data Types** | Float64, Int64, String, Bool, Timestamp, Date, Time |
 | **Output** | PNG, SVG 1.1, PDF 1.4, HiDPI via `WithScale()` |
 | **Theming** | 60+ themes — Dashboard, Dark, Classic, Minimal, Observable, Seaborn, Nord, Dracula, and more |
 
 ---
 
-## What's New in v0.0.5
+## What's New in v0.0.6
 
-### Concurrent Build & Draw
+### Temporal Data Types
 
-`Plot.Build` and `Built.Draw` now execute **panel-parallel** rendering via [`errgroup`](https://pkg.go.dev/golang.org/x/sync/errgroup). Multi-panel faceted plots build and render each panel concurrently, with automatic single-panel fast path (zero overhead for simple plots).
+First-class `DTypeTimestamp`, `DTypeDate`, and `DTypeTime` support across all engines. Temporal columns store as `int64` internally (nanoseconds or days-since-epoch) for zero-copy performance.
 
-- **Parallel Build** — each facet panel's data pipeline (stat → scale → position) runs in its own goroutine
-- **Parallel Draw** — each panel's data layers render to an independent sub-canvas, then composite onto the main surface via `DrawImage`
-- Chrome (grid lines, axes, titles, legend) remains sequential for correctness
+- **Memory engine**: `NewTimestampColumn`, `NewDateColumn`, `NewTimeColumn` constructors
+- **Arrow engine**: Maps Arrow `Timestamp`, `Date32`, `Date64`, `Time32`, `Time64` arrays
+- **BigQuery engine**: Maps `DateFieldType` → `DTypeDate`, `TimeFieldType` → `DTypeTime`
 
-### Typed Error Envelope
+### DateTime Scale
 
-All errors now carry structured context via `*ggplot.Error{Phase, Layer, Stage, Cause}`:
+`scale.DateTime` — auto-detecting time-series scale with calendar-aligned ticks and granularity-aware formatting:
 
+```go
+ScaleX(scale.DateTime)  // auto-detect from data span
 ```
-ggplot [build/layer 2/transform]: pipeline failed for group "A": column x not found
+
+Tick granularity: second → minute → hour → day → month → year. Intraday spans show time-only labels (`"15:04"`).
+
+### Binned Scale
+
+`scale.Binned` — discretize continuous axes into range-labeled bins:
+
+```go
+ScaleX(scale.Binned)                                                    // auto 7 bins
+ScaleX(scale.Binned, scale.WithBins(6))                                 // explicit count
+ScaleX(scale.Binned, scale.WithBinBreaks([]float64{40,50,60,70,80,90,100})) // explicit edges
 ```
 
-Full `errors.Is` / `errors.As` / `Unwrap` support with phase-aware sentinels (`PhaseBuild`, `PhaseDraw`, `PhaseRender`).
+### Out-of-Bounds Policies
 
-### Stat Transform Pipeline
+`scale.WithOOB(policy)` — per-axis control of out-of-bounds data points:
 
-Composable `stat.Transform` interface for full grammar-of-graphics data pipelines. 15+ stat transforms including `BinX`, `Count`, `DensityX`, `SmoothXY`, `BoxplotY`, `NormalizeY`, `Filter`, `StackY`, and `Summary`. Pipeline constructors like `geom.RectY(pipeline, opts...)` and `geom.LineY(pipeline, opts...)`.
+```go
+ScaleY(scale.Linear, scale.WithClipBounds(20, 80), scale.WithOOB(scale.OOBSquish))  // squish to limits
+ScaleY(scale.Linear, scale.WithClipBounds(20, 80), scale.WithOOB(scale.OOBCensor))  // drop out-of-range
+```
 
-### New Geometries
+### Opt-in Drivers
 
-Tile, Segment, ErrorBar, Polygon, Ribbon, and Difference — bringing the total to **18 geometry types**.
+GPU acceleration, CSV, and Parquet are now separate packages that register via blank imports. Only what you import is linked into the binary:
 
-### 60+ Themes with Dashboard Default
+```go
+import (
+    _ "github.com/TuSKan/ggplot/canvas/gpu"           // GPU-accelerated rendering
+    _ "github.com/TuSKan/ggplot/dataset/memory/csv"    // CSV read for memory engine
+    _ "github.com/TuSKan/ggplot/dataset/memory/parquet" // Parquet read for memory engine
+    _ "github.com/TuSKan/ggplot/dataset/arrow/csv"     // CSV read for Arrow engine
+    _ "github.com/TuSKan/ggplot/dataset/arrow/parquet"  // Parquet read for Arrow engine
+)
+```
 
-New default theme: **Dashboard** — a clean card-style theme with the Tab10/Blues palette. 60+ themes including Observable, Nord, Dracula, Gruvbox, GitHub, Cyberpunk, and more. Sealed element types with full ggplot2-style inheritance hierarchy.
-
-### GPU or CPU Rendering
-
-`canvas.NewGGCanvasCPU()` and `ggplot.WithCPU()` for deterministic, GPU-independent rasterization — essential for CI/golden tests and environments without GPU access.
+Without these imports, the corresponding `ReadCSV` / `ReadParquet` calls return `ErrUnsupportedEngine`, and rendering uses the CPU-only rasterizer. This keeps the default binary lean (~8 MB stripped).
 
 > Full changelog: [CHANGELOG.md](CHANGELOG.md)
 
@@ -92,8 +112,11 @@ New default theme: **Dashboard** — a clean card-style theme with the Tab10/Blu
 | `geom.Boxplot` | `geom.ErrorBar` | `geom.Rug` |
 | ![Text](assets/text.png) | ![HLine + VLine](assets/hline_vline.png) | ![Segment](assets/segment.png) |
 | `geom.Text` | `geom.HLine` / `geom.VLine` | `geom.Segment` |
-| ![Polygon](assets/polygon.png) | ![Tile](assets/tile.png) | |
-| `geom.Polygon` | `geom.Tile` | |
+
+| | |
+|---|---|
+| ![Polygon](assets/polygon.png) | ![Tile](assets/tile.png) |
+| `geom.Polygon` | `geom.Tile` |
 
 > Each image is generated by a self-contained example in [`examples/geometries/`](examples/geometries/).
 

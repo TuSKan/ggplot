@@ -1,4 +1,5 @@
-package arrow
+// Package csv provides the Arrow CSV engine driver.
+package csv
 
 import (
 	"context"
@@ -9,15 +10,23 @@ import (
 	"strconv"
 
 	"github.com/TuSKan/ggplot/dataset"
+	ggplotarrow "github.com/TuSKan/ggplot/dataset/arrow"
 
 	"github.com/apache/arrow-go/v18/arrow"
-	"github.com/apache/arrow-go/v18/arrow/array"
+	arrowarray "github.com/apache/arrow-go/v18/arrow/array"
 	arrowcsv "github.com/apache/arrow-go/v18/arrow/csv"
 )
 
+type arrowCSVHandler struct{}
+
 // ReadCSV reads CSV data using arrow/csv.NewInferringReader with chunked
 // streaming. Default chunk is 64K rows per batch to bound memory for large files.
-func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) (dataset.Table, error) {
+func (h *arrowCSVHandler) ReadCSV(_ context.Context, eng dataset.Engine, r io.Reader, cfg dataset.CSVConfig) (dataset.Table, error) {
+	e, ok := eng.(*ggplotarrow.Engine)
+	if !ok {
+		return nil, fmt.Errorf("arrow/csv: expected *arrow.Engine, got %T: %w", eng, dataset.ErrUnsupportedEngine)
+	}
+
 	chunkSize := cfg.ChunkSize
 	if chunkSize <= 0 {
 		chunkSize = 1 << 16 // 65 536 rows default
@@ -34,7 +43,7 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 
 	opts = append(opts, arrowcsv.WithNullReader(true, cfg.NullValues...))
 	opts = append(opts, arrowcsv.WithChunk(chunkSize))
-	opts = append(opts, arrowcsv.WithAllocator(e.alloc))
+	opts = append(opts, arrowcsv.WithAllocator(e.Alloc()))
 
 	rr := arrowcsv.NewInferringReader(r, opts...)
 	defer rr.Release()
@@ -77,7 +86,7 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 
 			switch a.typeID { //nolint:exhaustive // intentional subset; default case handles the rest.
 			case arrow.FLOAT64:
-				arr := col.(*array.Float64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
+				arr := col.(*arrowarray.Float64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				start := len(a.floats)
 
 				a.floats = append(a.floats, arr.Float64Values()...)
@@ -88,17 +97,17 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 				}
 
 			case arrow.INT64:
-				arr := col.(*array.Int64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
+				arr := col.(*arrowarray.Int64) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				a.ints = append(a.ints, arr.Int64Values()...)
 
 			case arrow.BOOL:
-				arr := col.(*array.Boolean) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
+				arr := col.(*arrowarray.Boolean) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				for j := range nRows {
 					a.bools = append(a.bools, arr.Value(j))
 				}
 
 			default: // string
-				arr := col.(*array.String) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
+				arr := col.(*arrowarray.String) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 				for j := range nRows {
 					a.strings = append(a.strings, arr.Value(j))
 				}
@@ -111,7 +120,12 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 	}
 
 	if accums == nil {
-		return e.FromColumns(dataset.NewSchema())
+		tbl, err := e.FromColumns(dataset.NewSchema())
+		if err != nil {
+			return nil, fmt.Errorf("arrow/csv: %w", err)
+		}
+
+		return tbl, nil
 	}
 
 	// Build dataset from accumulated columns.
@@ -134,11 +148,20 @@ func (e *Engine) ReadCSV(_ context.Context, r io.Reader, cfg dataset.CSVConfig) 
 		}
 	}
 
-	return e.FromColumns(dataset.NewSchema(fields...), dsCols...)
+	tbl, err := e.FromColumns(dataset.NewSchema(fields...), dsCols...)
+	if err != nil {
+		return nil, fmt.Errorf("arrow/csv: %w", err)
+	}
+
+	return tbl, nil
 }
 
-// WriteCSV writes a Dataset as CSV using go-simdcsv (generic string-based output).
-func (e *Engine) WriteCSV(_ context.Context, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
+// WriteCSV writes a Dataset as CSV using stdlib encoding/csv (generic string-based output).
+func (h *arrowCSVHandler) WriteCSV(_ context.Context, eng dataset.Engine, w io.Writer, ds dataset.Table, cfg dataset.CSVConfig) error {
+	if _, ok := eng.(*ggplotarrow.Engine); !ok {
+		return fmt.Errorf("arrow/csv: expected *arrow.Engine, got %T: %w", eng, dataset.ErrUnsupportedEngine)
+	}
+
 	writer := csv.NewWriter(w)
 
 	writer.Comma = cfg.Comma
@@ -222,4 +245,10 @@ func arrowMakeFormatter(col dataset.AnyColumn) func(int) string {
 	default:
 		return func(_ int) string { return "" }
 	}
+}
+
+func init() {
+	h := &arrowCSVHandler{}
+	dataset.RegisterCSVReader("arrow", h)
+	dataset.RegisterCSVWriter("arrow", h)
 }

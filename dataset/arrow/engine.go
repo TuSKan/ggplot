@@ -111,6 +111,38 @@ func (e *Engine) NewTimestampColumn(name string, data []int64) dataset.AnyColumn
 	return &arrowInt64Column{name: name, arr: b.NewInt64Array(), dtype: dataset.DTypeTimestamp}
 }
 
+// NewDateColumn creates a date column (days since epoch) stored as Arrow int64.
+func (e *Engine) NewDateColumn(name string, data []int64) dataset.AnyColumn {
+	b := array.NewInt64Builder(e.alloc)
+	defer b.Release()
+
+	b.AppendValues(data, nil)
+
+	return &arrowInt64Column{name: name, arr: b.NewInt64Array(), dtype: dataset.DTypeDate}
+}
+
+// NewTimeColumn creates a time-of-day column (nanoseconds since midnight)
+// stored as Arrow int64.
+func (e *Engine) NewTimeColumn(name string, data []int64) dataset.AnyColumn {
+	b := array.NewInt64Builder(e.alloc)
+	defer b.Release()
+
+	b.AppendValues(data, nil)
+
+	return &arrowInt64Column{name: name, arr: b.NewInt64Array(), dtype: dataset.DTypeTime}
+}
+
+// newInt64ColumnWithDType creates an int64-backed column with the given DType.
+// This is used internally to preserve temporal dtype when creating result columns.
+func (e *Engine) newInt64ColumnWithDType(name string, dtype dataset.DType, data []int64) dataset.AnyColumn {
+	b := array.NewInt64Builder(e.alloc)
+	defer b.Release()
+
+	b.AppendValues(data, nil)
+
+	return &arrowInt64Column{name: name, arr: b.NewInt64Array(), dtype: dtype}
+}
+
 // FromColumns builds a Table from pre-built Arrow columns.
 func (e *Engine) FromColumns(schema *dataset.Schema, cols ...dataset.AnyColumn) (dataset.Table, error) {
 	if len(cols) == 0 {
@@ -144,7 +176,7 @@ func (e *Engine) NewBuilder(schema *dataset.Schema) dataset.Builder {
 		switch f.Dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case dataset.DTypeFloat64:
 			b.builders[f.Name] = &arrowFloat64Appender{b: array.NewFloat64Builder(e.alloc)}
-		case dataset.DTypeInt64, dataset.DTypeTimestamp:
+		case dataset.DTypeInt64, dataset.DTypeTimestamp, dataset.DTypeDate, dataset.DTypeTime:
 			b.builders[f.Name] = &arrowInt64Appender{b: array.NewInt64Builder(e.alloc)}
 		case dataset.DTypeString:
 			b.builders[f.Name] = &arrowStringAppender{b: array.NewStringBuilder(e.alloc)}
@@ -212,9 +244,9 @@ func (e *Engine) MinMax(col dataset.AnyColumn) (dataset.AnyColumn, dataset.AnyCo
 		}
 
 		lo, hi := simd.SliceMinMax(vals)
-		if c.dtype == dataset.DTypeTimestamp {
-			return e.NewTimestampColumn(c.name, []int64{lo}),
-				e.NewTimestampColumn(c.name, []int64{hi}), nil
+		if c.dtype != 0 && c.dtype != dataset.DTypeInt64 {
+			return e.newInt64ColumnWithDType(c.name, c.dtype, []int64{lo}),
+				e.newInt64ColumnWithDType(c.name, c.dtype, []int64{hi}), nil
 		}
 
 		return e.NewInt64Column(c.name, []int64{lo}),
@@ -420,8 +452,8 @@ func (e *Engine) Mode(col dataset.AnyColumn) (dataset.AnyColumn, error) {
 			}
 		}
 
-		if c.dtype == dataset.DTypeTimestamp {
-			return e.NewTimestampColumn(c.name, []int64{bestVal}), nil
+		if c.dtype != 0 && c.dtype != dataset.DTypeInt64 {
+			return e.newInt64ColumnWithDType(c.name, c.dtype, []int64{bestVal}), nil
 		}
 
 		return e.NewInt64Column(c.name, []int64{bestVal}), nil
@@ -658,6 +690,7 @@ func (c *arrowStringColumn) Values() []string {
 
 	return vals
 }
+
 func (c *arrowStringColumn) IsNull() []bool {
 	if c.arr.NullN() == 0 {
 		return nil
@@ -687,6 +720,7 @@ func (c *arrowBoolColumn) Values() []bool {
 
 	return vals
 }
+
 func (c *arrowBoolColumn) IsNull() []bool {
 	if c.arr.NullN() == 0 {
 		return nil
@@ -733,12 +767,15 @@ type arrowBuilder struct {
 func (b *arrowBuilder) Float64(col string) dataset.Float64Appender {
 	return b.builders[col].(*arrowFloat64Appender) //nolint:errcheck,forcetypeassert // Builder interface cannot return error.
 }
+
 func (b *arrowBuilder) Int64(col string) dataset.Int64Appender {
 	return b.builders[col].(*arrowInt64Appender) //nolint:errcheck,forcetypeassert // Builder interface cannot return error.
 }
+
 func (b *arrowBuilder) String(col string) dataset.StringAppender {
 	return b.builders[col].(*arrowStringAppender) //nolint:errcheck,forcetypeassert // Builder interface cannot return error.
 }
+
 func (b *arrowBuilder) Bool(col string) dataset.BoolAppender {
 	return b.builders[col].(*arrowBoolAppender) //nolint:errcheck,forcetypeassert // Builder interface cannot return error.
 }
@@ -751,7 +788,7 @@ func (b *arrowBuilder) Build() (dataset.Table, error) {
 		case dataset.DTypeFloat64:
 			a := b.builders[f.Name].(*arrowFloat64Appender) //nolint:errcheck,forcetypeassert // type guaranteed by builder schema.
 			cols[i] = &arrowFloat64Column{name: f.Name, arr: a.b.NewFloat64Array()}
-		case dataset.DTypeInt64, dataset.DTypeTimestamp:
+		case dataset.DTypeInt64, dataset.DTypeTimestamp, dataset.DTypeDate, dataset.DTypeTime:
 			a := b.builders[f.Name].(*arrowInt64Appender) //nolint:errcheck,forcetypeassert // type guaranteed by builder schema.
 			cols[i] = &arrowInt64Column{name: f.Name, arr: a.b.NewInt64Array(), dtype: f.Dtype}
 		case dataset.DTypeString:
@@ -1441,7 +1478,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 			}
 
 			cols[ci] = e.NewBoolColumn(name, vals)
-		case dataset.DTypeTimestamp:
+		case dataset.DTypeTimestamp, dataset.DTypeDate, dataset.DTypeTime:
 			vals := make([]int64, 0, totalLen)
 
 			for _, ds := range datasets {
@@ -1449,7 +1486,7 @@ func (e *Engine) Stack(datasets ...dataset.Table) (dataset.Table, error) {
 				vals = append(vals, col.(dataset.Column[int64]).Values()...) //nolint:errcheck,forcetypeassert // type guaranteed by dispatch.
 			}
 
-			cols[ci] = e.NewTimestampColumn(name, vals)
+			cols[ci] = e.newInt64ColumnWithDType(name, schema.Field(ci).Dtype, vals)
 		default:
 		}
 	}

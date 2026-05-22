@@ -373,14 +373,14 @@ type CSVConfig struct {
 // Memory engine: uses go-simdcsv + schema inference.
 // Arrow engine: uses arrow/csv.NewInferringReader for zero-copy ingest.
 type CSVReader interface {
-	ReadCSV(ctx context.Context, r io.Reader, cfg CSVConfig) (Table, error)
+	ReadCSV(ctx context.Context, eng Engine, r io.Reader, cfg CSVConfig) (Table, error)
 }
 
 // CSVWriter writes a Dataset to CSV.
 // Memory engine: uses go-simdcsv Writer.
 // Arrow engine: uses go-simdcsv Writer (generic — CSV output is string-based).
 type CSVWriter interface {
-	WriteCSV(ctx context.Context, w io.Writer, ds Table, cfg CSVConfig) error
+	WriteCSV(ctx context.Context, eng Engine, w io.Writer, ds Table, cfg CSVConfig) error
 }
 
 // ParquetConfig holds engine-agnostic Parquet configuration.
@@ -393,12 +393,63 @@ type ParquetConfig struct {
 // Memory engine: uses parquet-go for struct-based row reading.
 // Arrow engine: uses pqarrow.ReadTable for zero-copy columnar ingest.
 type ParquetReader interface {
-	ReadParquet(ctx context.Context, r io.ReaderAt, size int64, cfg ParquetConfig) (Table, error)
+	ReadParquet(ctx context.Context, eng Engine, r io.ReaderAt, size int64, cfg ParquetConfig) (Table, error)
 }
 
 // ParquetWriter writes a Dataset to Parquet format.
 // Memory engine: uses parquet-go GenericWriter.
 // Arrow engine: uses pqarrow.WriteTable.
 type ParquetWriter interface {
-	WriteParquet(ctx context.Context, w io.Writer, ds Table, cfg ParquetConfig) error
+	WriteParquet(ctx context.Context, eng Engine, w io.Writer, ds Table, cfg ParquetConfig) error
+}
+
+var (
+	parquetReaders = make(map[string]ParquetReader)
+	parquetWriters = make(map[string]ParquetWriter)
+	csvReaders     = make(map[string]CSVReader)
+	csvWriters     = make(map[string]CSVWriter)
+)
+
+// RegisterParquetReader registers a ParquetReader implementation for an engine.
+func RegisterParquetReader(engineName string, r ParquetReader) {
+	parquetReaders[engineName] = r
+}
+
+// RegisterParquetWriter registers a ParquetWriter implementation for an engine.
+func RegisterParquetWriter(engineName string, w ParquetWriter) {
+	parquetWriters[engineName] = w
+}
+
+// GetParquetReader retrieves a registered ParquetReader for an engine.
+func GetParquetReader(engineName string) (ParquetReader, bool) {
+	r, ok := parquetReaders[engineName]
+	return r, ok
+}
+
+// GetParquetWriter retrieves a registered ParquetWriter for an engine.
+func GetParquetWriter(engineName string) (ParquetWriter, bool) {
+	w, ok := parquetWriters[engineName]
+	return w, ok
+}
+
+// RegisterCSVReader registers a CSVReader implementation for an engine.
+func RegisterCSVReader(engineName string, r CSVReader) {
+	csvReaders[engineName] = r
+}
+
+// RegisterCSVWriter registers a CSVWriter implementation for an engine.
+func RegisterCSVWriter(engineName string, w CSVWriter) {
+	csvWriters[engineName] = w
+}
+
+// GetCSVReader retrieves a registered CSVReader for an engine.
+func GetCSVReader(engineName string) (CSVReader, bool) {
+	r, ok := csvReaders[engineName]
+	return r, ok
+}
+
+// GetCSVWriter retrieves a registered CSVWriter for an engine.
+func GetCSVWriter(engineName string) (CSVWriter, bool) {
+	w, ok := csvWriters[engineName]
+	return w, ok
 }

@@ -89,7 +89,7 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 > Book Ch.1–2 (Introduction, First Steps), Ch.13 (Layers), Ch.19 (Internals)
 
 **Public API:**
-- ✅ Typed `Dataset`/`Frame` with `DType` system (Float64, Int64, String, Bool) and null masks
+- ✅ Typed `Dataset`/`Frame` with `DType` system (Float64, Int64, String, Bool, Timestamp, Date, Time) and null masks
 - ✅ Fluent ETL: `Select`, `Filter`, `Mutate`, `Arrange`, `Distinct`, `Summarize` (eager; lazy planned)
 - ✅ Cross-type column iterators
 - ✅ Canvas abstraction over `gg` with full 2D primitives
@@ -218,24 +218,24 @@ The public extension API — implemented via Go interfaces + registration, not g
 - ✅ 6 PNG goldens (SHA-256, platform-tagged)
 - ✅ Clone independence tests, deep-clone safety
 - ✅ Hot-path optimizations (`strconv` over `Sprintf`, `SelectRows` over `BoolMask`, `engine()` parent walk eliminated, `flatten()` exact capacity)
-- 🔲 **`Built`-level golden tests** — JSON snapshots of `Built` are platform-independent and orders of magnitude more sensitive than PNG goldens; PNG goldens stay as smoke tests
-- 🔲 **`Built.Diagnostics`** — typed warnings for deprecated stat paths (legacy `StatName` usage)
-- 🔲 **Performance CI gates** — track allocs/op and ns/op for ~10 canonical plots; fail PR on >10% regression
-- 🔲 **Typed error envelope** — `*ggplot.Error{Phase, Layer, Stage, Cause}` with `errors.Is`/`Unwrap` support
-- 🔲 **Real SIMD execution** — pending Go SIMD intrinsics that don't heap-escape `Vec[T]` through generic call sites ([golang/go#65592](https://github.com/golang/go/issues/65592)); current scalar loops + go-highway in `dmath`
-- 🔲 **KDE inner-loop SIMD** — `stat.Density` Gaussian kernel via `compute.Exp`/`compute.Mul`/`compute.ReduceSum`; currently scalar + NumCPU parallelism
-- 🔲 **Panel-parallel rendering** — `errgroup.Group` over `Built.Layers × panels`; gated on Phase 4.1
+- ✅ **Typed error envelope** — `*ggplot.Error{Phase, Layer, Stage, Cause}` with `errors.Is`/`Unwrap` support; 38 call sites migrated
+- ✅ **Panel-parallel rendering** — `errgroup.Group` over facet panels in `Build` + data layers in `Draw`; single-panel fast path
+- 🔲 **`Built`-level golden tests** — JSON snapshots of `Built` are platform-independent and orders of magnitude more sensitive than PNG goldens; PNG goldens stay as smoke tests. *Deferred: requires exposing a public `Plot.Build() → Built` API first.*
+- 🔲 **Performance CI gates** — track allocs/op and ns/op for ~10 canonical plots; fail PR on >10% regression. *Benchmarks exist (11 render + 40+ engine); needs CI workflow with `benchstat` comparison. Infrastructure-only, no code change.*
+- ~~🔲~~ ~~**`Built.Diagnostics`** — typed warnings for deprecated stat paths (legacy `StatName` usage)~~ *Removed: `StatName` field was fully replaced by `stat.Transform` pipeline; no deprecated paths remain.*
+- 🔲 **Real SIMD execution** — pending Go SIMD intrinsics that don't heap-escape `Vec[T]` through generic call sites ([golang/go#65592](https://github.com/golang/go/issues/65592)); current scalar loops + `dmath`. *Blocked by Go upstream.*
+- 🔲 **KDE inner-loop SIMD** — `stat.Density` Gaussian kernel via `compute.Exp`/`compute.Mul`/`compute.ReduceSum`; currently scalar + NumCPU parallelism. *Blocked by Real SIMD above.*
 
 #### 4.7 — Visual Polish (analysis.md §6)
 
 - ✅ **Histogram bar inset (S4)** — 0.5px inset per side between continuous-mode bars so adjacent bins never visually merge; matches Observable Plot's default
 - ✅ **Placeholder geom drawers (S5)** — `geom.Tile` (heatmap), `geom.Segment` (x,y→xend,yend), `geom.ErrorBar` (ymin/ymax + caps), `geom.Polygon` (closed paths); all four had declared types but no drawer
 - ✅ **`aes.XEnd`/`aes.YEnd` channels** — endpoint aesthetics for Segment geom
-- 🔲 **Tabular figures on quantitative axes (S1)** — monospaced digit rendering for aligned tick labels; requires canvas font-feature support or mono-digit tick font
+- ✅ **Tabular figures on quantitative axes (S1)** — monospaced digit rendering for aligned tick labels via `SetTabularNums(true)` + OpenType `tnum` feature; enabled for X-axis labels, Y-axis labels, and Y-axis margin measurement
 
 ---
 
-### Phase 5 — Position Scales & Axes 🔶
+### Phase 5 — Position Scales & Axes ✅
 
 > Book Ch.10 (Position scales and axes), Ch.14 (Scales and guides)
 
@@ -247,12 +247,12 @@ The public extension API — implemented via Go interfaces + registration, not g
 - ✅ `scale.WithMinorBreaks([]float64)` — minor grid line positions
 - ✅ `scale.WithClipBounds(min, max)` — coord_cartesian-style zoom-without-filter
 
-#### 5b — Axes & Time Scales (unblocked by Phase 4.1)
-- 🔲 **Date/Time scale** — `scale.DateTime()` with auto tick formatting (year/month/day/hour); training path on `Column[int64]` epoch; `Format()` via `time.Unix`. Forces the renderer off the float64-everywhere assumption (return: more honest typing)
+#### 5b — Axes & Time Scales ✅
+- ✅ **Date/Time scale** — `scale.DateTime` with auto tick formatting (second/minute/hour/day/month/year); training on `DTypeTimestamp`/`DTypeDate`/`DTypeTime` columns; `time.Local` timezone; intraday spans show time-only labels
+- ✅ **`scale.Binned`** — discretize continuous axes into range-labeled bins; auto (Sturges) or explicit bin count via `scale.WithBins(n)`; explicit edges via `scale.WithBinBreaks([]float64)`; `Format()` shows `[lo, hi)` range labels
+- ✅ **Out-of-bounds (oob) policies** — `scale.WithOOB(OOBKeep | OOBSquish | OOBCensor)` per ggplot2 Ch.14.4; composable with `WithClipBounds`
 - 🔲 **Secondary axes** — `SecAxis()` / `DupAxis()` for dual Y. Requires dual-axis layout (right margin, second tick column) — straightforward once `Built.Layout` exists
 - 🔲 **`guide_axis(n.dodge)`** — rotated/dodged labels for dense categorical axes (consumes ElementText.Angle and inheritance)
-- 🔲 **`scale_x_binned()`** — discretize continuous axes for histogram-on-x scenarios
-- 🔲 **out-of-bounds (oob) policies** — `scale.WithOOB(squish | censor | error | na)` per ggplot2 Ch.14.4
 
 ---
 

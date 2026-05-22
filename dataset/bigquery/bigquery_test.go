@@ -58,6 +58,8 @@ func TestDtypeToBQSQL(t *testing.T) {
 		{dataset.DTypeString, "STRING"},
 		{dataset.DTypeBool, "BOOL"},
 		{dataset.DTypeTimestamp, "TIMESTAMP"},
+		{dataset.DTypeDate, "DATE"},
+		{dataset.DTypeTime, "TIME"},
 	}
 	for _, tt := range tests {
 		got := bq.DtypeToBQSQL(tt.dt)

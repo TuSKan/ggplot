@@ -46,14 +46,14 @@ func buildConfig(opts []Option) dataset.ParquetConfig {
 }
 
 // Read reads a Parquet file from r (which must support random access) using
-// the given engine. The engine must implement [dataset.ParquetReader].
+// the given engine. The engine must have a registered ParquetReader.
 func Read(ctx context.Context, r io.ReaderAt, size int64, eng dataset.Engine, opts ...Option) (dataset.Dataset, error) {
-	reader, ok := eng.(dataset.ParquetReader)
+	reader, ok := dataset.GetParquetReader(eng.Name())
 	if !ok {
-		return dataset.Dataset{}, fmt.Errorf("parquet: engine %q does not implement ParquetReader: %w", eng.Name(), ErrUnsupportedType)
+		return dataset.Dataset{}, fmt.Errorf("parquet: engine %q does not have a registered ParquetReader: %w", eng.Name(), ErrUnsupportedType)
 	}
 
-	tbl, err := reader.ReadParquet(ctx, r, size, buildConfig(opts))
+	tbl, err := reader.ReadParquet(ctx, eng, r, size, buildConfig(opts))
 	if err != nil {
 		return dataset.Dataset{}, fmt.Errorf("parquet: %w", err)
 	}
@@ -62,14 +62,14 @@ func Read(ctx context.Context, r io.ReaderAt, size int64, eng dataset.Engine, op
 }
 
 // Write writes a Dataset as Parquet to w using the given engine.
-// The engine must implement [dataset.ParquetWriter].
+// The engine must have a registered ParquetWriter.
 func Write(ctx context.Context, w io.Writer, ds dataset.Dataset, eng dataset.Engine, opts ...Option) error {
-	writer, ok := eng.(dataset.ParquetWriter)
+	writer, ok := dataset.GetParquetWriter(eng.Name())
 	if !ok {
-		return fmt.Errorf("parquet: engine %q does not implement ParquetWriter: %w", eng.Name(), ErrUnsupportedType)
+		return fmt.Errorf("parquet: engine %q does not have a registered ParquetWriter: %w", eng.Name(), ErrUnsupportedType)
 	}
 
-	if err := writer.WriteParquet(ctx, w, ds.Table(), buildConfig(opts)); err != nil {
+	if err := writer.WriteParquet(ctx, eng, w, ds.Table(), buildConfig(opts)); err != nil {
 		return fmt.Errorf("parquet: %w", err)
 	}
 

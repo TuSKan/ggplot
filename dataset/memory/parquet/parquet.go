@@ -1,4 +1,5 @@
-package memory
+// Package parquet provides the Memory Parquet engine driver.
+package parquet
 
 import (
 	"context"
@@ -7,12 +8,20 @@ import (
 	"math"
 
 	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 
 	pq "github.com/parquet-go/parquet-go"
 )
 
+type memoryParquetHandler struct{}
+
 // ReadParquet reads Parquet data using parquet-go (row-based reader).
-func (e *Engine) ReadParquet(_ context.Context, r io.ReaderAt, size int64, _ dataset.ParquetConfig) (dataset.Table, error) {
+func (h *memoryParquetHandler) ReadParquet(_ context.Context, eng dataset.Engine, r io.ReaderAt, size int64, _ dataset.ParquetConfig) (dataset.Table, error) {
+	e, ok := eng.(*memory.Engine)
+	if !ok {
+		return nil, fmt.Errorf("memory/parquet: expected *memory.Engine, got %T: %w", eng, dataset.ErrUnsupportedEngine)
+	}
+
 	f, err := pq.OpenFile(r, size)
 	if err != nil {
 		return nil, fmt.Errorf("memory: parquet open: %w", err)
@@ -24,7 +33,12 @@ func (e *Engine) ReadParquet(_ context.Context, r io.ReaderAt, size int64, _ dat
 	nRows := int(f.NumRows())
 
 	if nCols == 0 || nRows == 0 {
-		return e.FromColumns(dataset.NewSchema())
+		tbl, err := e.FromColumns(dataset.NewSchema())
+		if err != nil {
+			return nil, fmt.Errorf("memory/parquet: %w", err)
+		}
+
+		return tbl, nil
 	}
 
 	// Map parquet column types → dataset DTypes.
@@ -41,7 +55,7 @@ func (e *Engine) ReadParquet(_ context.Context, r io.ReaderAt, size int64, _ dat
 
 		node, ok := schema.Lookup(path...)
 		if !ok {
-			return nil, fmt.Errorf("memory: parquet column not found: %v: %w", path, ErrUnsupportedType)
+			return nil, fmt.Errorf("memory: parquet column not found: %v: %w", path, memory.ErrUnsupportedType)
 		}
 
 		cols[i] = colInfo{
@@ -80,58 +94,45 @@ func (e *Engine) ReadParquet(_ context.Context, r io.ReaderAt, size int64, _ dat
 	for colIdx, ci := range cols {
 		switch ci.dtype { //nolint:exhaustive // intentional subset; default case handles the rest.
 		case dataset.DTypeFloat64:
-			data := make([]float64, len(rows))
-			for i, row := range rows {
-				if colIdx < len(row) && !row[colIdx].IsNull() {
-					data[i] = row[colIdx].Double()
-				} else {
-					data[i] = math.NaN()
-				}
-			}
+			data := parseParquetFloat64Column(rows, colIdx)
 
 			fields = append(fields, dataset.FloatCol(ci.name))
 			dsCols = append(dsCols, e.NewFloat64Column(ci.name, data))
 
 		case dataset.DTypeInt64:
-			data := make([]int64, len(rows))
-			for i, row := range rows {
-				if colIdx < len(row) && !row[colIdx].IsNull() {
-					data[i] = row[colIdx].Int64()
-				}
-			}
+			data := parseParquetInt64Column(rows, colIdx)
 
 			fields = append(fields, dataset.IntCol(ci.name))
 			dsCols = append(dsCols, e.NewInt64Column(ci.name, data))
 
 		case dataset.DTypeBool:
-			data := make([]bool, len(rows))
-			for i, row := range rows {
-				if colIdx < len(row) && !row[colIdx].IsNull() {
-					data[i] = row[colIdx].Boolean()
-				}
-			}
+			data := parseParquetBoolColumn(rows, colIdx)
 
 			fields = append(fields, dataset.BoolCol(ci.name))
 			dsCols = append(dsCols, e.NewBoolColumn(ci.name, data))
 
 		default: // string
-			data := make([]string, len(rows))
-			for i, row := range rows {
-				if colIdx < len(row) && !row[colIdx].IsNull() {
-					data[i] = row[colIdx].String()
-				}
-			}
+			data := parseParquetStringColumn(rows, colIdx)
 
 			fields = append(fields, dataset.StringCol(ci.name))
 			dsCols = append(dsCols, e.NewStringColumn(ci.name, data))
 		}
 	}
 
-	return e.FromColumns(dataset.NewSchema(fields...), dsCols...)
+	tbl, err := e.FromColumns(dataset.NewSchema(fields...), dsCols...)
+	if err != nil {
+		return nil, fmt.Errorf("memory/parquet: %w", err)
+	}
+
+	return tbl, nil
 }
 
 // WriteParquet writes a Dataset as Parquet using parquet-go.
-func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, _ dataset.ParquetConfig) error {
+func (h *memoryParquetHandler) WriteParquet(_ context.Context, eng dataset.Engine, w io.Writer, ds dataset.Table, _ dataset.ParquetConfig) error {
+	if _, ok := eng.(*memory.Engine); !ok {
+		return fmt.Errorf("memory/parquet: expected *memory.Engine, got %T: %w", eng, dataset.ErrUnsupportedEngine)
+	}
+
 	schema := ds.Schema()
 	nCols := schema.NumFields()
 	nRows := int(ds.NumRows())
@@ -156,7 +157,7 @@ func (e *Engine) WriteParquet(_ context.Context, w io.Writer, ds dataset.Table, 
 
 		leaf, ok := pqSchema.Lookup(f.Name)
 		if !ok {
-			return fmt.Errorf("memory: parquet schema missing column %q: %w", f.Name, ErrUnsupportedType)
+			return fmt.Errorf("memory: parquet schema missing column %q: %w", f.Name, memory.ErrUnsupportedType)
 		}
 
 		colIndices[i] = leaf.ColumnIndex
@@ -253,4 +254,56 @@ func makeParquetValue(col dataset.AnyColumn, row, colIdx int) pq.Value {
 	default:
 		return pq.Value{}.Level(0, 0, colIdx)
 	}
+}
+
+func init() {
+	h := &memoryParquetHandler{}
+	dataset.RegisterParquetReader("memory", h)
+	dataset.RegisterParquetWriter("memory", h)
+}
+
+func parseParquetFloat64Column(rows []pq.Row, colIdx int) []float64 {
+	data := make([]float64, len(rows))
+	for i, row := range rows {
+		if colIdx < len(row) && !row[colIdx].IsNull() {
+			data[i] = row[colIdx].Double()
+		} else {
+			data[i] = math.NaN()
+		}
+	}
+
+	return data
+}
+
+func parseParquetInt64Column(rows []pq.Row, colIdx int) []int64 {
+	data := make([]int64, len(rows))
+	for i, row := range rows {
+		if colIdx < len(row) && !row[colIdx].IsNull() {
+			data[i] = row[colIdx].Int64()
+		}
+	}
+
+	return data
+}
+
+func parseParquetBoolColumn(rows []pq.Row, colIdx int) []bool {
+	data := make([]bool, len(rows))
+	for i, row := range rows {
+		if colIdx < len(row) && !row[colIdx].IsNull() {
+			data[i] = row[colIdx].Boolean()
+		}
+	}
+
+	return data
+}
+
+func parseParquetStringColumn(rows []pq.Row, colIdx int) []string {
+	data := make([]string, len(rows))
+	for i, row := range rows {
+		if colIdx < len(row) && !row[colIdx].IsNull() {
+			data[i] = row[colIdx].String()
+		}
+	}
+
+	return data
 }

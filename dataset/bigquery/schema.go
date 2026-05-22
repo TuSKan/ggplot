@@ -44,8 +44,12 @@ func bqFieldToDataset(fs *bigquery.FieldSchema) dataset.Field {
 		f.Dtype = dataset.DTypeString
 	case bigquery.BooleanFieldType:
 		f.Dtype = dataset.DTypeBool
-	case bigquery.TimestampFieldType, bigquery.DateTimeFieldType, bigquery.DateFieldType, bigquery.TimeFieldType:
+	case bigquery.TimestampFieldType, bigquery.DateTimeFieldType:
 		f.Dtype = dataset.DTypeTimestamp
+	case bigquery.DateFieldType:
+		f.Dtype = dataset.DTypeDate
+	case bigquery.TimeFieldType:
+		f.Dtype = dataset.DTypeTime
 	case bigquery.BytesFieldType:
 		f.Dtype = dataset.DTypeString // bytes → string fallback
 	default:
@@ -84,6 +88,10 @@ func datasetFieldToBQ(f dataset.Field) *bigquery.FieldSchema {
 		fs.Type = bigquery.BooleanFieldType
 	case dataset.DTypeTimestamp:
 		fs.Type = bigquery.TimestampFieldType
+	case dataset.DTypeDate:
+		fs.Type = bigquery.DateFieldType
+	case dataset.DTypeTime:
+		fs.Type = bigquery.TimeFieldType
 	default:
 		fs.Type = bigquery.StringFieldType // fallback
 	}
@@ -140,8 +148,12 @@ func arrowTypeToDType(dt arrow.DataType) dataset.DType {
 		return dataset.DTypeString
 	case arrow.BOOL:
 		return dataset.DTypeBool
-	case arrow.TIMESTAMP, arrow.DATE32, arrow.DATE64, arrow.TIME32, arrow.TIME64:
+	case arrow.TIMESTAMP:
 		return dataset.DTypeTimestamp
+	case arrow.DATE32, arrow.DATE64:
+		return dataset.DTypeDate
+	case arrow.TIME32, arrow.TIME64:
+		return dataset.DTypeTime
 	default:
 		return dataset.DTypeString // fallback
 	}
@@ -219,6 +231,9 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 
 		return eng.NewBoolColumn(name, vals), nil
 
+	case dataset.DTypeTimestamp, dataset.DTypeDate, dataset.DTypeTime:
+		return arrowTemporalToColumn(eng, name, arr, dtype)
+
 	default:
 		// Fallback: treat as string
 		vals := make([]string, arr.Len())
@@ -227,6 +242,50 @@ func arrowArrayToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, d
 		}
 
 		return eng.NewStringColumn(name, vals), nil
+	}
+}
+
+// arrowTemporalToColumn converts an Arrow temporal array (Timestamp, Date32,
+// Date64, Time32, Time64, or Int64) into a dataset column with the given DType.
+func arrowTemporalToColumn(eng *arrowEngine.Engine, name string, arr arrow.Array, dtype dataset.DType) (dataset.AnyColumn, error) {
+	vals := make([]int64, arr.Len())
+
+	switch a := arr.(type) {
+	case *arrowarray.Int64:
+		for i := range a.Len() {
+			vals[i] = a.Value(i)
+		}
+	case *arrowarray.Timestamp:
+		for i := range a.Len() {
+			vals[i] = int64(a.Value(i))
+		}
+	case *arrowarray.Date32:
+		for i := range a.Len() {
+			vals[i] = int64(a.Value(i))
+		}
+	case *arrowarray.Date64:
+		for i := range a.Len() {
+			vals[i] = int64(a.Value(i))
+		}
+	case *arrowarray.Time32:
+		for i := range a.Len() {
+			vals[i] = int64(a.Value(i))
+		}
+	case *arrowarray.Time64:
+		for i := range a.Len() {
+			vals[i] = int64(a.Value(i))
+		}
+	default:
+		return nil, fmt.Errorf("unsupported arrow type %T for temporal: %w", arr, ErrUnsupportedType)
+	}
+
+	switch dtype { //nolint:exhaustive // only temporal dtypes reach here.
+	case dataset.DTypeDate:
+		return eng.NewDateColumn(name, vals), nil
+	case dataset.DTypeTime:
+		return eng.NewTimeColumn(name, vals), nil
+	default:
+		return eng.NewTimestampColumn(name, vals), nil
 	}
 }
 
