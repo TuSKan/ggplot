@@ -51,13 +51,17 @@ var (
 	ErrUnknownName = errors.New("theme: unknown name")
 )
 
+func init() {
+	MustRegister(Default, newDashboard)
+}
+
 // Name identifies a built-in theme.
 type Name string
 
 // Built-in theme names.
 //
-// Default resolves to the matplotlib ggplot preset; users who want the old
-// hand-tuned light theme should pick a specific named preset instead.
+// Default resolves to the Dashboard card-style theme; users who want the
+// matplotlib ggplot preset should use Theme("ggplot") explicitly.
 const (
 	// Default is the default theme.
 	Default Name = "default"

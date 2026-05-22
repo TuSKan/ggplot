@@ -4,7 +4,6 @@ import "image/color"
 
 func init() {
 	MustRegister(Ggplot, newGgplot)
-	MustRegister(Default, newGgplot) // Default is an alias for Ggplot.
 }
 
 // newGgplot mirrors matplotlib's ggplot.mplstyle.

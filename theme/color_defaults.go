@@ -38,7 +38,7 @@ var defaultColorDefaults = ColorDefaults{
 //nolint:gochecknoglobals // Immutable theme-level configuration table.
 var themeColorDefaults = map[Name]ColorDefaults{
 	// ── Light backgrounds ──────────────────────────────────────────────
-	Default:             {colormap.Tab10, colormap.Viridis, colormap.RdBu, colormap.Twilight},
+	Default:             {colormap.Tab10, colormap.Blues, colormap.RdBu, colormap.Twilight},
 	Ggplot:              {colormap.Tab10, colormap.Viridis, colormap.RdBu, colormap.Twilight},
 	Classic:             {colormap.Tab10, colormap.Blues, colormap.RdBu, colormap.Twilight},
 	Minimal:             {colormap.Tab10, colormap.Viridis, colormap.RdBu, colormap.Twilight},

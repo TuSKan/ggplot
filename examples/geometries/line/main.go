@@ -37,7 +37,7 @@ func main() {
 		Labs(ggplot.Title("Line Plot"))
 
 	_, filename, _, _ := runtime.Caller(0)
-	if err := p.Save(context.Background(), filepath.Join(filepath.Dir(filename), "line.png"), 800, 600); err != nil {
+	if err := p.Save(context.Background(), filepath.Join(filepath.Dir(filename), "line.png"), 800, 600, ggplot.WithCPU()); err != nil {
 		log.Fatalln(err)
 	}
 }
