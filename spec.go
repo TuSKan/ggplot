@@ -62,6 +62,16 @@ type PlotSpec struct {
 
 	// LegendPosition controls where the legend is drawn.
 	LegendPosition string
+
+	// ColorBarWidth sets the width of the continuous color bar in pixels.
+	// Zero means default (12px).
+	ColorBarWidth float64
+	// ColorBarNBin sets the number of discrete gradient steps in the color bar.
+	// Zero means default (256).
+	ColorBarNBin int
+	// LegendNCols sets the number of columns for the categorical legend.
+	// Zero means single column (vertical) or single row (horizontal).
+	LegendNCols int
 }
 
 // AesMap maps aesthetic channel names to column names.

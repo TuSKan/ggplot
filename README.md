@@ -31,60 +31,70 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 
 ---
 
-## What's New in v0.0.6
+## What's New in v0.0.7
 
-### Temporal Data Types
+### CIELAB Gradient Constructors
 
-First-class `DTypeTimestamp`, `DTypeDate`, and `DTypeTime` support across all engines. Temporal columns store as `int64` internally (nanoseconds or days-since-epoch) for zero-copy performance.
-
-- **Memory engine**: `NewTimestampColumn`, `NewDateColumn`, `NewTimeColumn` constructors
-- **Arrow engine**: Maps Arrow `Timestamp`, `Date32`, `Date64`, `Time32`, `Time64` arrays
-- **BigQuery engine**: Maps `DateFieldType` → `DTypeDate`, `TimeFieldType` → `DTypeTime`
-
-### DateTime Scale
-
-`scale.DateTime` — auto-detecting time-series scale with calendar-aligned ticks and granularity-aware formatting:
+Build perceptually uniform colour gradients using CIELAB interpolation — midpoints look equally different from both endpoints, unlike RGB lerps:
 
 ```go
-ScaleX(scale.DateTime)  // auto-detect from data span
+white := colormap.Color{R: 1, G: 1, B: 1, A: 1}
+blue  := colormap.Color{R: 0, G: 0, B: 1, A: 1}
+
+ScaleColor(colormap.Gradient(white, blue))           // 2-stop gradient
+ScaleColor(colormap.Gradient2(cold, neutral, hot))   // diverging (3-stop)
+ScaleColor(colormap.GradientN([]colormap.Color{...})) // N-stop terrain/custom
 ```
 
-Tick granularity: second → minute → hour → day → month → year. Intraday spans show time-only labels (`"15:04"`).
+### Theme-Aware Colour Defaults
 
-### Binned Scale
-
-`scale.Binned` — discretize continuous axes into range-labeled bins:
+Themes now provide separate Color/Fill palettes. No explicit `ScaleColor()` needed — the pipeline picks the right default:
 
 ```go
-ScaleX(scale.Binned)                                                    // auto 7 bins
-ScaleX(scale.Binned, scale.WithBins(6))                                 // explicit count
-ScaleX(scale.Binned, scale.WithBinBreaks([]float64{40,50,60,70,80,90,100})) // explicit edges
+p.Theme("dark")      // dark theme → Observable10 discrete, Inferno fill
+p.Theme("okabe_ito") // colorblind-safe palette
+p.Theme("nord")      // Nord palette
 ```
 
-### Out-of-Bounds Policies
+### Legend Key Glyphs
 
-`scale.WithOOB(policy)` — per-axis control of out-of-bounds data points:
+Legend keys now match their geom type — circles for points, lines for smooth/line, rectangles for bars:
 
 ```go
-ScaleY(scale.Linear, scale.WithClipBounds(20, 80), scale.WithOOB(scale.OOBSquish))  // squish to limits
-ScaleY(scale.Linear, scale.WithClipBounds(20, 80), scale.WithOOB(scale.OOBCensor))  // drop out-of-range
+Layer(geom.Point(geom.WithLabel("Data"), geom.WithColor("red"))).    // ● circle key
+Layer(geom.Smooth(geom.WithLabel("Trend"), geom.WithColor("blue"))). // ── line key
+Layer(geom.Bar(geom.WithLabel("Count"), geom.WithFill("green")))     // ■ rect key
 ```
 
-### Opt-in Drivers
+### Guide Customization
 
-GPU acceleration, CSV, and Parquet are now separate packages that register via blank imports. Only what you import is linked into the binary:
+Fine-tune colour bar and legend appearance:
 
 ```go
-import (
-    _ "github.com/TuSKan/ggplot/canvas/gpu"           // GPU-accelerated rendering
-    _ "github.com/TuSKan/ggplot/dataset/memory/csv"    // CSV read for memory engine
-    _ "github.com/TuSKan/ggplot/dataset/memory/parquet" // Parquet read for memory engine
-    _ "github.com/TuSKan/ggplot/dataset/arrow/csv"     // CSV read for Arrow engine
-    _ "github.com/TuSKan/ggplot/dataset/arrow/parquet"  // Parquet read for Arrow engine
-)
+p.ColorBarWidth(20).  // wider gradient bar (default 12px)
+  ColorBarNBin(8).    // 8 discrete steps instead of smooth
+  LegendCols(2)       // 2-column legend layout
 ```
 
-Without these imports, the corresponding `ReadCSV` / `ReadParquet` calls return `ErrUnsupportedEngine`, and rendering uses the CPU-only rasterizer. This keeps the default binary lean (~8 MB stripped).
+### NA Color
+
+Control how missing values appear in colour scales:
+
+```go
+red := gg.RGBA{R: 1, A: 1}
+scale.SetNAColor(&red)  // NaN → red instead of transparent
+```
+
+<details>
+<summary><strong>What was new in v0.0.6</strong></summary>
+
+- **Temporal data types**: `DTypeTimestamp`, `DTypeDate`, `DTypeTime` across all engines
+- **DateTime scale**: `scale.DateTime` with auto calendar-aligned ticks
+- **Binned scale**: `scale.Binned` with `WithBins(n)` and `WithBinBreaks(edges)`
+- **Out-of-bounds policies**: `scale.WithOOB(OOBSquish | OOBCensor)`
+- **Opt-in drivers**: GPU, CSV, Parquet as blank-import packages
+
+</details>
 
 > Full changelog: [CHANGELOG.md](CHANGELOG.md)
 

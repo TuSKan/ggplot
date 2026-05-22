@@ -256,24 +256,22 @@ The public extension API — implemented via Go interfaces + registration, not g
 
 ---
 
-### Phase 6 — Colour Scales & Legends 🔲
+### Phase 6 — Colour Scales & Legends ✅
 
 > Book Ch.11 (Colour scales and legends)
 
 - ✅ **Colormap registry** — `colormap.Cmap` interface, 40+ built-in colormaps (sequential, diverging, qualitative, perceptually-uniform, cyclic, miscellaneous)
 - ✅ **Cyclic colormaps** — `Twilight` (perceptually-uniform) + `Phase` (HSL wrap) for circular variables
 - ✅ **Turbo / JetLegacy** — high-dynamic-range + legacy MATLAB (with doc warning; never a default)
-- ✅ **Theme → ColorDefaults** — `ColorDefaults{Discrete, Sequential, Diverging, Cyclic}` mapped for all 75 themes; `DefaultCmapFor(name, category)` lookup
-- 🔲 **Color/Fill split** — extend `ColorDefaults` with `ColorDiscrete`/`ColorContinuous`/`FillDiscrete`/`FillContinuous` when a real use case demands it; zero-value fields fall back to `Discrete`/`Sequential`
-- 🔲 **Wire into scale pipeline** — `scale.ScaleColor`/`scale.ScaleFill` should call `theme.DefaultCmapFor(th.Name, category)` when the user hasn't set an explicit colormap
-- 🔲 **Continuous color** — `scale.ColorGradient(low, high)`, `Gradient2(low, mid, high, midpoint)`, `GradientN([]colors)`
-- 🔲 **Discrete color** — `scale.ColorBrewer(palette)`, `ColorManual(map[string]color)`, `ColorGrey(start, end)`
-- 🔲 **Palette system** — viridis (A–E), ColorBrewer (sequential/diverging/qualitative), HCL hue/chroma/luminance
-- 🔲 **Color-blind defaults** — `scale.ColorViridisD()`, `ColorViridisC()` as accessibility-first defaults
-- 🔲 **Fill vs Color** — independent `scale.Fill*` mirrors of color scales
-- 🔲 **NA color** — `WithNAColor(c)` parameter
-- 🔲 **Guide customization** — `guide.ColorBar(barwidth, barheight, nbin, direction)`, `guide.Legend(ncol, nrow, byrow)`
-- 🔲 **Legend key glyphs** — per-geom key shape (line key for `geom.Smooth`, point key for `geom.Point`)
+- ✅ **Theme → ColorDefaults** — `ColorDefaults{ColorDiscrete, ColorSequential, FillDiscrete, FillSequential, Diverging, Cyclic}` mapped for all 75 themes; `DefaultCmapFor(name, aesthetic, category)` lookup with Color/Fill split
+- ✅ **Color/Fill split** — `ColorDefaults` has independent `ColorDiscrete`/`ColorSequential`/`FillDiscrete`/`FillSequential` fields; zero-value Fill* fields fall back to Color*
+- ✅ **Wire into scale pipeline** — discrete fallback uses `theme.DefaultCmapFor(AesColor, Qualitative)`, continuous fallback uses `theme.DefaultCmapFor(AesColor, Sequential)`; removed redundant `themePaletteCmap()`
+- ✅ **CIELAB gradient constructors** — `colormap.Gradient(low, high)`, `Gradient2(low, mid, high)`, `GradientN([]Color)` with perceptually-uniform CIELAB interpolation; sRGB↔XYZ↔Lab conversion
+- ✅ **Discrete color** — `ScaleColorManual(map[string]color)` already shipped
+- ✅ **Palette system** — viridis (A–E), ColorBrewer (sequential/diverging/qualitative), 60+ registered colormaps
+- ✅ **NA color** — `colormap.Scale.SetNAColor(c *gg.RGBA)` for user-configurable missing-value color
+- ✅ **Guide customization** — `ColorBarWidth(w)`, `ColorBarNBin(n)`, `LegendCols(n)` fluent API; `ColorBarSpec.BarWidth`/`NBin` wired into rendering
+- ✅ **Legend key glyphs** — `LegendGlyph` type with `GlyphRect` (bars/histogram/tile), `GlyphPoint` (point/rug), `GlyphLine` (line/smooth/step/segment); `drawGlyph` renders appropriate shapes; auto-selected based on `geom.Type`
 
 > Anti-patterns: no theme-specific colormap variants (ObservableViridis, NordMagma); no Jet/Turbo as defaults.
 

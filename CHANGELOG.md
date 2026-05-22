@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.7] — 2026-05-22
+
+### Added
+
+#### CIELAB Gradient Constructors (Phase 6)
+- **`colormap.Gradient(low, high)`** — 2-stop perceptually uniform gradient using CIELAB interpolation.
+- **`colormap.Gradient2(low, mid, high)`** — 3-stop diverging gradient with midpoint at t=0.5.
+- **`colormap.GradientN(colors)`** — N-stop multi-color gradient with evenly spaced breakpoints.
+- Full `Cmap` interface support: `Reversed()`, `Resampled()`, `WithExtremes()`, clamping, NaN handling.
+- sRGB ↔ D65 XYZ ↔ CIELAB conversion helpers for round-trip-accurate colour space transforms.
+
+#### Color/Fill Split in Theme Defaults (Phase 6)
+- **`ColorDefaults`** now has independent `ColorDiscrete`, `ColorSequential`, `FillDiscrete`, `FillSequential` fields.
+- Fill fields fall back to corresponding Color fields when nil — no duplication needed.
+- **`theme.DefaultCmapFor(name, aesthetic, category)`** — resolves `AesColor` vs `AesFill` for correct default palette dispatch.
+- All 75 themes updated with split Color/Fill defaults (e.g., dark themes: Fill=Inferno, Color=Observable10).
+
+#### NA Color on colormap.Scale (Phase 6)
+- **`colormap.Scale.SetNAColor(c *gg.RGBA)`** — user-configurable color for missing/NaN values.
+- `nil` reverts to the cmap's default bad color (transparent black).
+
+#### Legend Key Glyphs (Phase 6)
+- **`LegendGlyph`** type with three variants: `GlyphRect`, `GlyphPoint`, `GlyphLine`.
+- Legend keys auto-match their geom type: circles for `geom.Point`/`Rug`, lines for `geom.Line`/`Smooth`/`Step`/`Segment`, rectangles for bars/tiles.
+- **`drawGlyph()`** helper renders the appropriate shape in both vertical and horizontal legends.
+
+#### Guide Customization API (Phase 6)
+- **`Plot.ColorBarWidth(w)`** — set continuous color bar width in pixels.
+- **`Plot.ColorBarNBin(n)`** — set number of discrete gradient steps in the color bar.
+- **`Plot.LegendCols(n)`** — set number of columns for categorical legends.
+- `ColorBarSpec.BarWidth`/`NBin` fields wired into `drawColorBar()`.
+
+#### Examples
+- **`examples/phase6_color_scales/`** — 6 example functions generating 8 PNGs: CIELAB gradient, diverging gradient, multi-stop terrain, theme-aware auto-selection (default/dark/okabe_ito), legend key glyphs, guide customization.
+
+### Changed
+- Build pipeline now uses `theme.DefaultCmapFor()` for all colour scale fallbacks — themes control default palettes, not hard-coded constants.
+- Removed redundant `themePaletteCmap()` function.
+- `grouped_color` golden test updated (legend key shape changed from rectangle to circle for `geom.Point` — intentional visual improvement).
+
 ## [0.0.6] — 2026-05-22
 
 ### Added

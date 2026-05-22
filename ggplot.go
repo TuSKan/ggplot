@@ -315,6 +315,33 @@ func (p *Plot) LegendPosition(pos LegendPos) *Plot {
 	return cloned
 }
 
+// ColorBarWidth sets the width of the continuous color bar in pixels.
+// Zero resets to default (12px).
+func (p *Plot) ColorBarWidth(w float64) *Plot {
+	cloned := p.clone()
+	cloned.spec.ColorBarWidth = w
+
+	return cloned
+}
+
+// ColorBarNBin sets the number of discrete gradient steps in the color bar.
+// Zero resets to default (256).
+func (p *Plot) ColorBarNBin(n int) *Plot {
+	cloned := p.clone()
+	cloned.spec.ColorBarNBin = n
+
+	return cloned
+}
+
+// LegendCols sets the number of columns for the categorical legend.
+// Zero resets to single column (vertical) or single row (horizontal).
+func (p *Plot) LegendCols(n int) *Plot {
+	cloned := p.clone()
+	cloned.spec.LegendNCols = n
+
+	return cloned
+}
+
 // ScaleX sets the x-axis scale type with optional configuration.
 // Options: [scale.WithBreaks], [scale.WithLabels], [scale.WithFormatter],
 // [scale.WithExpand], [scale.WithMinorBreaks], [scale.WithClipBounds].
@@ -688,29 +715,6 @@ func groupByColumn(_ context.Context, ds dataset.Dataset, colName string) ([]str
 	return order, subsets, nil
 }
 
-// themePaletteCmap returns a discrete colormap derived from the theme's
-// Palette, falling back to colormap.Tab10 when the theme carries no
-// palette. Used as the default discrete color cycle when the plot has
-// no explicit color scale set.
-func themePaletteCmap(th theme.Theme) colormap.Cmap {
-	if len(th.Palette) == 0 {
-		return colormap.Tab10
-	}
-
-	colors := make([]gg.RGBA, len(th.Palette))
-	for i, c := range th.Palette {
-		r, g, b, a := c.RGBA()
-		colors[i] = gg.RGBA{
-			R: float64(r) / 65535.0,
-			G: float64(g) / 65535.0,
-			B: float64(b) / 65535.0,
-			A: float64(a) / 65535.0,
-		}
-	}
-
-	return colormap.NewListed("theme:"+th.Name, colormap.Qualitative, colors)
-}
-
 // allLayersHorizontal returns true if every layer in the list has
 // Orientation == geom.Horizontal. Returns false for empty lists.
 func allLayersHorizontal(layers []LayerSpec) bool {
@@ -990,7 +994,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 		if groupCol != "" {
 			colorScale := p.spec.ColorScales["color"]
 			if colorScale == nil {
-				colorScale = colormap.NewDiscrete(themePaletteCmap(th))
+				colorScale = colormap.NewDiscrete(theme.DefaultCmapFor(theme.Name(th.Name), theme.AesColor, colormap.Qualitative))
 			}
 
 			if col, err := ds.Column(groupCol); err == nil {
@@ -1077,6 +1081,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 						legendEntries = append(legendEntries, LegendEntry{
 							Label: grpLabel,
 							Color: grpRGBA,
+							Glyph: glyphForGeom(layer.Geom.Geom),
 						})
 					}
 				}
@@ -1111,7 +1116,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 			if continuousColorCol != "" {
 				contScale = p.spec.ColorScales["color"]
 				if contScale == nil {
-					contScale = colormap.NewContinuous(colormap.Viridis, nil)
+					contScale = colormap.NewContinuous(theme.DefaultCmapFor(theme.Name(th.Name), theme.AesColor, colormap.Sequential), nil)
 				}
 
 				if col, err := ds.Column(continuousColorCol); err == nil {
@@ -1129,9 +1134,11 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 
 			if contScale != nil && colorBarSpec == nil && pi == 0 {
 				colorBarSpec = &ColorBarSpec{
-					Title: continuousColorCol,
-					Cmap:  contScale.Cmap(),
-					Norm:  contScale.Norm(),
+					Title:    continuousColorCol,
+					Cmap:     contScale.Cmap(),
+					Norm:     contScale.Norm(),
+					BarWidth: p.spec.ColorBarWidth,
+					NBin:     p.spec.ColorBarNBin,
 				}
 			}
 
@@ -1140,6 +1147,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 					legendEntries = append(legendEntries, LegendEntry{
 						Label: layer.Geom.Params.Label,
 						Color: c,
+						Glyph: glyphForGeom(layer.Geom.Geom),
 					})
 				}
 			}
@@ -2451,10 +2459,54 @@ func drawMinorLines(cv canvas.Canvas, xScale, yScale scale.Scale, x, y, w, h flo
 
 // --- Legend ---
 
+// LegendGlyph controls the key shape drawn beside each legend entry.
+type LegendGlyph int
+
+const (
+	// GlyphRect draws a filled square swatch (bars, histogram, tile, area).
+	GlyphRect LegendGlyph = iota
+	// GlyphPoint draws a filled circle (point, rug).
+	GlyphPoint
+	// GlyphLine draws a horizontal line stroke (line, smooth, step, segment).
+	GlyphLine
+)
+
+// glyphForGeom returns the appropriate legend glyph for a geometry type.
+func glyphForGeom(t geom.Type) LegendGlyph {
+	switch t { //nolint:exhaustive // Only groupable geom types produce legend entries.
+	case geom.TypePoint, geom.TypeRug:
+		return GlyphPoint
+	case geom.TypeLine, geom.TypeSmooth, geom.TypeStep, geom.TypeSegment:
+		return GlyphLine
+	default:
+		return GlyphRect
+	}
+}
+
 // LegendEntry describes one item in the legend.
 type LegendEntry struct {
 	Label string
 	Color gg.RGBA
+	Glyph LegendGlyph
+}
+
+// drawGlyph draws a legend key glyph at (x, y) with the given size.
+// The color must be set by the caller before calling drawGlyph.
+func drawGlyph(cv canvas.Canvas, g LegendGlyph, x, y, size float64) {
+	switch g {
+	case GlyphRect:
+		cv.DrawRectangle(x, y-size/2, size, size)
+		cv.Fill()
+	case GlyphPoint:
+		radius := size / 2
+		cv.DrawCircle(x+radius, y, radius)
+		cv.Fill()
+	case GlyphLine:
+		lw := 2.5 //nolint:mnd // Standard legend line stroke width.
+		cv.SetLineWidth(lw)
+		cv.DrawLine(x, y, x+size, y)
+		cv.Stroke()
+	}
 }
 
 // drawLegendVertical renders a categorical legend to the right of the data area.
@@ -2477,8 +2529,7 @@ func drawLegendVertical(cv canvas.Canvas, title string, entries []LegendEntry, x
 
 	for _, e := range entries {
 		cv.SetRGBA(e.Color.R, e.Color.G, e.Color.B, e.Color.A)
-		cv.DrawRectangle(x, curY-swatchSize/2, swatchSize, swatchSize)
-		cv.Fill()
+		drawGlyph(cv, e.Glyph, x, curY, swatchSize)
 
 		r, g, b, _ := rgbaOf(th.LegendTextElem().Color)
 		cv.SetRGBA(r, g, b, 1)
@@ -2495,15 +2546,20 @@ func drawLegendVertical(cv canvas.Canvas, title string, entries []LegendEntry, x
 // Cmap.At directly across the [0,1] range, and Norm provides the data-space
 // labels at the endpoints (and any future intermediate ticks).
 type ColorBarSpec struct {
-	Title string
-	Cmap  colormap.Cmap
-	Norm  colormap.Norm
+	Title    string
+	Cmap     colormap.Cmap
+	Norm     colormap.Norm
+	BarWidth float64 // 0 = default (12px)
+	NBin     int     // 0 = default (pixel-matched strips)
 }
 
 // drawColorBar renders a continuous color bar legend at the given position.
 // The bar is drawn vertically (top = max, bottom = min) as in ggplot2.
 func drawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th theme.Theme) {
-	barW := 12.0
+	barW := spec.BarWidth
+	if barW <= 0 {
+		barW = 12.0 //nolint:mnd // Default color bar width in pixels.
+	}
 
 	// Title above the bar.
 	tr, tg, tb, _ := rgbaOf(th.LegendTextElem().Color)
@@ -2520,7 +2576,10 @@ func drawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th th
 	}
 
 	// Draw gradient bar as thin horizontal strips (top = max, bottom = min).
-	nStrips := max(int(barH), 2)
+	nStrips := spec.NBin
+	if nStrips <= 0 {
+		nStrips = max(int(barH), 2) // pixel-matched strips
+	}
 
 	stripH := barH / float64(nStrips)
 	for i := range nStrips {
@@ -2589,8 +2648,7 @@ func drawLegendHorizontal(cv canvas.Canvas, title string, entries []LegendEntry,
 		}
 
 		cv.SetRGBA(e.Color.R, e.Color.G, e.Color.B, e.Color.A)
-		cv.DrawRectangle(curX, y-swatchSize/2, swatchSize, swatchSize)
-		cv.Fill()
+		drawGlyph(cv, e.Glyph, curX, y, swatchSize)
 
 		cv.SetRGBA(tr, tg, tb, 1)
 		cv.SetFontSize(th.LegendTextElem().Size * 0.9)

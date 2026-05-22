@@ -34,6 +34,7 @@ type Scale struct {
 	categories []string
 	labelIdx   map[string]int
 	overrides  map[string]gg.RGBA
+	naColor    *gg.RGBA // nil = use cmap.At(NaN) default
 }
 
 // NewContinuous returns a Scale that maps numeric data through n into the
@@ -121,6 +122,10 @@ func (s *Scale) Norm() Norm { return s.norm }
 
 // Discrete reports whether this Scale operates on category labels.
 func (s *Scale) Discrete() bool { return s.discrete }
+
+// SetNAColor sets the color to use for missing/null/NaN values.
+// Pass nil to revert to the cmap's default NaN color.
+func (s *Scale) SetNAColor(c *gg.RGBA) { s.naColor = c }
 
 // Categories returns the list of trained category labels in encounter order.
 // Empty for continuous scales.
@@ -313,8 +318,13 @@ func (s *Scale) colorAtIndex(i int) gg.RGBA {
 	return s.cmap.At(t)
 }
 
-// bad returns the cmap's NaN/bad color (transparent black if unset).
+// bad returns the configured NA color, or the cmap's NaN/bad color
+// (transparent black if neither is set).
 func (s *Scale) bad() gg.RGBA {
+	if s.naColor != nil {
+		return *s.naColor
+	}
+
 	return s.cmap.At(math.NaN())
 }
 

@@ -7,12 +7,12 @@ require (
 	github.com/ajroetker/go-highway v0.0.12
 	github.com/apache/arrow-go/v18 v18.6.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
-	github.com/gogpu/gg v0.46.11
-	github.com/parquet-go/parquet-go v0.29.0
+	github.com/gogpu/gg v0.48.3
+	github.com/parquet-go/parquet-go v0.30.1
 	github.com/rickb777/date/v2 v2.3.11
-	golang.org/x/image v0.40.0
+	golang.org/x/image v0.41.0
 	golang.org/x/sync v0.20.0
-	google.golang.org/api v0.279.0
+	google.golang.org/api v0.280.0
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -58,12 +58,12 @@ require (
 	go.opentelemetry.io/otel v1.43.0 // indirect
 	go.opentelemetry.io/otel/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
-	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
 	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260409153401-be6f6cb8b1fa // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
@@ -71,8 +71,8 @@ require (
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4 // indirect
-	google.golang.org/grpc v1.80.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260511170946-3700d4141b60 // indirect
+	google.golang.org/grpc v1.81.1 // indirect
 )
 
 replace github.com/gogpu/gg => github.com/TuSKan/gogpugg v0.0.0-20260514231116-53271ec1afca
