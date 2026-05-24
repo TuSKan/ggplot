@@ -64,6 +64,12 @@ const (
 	TypeRibbon     Type = "ribbon"     // filled band between ymin/ymax
 	TypeDifference Type = "difference" // difference between two series
 	TypeRect       Type = "rect"       // unified rectangle mark (replaces TypeBar/TypeHistogram for pipeline constructors)
+	TypeCrossbar   Type = "crossbar"   // box with median line between ymin/ymax (no whiskers)
+	TypeLinerange  Type = "linerange"  // vertical/horizontal line from ymin to ymax (no caps)
+	TypePointrange Type = "pointrange" // point at y + linerange from ymin to ymax
+	TypeCurve      Type = "curve"      // quadratic bezier curve between endpoints
+	TypeViolin     Type = "violin"     // mirrored kernel density estimate per group
+	TypeDotplot    Type = "dotplot"    // stacked dots at binned positions
 )
 
 // Orientation controls which axis a directional geom extends along.
@@ -111,6 +117,9 @@ type Params struct {
 	// Reference lines
 	Intercept float64 // y-intercept (hline) or x-intercept (vline)
 	Slope     float64 // slope for abline (y = slope*x + intercept)
+
+	// Curve-specific
+	Curvature float64 // bezier curvature multiplier (default = 0.5); 0 = straight line
 }
 
 // --- Option tracking for validation ---
@@ -140,6 +149,7 @@ const (
 	OptDensityPoints                     // density
 	OptWhisker                           // boxplot
 	OptNotch                             // boxplot
+	OptCurvature                         // curve
 )
 
 // paramRelevance maps geometry types to what parameters are meaningful for them.
@@ -165,6 +175,12 @@ var paramRelevance = map[Type]OptFlag{
 	TypeRibbon:     OptColor | OptFill | OptAlpha | OptLineWidth,
 	TypeDifference: OptColor | OptFill | OptAlpha | OptLineWidth,
 	TypeRect:       OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptBins,
+	TypeCrossbar:   OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth,
+	TypeLinerange:  OptColor | OptAlpha | OptLineWidth,
+	TypePointrange: OptColor | OptAlpha | OptLineWidth | OptSize,
+	TypeCurve:      OptColor | OptAlpha | OptLineWidth | OptCurvature,
+	TypeViolin:     OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptBandwidth,
+	TypeDotplot:    OptColor | OptFill | OptAlpha | OptSize | OptBins | OptOrientation,
 }
 
 // RegisterGeomType registers a custom geometry type with its relevant option
@@ -201,6 +217,7 @@ var optName = map[OptFlag]string{
 	OptDensityPoints: "WithDensityPoints",
 	OptWhisker:       "WithWhisker",
 	OptNotch:         "WithNotch",
+	OptCurvature:     "WithCurvature",
 }
 
 // Validate checks if the configured params are meaningful for this geometry
@@ -228,7 +245,7 @@ func (l *Layer) Validate() []string {
 
 	var warnings []string
 
-	for flag := OptFlag(1); flag <= OptNotch; flag <<= 1 {
+	for flag := OptFlag(1); flag <= OptCurvature; flag <<= 1 {
 		if irrelevant&flag == 0 {
 			continue
 		}
@@ -377,6 +394,23 @@ func finalizePipeline(l *Layer) {
 		}
 
 		l.Pipeline = []stat.Transform{stat.BoxplotY(opts...)}
+
+	case TypeViolin:
+		var opts []stat.ViolinOption
+		if l.statCfg.bandwidth > 0 {
+			opts = append(opts, stat.WithViolinBandwidth(l.statCfg.bandwidth))
+		}
+
+		l.Pipeline = []stat.Transform{stat.ViolinY(opts...)}
+
+	case TypeDotplot:
+		var opts []stat.DotBinOption
+		if l.statCfg.bins > 0 {
+			// Convert bin count to a bin width estimate.
+			opts = append(opts, stat.WithDotBinWidth(float64(l.statCfg.bins)))
+		}
+
+		l.Pipeline = []stat.Transform{stat.DotBin(opts...)}
 
 	default:
 		// Other geom types have no stat pipeline to rebuild from sugar options.
@@ -783,6 +817,114 @@ func ErrorBar(opts ...Opt) Layer {
 		Geom:     TypeErrorBar,
 		Position: IdentityPos(),
 		Params:   Params{LineWidth: 1, Alpha: 1.0, Width: 0.5},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// Crossbar creates a box-with-median-line geometry layer. Each row draws
+// a filled rectangle from (x - width/2, ymin) to (x + width/2, ymax) with
+// a horizontal line at y (the median or central value).
+//
+// Required aesthetics: x, y, ymin, ymax.
+// Relevant options: WithColor, WithFill, WithAlpha, WithWidth, WithLineWidth.
+func Crossbar(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeCrossbar,
+		Position: IdentityPos(),
+		Params:   Params{Width: 0.5, Alpha: 0.8, LineWidth: 1},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// Linerange creates a vertical (or horizontal) line from ymin to ymax
+// without caps. This is a thinner variant of [ErrorBar].
+//
+// Required aesthetics: x, ymin, ymax.
+// Relevant options: WithColor, WithAlpha, WithLineWidth.
+func Linerange(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeLinerange,
+		Position: IdentityPos(),
+		Params:   Params{LineWidth: 1, Alpha: 1.0},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// Pointrange creates a point-with-range geometry layer. Each row draws a
+// vertical line from ymin to ymax plus a point at (x, y).
+//
+// Required aesthetics: x, y, ymin, ymax.
+// Relevant options: WithColor, WithAlpha, WithLineWidth, WithSize.
+func Pointrange(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypePointrange,
+		Position: IdentityPos(),
+		Params:   Params{Size: 3, LineWidth: 1, Alpha: 1.0},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// WithCurvature sets the bezier curvature multiplier for [Curve].
+// 0 produces a straight line, 0.5 (default) produces a moderate curve.
+// Negative values curve in the opposite direction.
+func WithCurvature(c float64) Opt {
+	return func(l *Layer) { l.Params.Curvature = c; l.setFlags |= OptCurvature }
+}
+
+// Curve creates a quadratic bezier curve geometry layer. Each row draws
+// a curved line from (x, y) to (xend, yend) with curvature controlled
+// by [WithCurvature].
+//
+// Required aesthetics: x, y, xend, yend.
+// Relevant options: WithColor, WithAlpha, WithLineWidth, WithCurvature.
+func Curve(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeCurve,
+		Position: IdentityPos(),
+		Params:   Params{LineWidth: 1, Alpha: 1.0, Curvature: 0.5},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// Violin creates a mirrored kernel density geometry layer. Each group's
+// Y values are estimated via KDE, and the density is drawn symmetrically
+// around the group's categorical X position.
+//
+// Default stat: [stat.ViolinY]. Default position: identity.
+// Relevant options: WithColor, WithFill, WithAlpha, WithWidth, WithLineWidth, WithBandwidth.
+func Violin(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeViolin,
+		Pipeline: []stat.Transform{stat.ViolinY()},
+		Position: IdentityPos(),
+		Params:   Params{Width: 0.8, Alpha: 0.6, LineWidth: 1},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// Dotplot creates a stacked-dot geometry layer. Each observation is
+// represented as a dot, stacked vertically within bins.
+//
+// Default stat: [stat.DotBin]. Default position: identity.
+// Relevant options: WithColor, WithFill, WithAlpha, WithSize, WithBins.
+func Dotplot(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeDotplot,
+		Pipeline: []stat.Transform{stat.DotBin()},
+		Position: IdentityPos(),
+		Params:   Params{Size: 3, Alpha: 0.8},
 	}
 	applyOpts(&l, opts)
 

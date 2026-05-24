@@ -289,21 +289,42 @@ The public extension API — implemented via Go interfaces + registration, not g
 
 ---
 
-### Phase 8 — Advanced Geometries 🔲
+### Phase 8 — Advanced Geometries 🔶
 
 > Book Ch.3–5 (revisited with full position/coord/scale support)
 
-- 🔲 `geom.Tile` / `geom.Raster` — 2D grids for density and correlation matrices
-- 🔲 `geom.Violin` — mirrored density per group
-- 🔲 `geom.Ribbon` — filled bands (ymin/ymax) for confidence intervals
-- 🔲 `geom.Segment` / `geom.Curve` — directed segments and bezier curves
-- 🔲 `geom.ErrorBar` / `Crossbar` / `Linerange` / `Pointrange` — full error-bar family
-- 🔲 `geom.Contour` / `ContourFilled` — 2D density contours from XYZ
-- 🔲 `geom.Polygon` — arbitrary filled/stroked polygons
-- 🔲 `geom.Rect` — parameterised by xmin/ymin/xmax/ymax
-- 🔲 `geom.Jitter` (full) — random displacement; deterministic via injectable `rand.Source`
-- 🔲 `geom.Dotplot` — dot plots for small datasets
+**Already shipped (Phase 4.5 / 4.7):**
+- ✅ `geom.Tile` — heatmap cells at (x, y) with continuous fill
+- ✅ `geom.Segment` — line segments from (x, y) to (xend, yend) via `aes.XEnd`/`aes.YEnd`
+- ✅ `geom.ErrorBar` — vertical/horizontal error bars with caps
+- ✅ `geom.Polygon` — arbitrary filled/stroked closed polygons
+- ✅ `geom.Ribbon` / `RibbonY` — filled bands between ymin/ymax
+- ✅ `geom.Rect` / `TypeRect` — parameterised rectangles (xmin/ymin/xmax/ymax)
+- ✅ `geom.Difference` — difference-fill between two series
+
+**Shipped — Error bar family (Batch A):**
+- ✅ `geom.Crossbar` — box with median line between ymin/ymax (no whiskers)
+- ✅ `geom.Linerange` — vertical/horizontal line without caps (thin ErrorBar)
+- ✅ `geom.Pointrange` — point + linerange (mean ± SE / CI)
+
+**Shipped — Distribution geoms (Batch A):**
+- ✅ `geom.Violin` — mirrored density per group (symmetric KDE around category axis); uses dedicated `stat.ViolinY`
+- ✅ `geom.Dotplot` — dot plots for small datasets (stacked dots at binned positions); uses dedicated `stat.DotBin` (Wilkinson)
+
+**Remaining — 2D density:**
+- 🔲 `geom.Contour` / `ContourFilled` — 2D density contours from XYZ (requires `stat.Density2D` and marching-squares contouring)
+
+**Shipped — Curve/Bezier (Batch A):**
+- ✅ `geom.Curve` — quadratic bezier curves between endpoints via `Canvas.QuadraticTo`; curvature controlled by `geom.WithCurvature()`
+
+**Remaining — Binning/Aggregation:**
 - 🔲 `geom.Hex` — hexagonal binning (server-side aggregation hook for >1M points)
+
+**Remaining — Position:**
+- 🔲 `geom.Jitter` (full) — random displacement; deterministic via injectable `rand.Source` *(see also Phase 13: `position.Jitter`)*
+
+**Remaining — Pixel grid:**
+- 🔲 `geom.Raster` — dense pixel-aligned image grid (distinct from Tile: raster takes a matrix, tile takes row-per-cell)
 
 ---
 

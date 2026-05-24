@@ -93,6 +93,12 @@ func init() {
 	RegisterDrawer(geom.TypeRibbon, DrawerFunc(drawRibbonFn))
 	RegisterDrawer(geom.TypeDifference, DrawerFunc(drawDifferenceFn))
 	RegisterDrawer(geom.TypeRect, DrawerFunc(drawRectFn))
+	RegisterDrawer(geom.TypeCrossbar, DrawerFunc(drawCrossbarFn))
+	RegisterDrawer(geom.TypeLinerange, DrawerFunc(drawLinerangeFn))
+	RegisterDrawer(geom.TypePointrange, DrawerFunc(drawPointrangeFn))
+	RegisterDrawer(geom.TypeCurve, DrawerFunc(drawCurveFn))
+	RegisterDrawer(geom.TypeViolin, DrawerFunc(drawViolinFn))
+	RegisterDrawer(geom.TypeDotplot, DrawerFunc(drawDotplotFn))
 }
 
 // drawLayer dispatches rendering to the registered Drawer for the layer's geom type.
@@ -1545,4 +1551,463 @@ func drawDifferenceFn(dc DrawContext) {
 	// correct shape. Dual-color clipping will be added when the canvas
 	// abstraction supports clip paths.
 	drawRibbonFn(dc)
+}
+
+// ---------------------------------------------------------------------------
+// Crossbar (box with median line between ymin/ymax)
+// ---------------------------------------------------------------------------
+
+func drawCrossbarFn(dc DrawContext) {
+	xVals, err := dc.Data.Float64(dc.Mapping["x"])
+	if err != nil {
+		return
+	}
+
+	yVals, err := dc.Data.Float64(dc.Mapping["y"])
+	if err != nil {
+		return
+	}
+
+	yminVals, err := dc.Data.Float64(dc.Mapping["ymin"])
+	if err != nil {
+		return
+	}
+
+	ymaxVals, err := dc.Data.Float64(dc.Mapping["ymax"])
+	if err != nil {
+		return
+	}
+
+	n := min(len(xVals), len(yVals), len(yminVals), len(ymaxVals))
+
+	fr, fg, fb := colormap.ParseRGB(dc.Params.Fill, 0.8, 0.8, 0.8)
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.2, 0.2, 0.2)
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 0.8 //nolint:mnd // Default alpha for crossbar fill.
+	}
+
+	lw := dc.Params.LineWidth
+	if lw <= 0 {
+		lw = 1
+	}
+
+	barW := dc.Params.Width
+	if barW <= 0 {
+		barW = 0.5 //nolint:mnd // Default relative crossbar width.
+	}
+
+	// Pixel half-width of the crossbar.
+	halfPx := barW * dc.W / (dc.XMax - dc.XMin) / 2 //nolint:mnd // Half-width in pixel space.
+
+	for i := range n {
+		nx := normalize(xVals[i], dc.XMin, dc.XMax)
+		nyLo := normalize(yminVals[i], dc.YMin, dc.YMax)
+		nyHi := normalize(ymaxVals[i], dc.YMin, dc.YMax)
+		nyMid := normalize(yVals[i], dc.YMin, dc.YMax)
+
+		px, pyLo := dc.Coord.Transform(nx, nyLo, dc.W, dc.H)
+		_, pyHi := dc.Coord.Transform(nx, nyHi, dc.W, dc.H)
+		_, pyMid := dc.Coord.Transform(nx, nyMid, dc.W, dc.H)
+
+		// Filled rectangle from ymin to ymax.
+		dc.Canvas.SetRGBA(fr, fg, fb, alpha)
+		dc.Canvas.DrawRectangle(px-halfPx, pyHi, halfPx*2, pyLo-pyHi) //nolint:mnd // Full width = 2 * half.
+		dc.Canvas.Fill()
+
+		// Stroke the rectangle outline.
+		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+		dc.Canvas.SetLineWidth(lw)
+		dc.Canvas.DrawRectangle(px-halfPx, pyHi, halfPx*2, pyLo-pyHi) //nolint:mnd // Full width = 2 * half.
+		dc.Canvas.Stroke()
+
+		// Median line.
+		dc.Canvas.SetLineWidth(lw * 2) //nolint:mnd // Median line is thicker than border.
+		dc.Canvas.MoveTo(px-halfPx, pyMid)
+		dc.Canvas.LineTo(px+halfPx, pyMid)
+		dc.Canvas.Stroke()
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Linerange (vertical/horizontal line from ymin to ymax, no caps)
+// ---------------------------------------------------------------------------
+
+func drawLinerangeFn(dc DrawContext) {
+	xVals, err := dc.Data.Float64(dc.Mapping["x"])
+	if err != nil {
+		return
+	}
+
+	yminVals, err := dc.Data.Float64(dc.Mapping["ymin"])
+	if err != nil {
+		return
+	}
+
+	ymaxVals, err := dc.Data.Float64(dc.Mapping["ymax"])
+	if err != nil {
+		return
+	}
+
+	n := min(len(xVals), len(yminVals), len(ymaxVals))
+
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.2, 0.2, 0.2)
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 1.0
+	}
+
+	lw := dc.Params.LineWidth
+	if lw <= 0 {
+		lw = 1
+	}
+
+	dc.Canvas.SetLineWidth(lw)
+	dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+
+	for i := range n {
+		nx := normalize(xVals[i], dc.XMin, dc.XMax)
+		nyLo := normalize(yminVals[i], dc.YMin, dc.YMax)
+		nyHi := normalize(ymaxVals[i], dc.YMin, dc.YMax)
+
+		px, pyLo := dc.Coord.Transform(nx, nyLo, dc.W, dc.H)
+		_, pyHi := dc.Coord.Transform(nx, nyHi, dc.W, dc.H)
+
+		dc.Canvas.MoveTo(px, pyLo)
+		dc.Canvas.LineTo(px, pyHi)
+		dc.Canvas.Stroke()
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Pointrange (point at y + linerange from ymin to ymax)
+// ---------------------------------------------------------------------------
+
+func drawPointrangeFn(dc DrawContext) {
+	xVals, err := dc.Data.Float64(dc.Mapping["x"])
+	if err != nil {
+		return
+	}
+
+	yVals, err := dc.Data.Float64(dc.Mapping["y"])
+	if err != nil {
+		return
+	}
+
+	yminVals, err := dc.Data.Float64(dc.Mapping["ymin"])
+	if err != nil {
+		return
+	}
+
+	ymaxVals, err := dc.Data.Float64(dc.Mapping["ymax"])
+	if err != nil {
+		return
+	}
+
+	n := min(len(xVals), len(yVals), len(yminVals), len(ymaxVals))
+
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.2, 0.2, 0.2)
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 1.0
+	}
+
+	lw := dc.Params.LineWidth
+	if lw <= 0 {
+		lw = 1
+	}
+
+	sz := dc.Params.Size
+	if sz <= 0 {
+		sz = 3 //nolint:mnd // Default point size.
+	}
+
+	for i := range n {
+		nx := normalize(xVals[i], dc.XMin, dc.XMax)
+		ny := normalize(yVals[i], dc.YMin, dc.YMax)
+		nyLo := normalize(yminVals[i], dc.YMin, dc.YMax)
+		nyHi := normalize(ymaxVals[i], dc.YMin, dc.YMax)
+
+		px, py := dc.Coord.Transform(nx, ny, dc.W, dc.H)
+		_, pyLo := dc.Coord.Transform(nx, nyLo, dc.W, dc.H)
+		_, pyHi := dc.Coord.Transform(nx, nyHi, dc.W, dc.H)
+
+		// Vertical line from ymin to ymax.
+		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+		dc.Canvas.SetLineWidth(lw)
+		dc.Canvas.MoveTo(px, pyLo)
+		dc.Canvas.LineTo(px, pyHi)
+		dc.Canvas.Stroke()
+
+		// Point at (x, y).
+		dc.Canvas.DrawCircle(px, py, sz)
+		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+		dc.Canvas.Fill()
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Curve (quadratic bezier via Canvas.QuadraticTo)
+// ---------------------------------------------------------------------------
+
+func drawCurveFn(dc DrawContext) {
+	xVals, err := dc.Data.Float64(dc.Mapping["x"])
+	if err != nil {
+		return
+	}
+
+	yVals, err := dc.Data.Float64(dc.Mapping["y"])
+	if err != nil {
+		return
+	}
+
+	xeVals, err := dc.Data.Float64(dc.Mapping["xend"])
+	if err != nil {
+		return
+	}
+
+	yeVals, err := dc.Data.Float64(dc.Mapping["yend"])
+	if err != nil {
+		return
+	}
+
+	n := min(len(xVals), len(yVals), len(xeVals), len(yeVals))
+
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.2, 0.2, 0.2)
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 1.0
+	}
+
+	lw := dc.Params.LineWidth
+	if lw <= 0 {
+		lw = 1
+	}
+
+	curvature := dc.Params.Curvature
+
+	dc.Canvas.SetLineWidth(lw)
+
+	for i := range n {
+		nx0 := normalize(xVals[i], dc.XMin, dc.XMax)
+		ny0 := normalize(yVals[i], dc.YMin, dc.YMax)
+		nx1 := normalize(xeVals[i], dc.XMin, dc.XMax)
+		ny1 := normalize(yeVals[i], dc.YMin, dc.YMax)
+
+		px0, py0 := dc.Coord.Transform(nx0, ny0, dc.W, dc.H)
+		px1, py1 := dc.Coord.Transform(nx1, ny1, dc.W, dc.H)
+
+		// Compute control point: offset perpendicular to the midpoint.
+		mx := (px0 + px1) / 2 //nolint:mnd // Midpoint x.
+		my := (py0 + py1) / 2 //nolint:mnd // Midpoint y.
+		dx := px1 - px0
+		dy := py1 - py0
+
+		// Perpendicular direction scaled by curvature * segment length.
+		segLen := math.Sqrt(dx*dx + dy*dy)
+		cx := mx - dy*curvature
+		cy := my + dx/segLen*segLen*curvature
+
+		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+		dc.Canvas.MoveTo(px0, py0)
+		dc.Canvas.QuadraticTo(cx, cy, px1, py1)
+		dc.Canvas.Stroke()
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Violin (mirrored KDE polygon per group)
+// ---------------------------------------------------------------------------
+
+func drawViolinFn(dc DrawContext) {
+	xVals, err := dc.Data.Float64(dc.Mapping["x"])
+	if err != nil {
+		return
+	}
+
+	yVals, err := dc.Data.Float64(dc.Mapping["y"])
+	if err != nil {
+		return
+	}
+
+	xminVals, err := dc.Data.Float64("xmin")
+	if err != nil {
+		return
+	}
+
+	xmaxVals, err := dc.Data.Float64("xmax")
+	if err != nil {
+		return
+	}
+
+	n := min(len(xVals), len(yVals), len(xminVals), len(xmaxVals))
+	if n == 0 {
+		return
+	}
+
+	fr, fg, fb := colormap.ParseRGB(dc.Params.Fill, 0.7, 0.7, 0.9)
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.2, 0.2, 0.2)
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 0.6 //nolint:mnd // Default alpha for violin fill.
+	}
+
+	lw := dc.Params.LineWidth
+	if lw <= 0 {
+		lw = 1
+	}
+
+	// Width scaling: violin half-width is relative to available space.
+	violinW := dc.Params.Width
+	if violinW <= 0 {
+		violinW = 0.8 //nolint:mnd // Default violin width fraction.
+	}
+
+	// Group rows by x position.
+	type violinRow struct {
+		x, y, xmin, xmax float64
+	}
+
+	groups := make(map[float64][]violinRow)
+
+	for i := range n {
+		r := violinRow{
+			x:    xVals[i],
+			y:    yVals[i],
+			xmin: xminVals[i],
+			xmax: xmaxVals[i],
+		}
+		groups[r.x] = append(groups[r.x], r)
+	}
+
+	for _, rows := range groups {
+		if len(rows) < 2 { //nolint:mnd // Need at least 2 points for a polygon.
+			continue
+		}
+
+		// Build polygon: right side (xmax) top-to-bottom, then left side (xmin) bottom-to-top.
+		nR := len(rows)
+
+		// Right side: walk from first to last.
+		dc.Canvas.SetRGBA(fr, fg, fb, alpha)
+
+		nx0 := normalize(rows[0].xmax*violinW+(1-violinW)*rows[0].x, dc.XMin, dc.XMax)
+		ny0 := normalize(rows[0].y, dc.YMin, dc.YMax)
+		px0, py0 := dc.Coord.Transform(nx0, ny0, dc.W, dc.H)
+		dc.Canvas.MoveTo(px0, py0)
+
+		for j := 1; j < nR; j++ {
+			nxj := normalize(rows[j].xmax*violinW+(1-violinW)*rows[j].x, dc.XMin, dc.XMax)
+			nyj := normalize(rows[j].y, dc.YMin, dc.YMax)
+			pxj, pyj := dc.Coord.Transform(nxj, nyj, dc.W, dc.H)
+			dc.Canvas.LineTo(pxj, pyj)
+		}
+
+		// Left side: walk back from last to first.
+		for j := nR - 1; j >= 0; j-- {
+			nxj := normalize(rows[j].xmin*violinW+(1-violinW)*rows[j].x, dc.XMin, dc.XMax)
+			nyj := normalize(rows[j].y, dc.YMin, dc.YMax)
+			pxj, pyj := dc.Coord.Transform(nxj, nyj, dc.W, dc.H)
+			dc.Canvas.LineTo(pxj, pyj)
+		}
+
+		dc.Canvas.ClosePath()
+		dc.Canvas.Fill()
+
+		// Stroke outline.
+		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+		dc.Canvas.SetLineWidth(lw)
+
+		// Right side.
+		nx0 = normalize(rows[0].xmax*violinW+(1-violinW)*rows[0].x, dc.XMin, dc.XMax)
+		ny0 = normalize(rows[0].y, dc.YMin, dc.YMax)
+		px0, py0 = dc.Coord.Transform(nx0, ny0, dc.W, dc.H)
+		dc.Canvas.MoveTo(px0, py0)
+
+		for j := 1; j < nR; j++ {
+			nxj := normalize(rows[j].xmax*violinW+(1-violinW)*rows[j].x, dc.XMin, dc.XMax)
+			nyj := normalize(rows[j].y, dc.YMin, dc.YMax)
+			pxj, pyj := dc.Coord.Transform(nxj, nyj, dc.W, dc.H)
+			dc.Canvas.LineTo(pxj, pyj)
+		}
+
+		// Left side.
+		for j := nR - 1; j >= 0; j-- {
+			nxj := normalize(rows[j].xmin*violinW+(1-violinW)*rows[j].x, dc.XMin, dc.XMax)
+			nyj := normalize(rows[j].y, dc.YMin, dc.YMax)
+			pxj, pyj := dc.Coord.Transform(nxj, nyj, dc.W, dc.H)
+			dc.Canvas.LineTo(pxj, pyj)
+		}
+
+		dc.Canvas.ClosePath()
+		dc.Canvas.Stroke()
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Dotplot (stacked dots at binned positions)
+// ---------------------------------------------------------------------------
+
+func drawDotplotFn(dc DrawContext) {
+	xVals, err := dc.Data.Float64(dc.Mapping["x"])
+	if err != nil {
+		return
+	}
+
+	yVals, err := dc.Data.Float64(dc.Mapping["y"])
+	if err != nil {
+		return
+	}
+
+	n := min(len(xVals), len(yVals))
+	if n == 0 {
+		return
+	}
+
+	fr, fg, fb := colormap.ParseRGB(dc.Params.Fill, 0.3, 0.3, 0.3)
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.2, 0.2, 0.2)
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 0.8 //nolint:mnd // Default alpha for dotplot.
+	}
+
+	lw := dc.Params.LineWidth
+	if lw <= 0 {
+		lw = 0.5 //nolint:mnd // Thin stroke around dots.
+	}
+
+	// Compute dot radius from Y domain so adjacent dots (y=0, y=1) touch.
+	// One unit in data space → pixel distance via transform difference.
+	_, py0 := dc.Coord.Transform(0, normalize(0, dc.YMin, dc.YMax), dc.W, dc.H)
+	_, py1 := dc.Coord.Transform(0, normalize(1, dc.YMin, dc.YMax), dc.W, dc.H)
+	unitPixels := math.Abs(py0 - py1)
+
+	sz := unitPixels / 2 //nolint:mnd // Radius = half the distance between adjacent stack levels.
+	if dc.Params.Size > 0 {
+		sz = dc.Params.Size
+	}
+
+	for i := range n {
+		nx := normalize(xVals[i], dc.XMin, dc.XMax)
+		// Center each dot at y + 0.5 so the first dot sits above the baseline.
+		ny := normalize(yVals[i]+0.5, dc.YMin, dc.YMax) //nolint:mnd // 0.5 offset centers dot in its stack slot.
+		px, py := dc.Coord.Transform(nx, ny, dc.W, dc.H)
+
+		// Fill.
+		dc.Canvas.SetRGBA(fr, fg, fb, alpha)
+		dc.Canvas.DrawCircle(px, py, sz)
+		dc.Canvas.Fill()
+
+		// Stroke.
+		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
+		dc.Canvas.SetLineWidth(lw)
+		dc.Canvas.DrawCircle(px, py, sz)
+		dc.Canvas.Stroke()
+	}
 }

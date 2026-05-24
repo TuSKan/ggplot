@@ -46,7 +46,8 @@ github.com/TuSKan/ggplot
 ├── geom/                # Geometry layer definitions, options, position adjustments
 │   ├── geom.go          #   Point, Line, Step, Bar, Col, Histogram, Area, Density, Rug,
 │   │                    #   HLine, VLine, Text, BoxPlot, Smooth, Tile, Segment, ErrorBar,
-│   │                    #   Polygon, Ribbon, Difference + functional options
+│   │                    #   Polygon, Ribbon, Difference, Crossbar, Linerange, Pointrange,
+│   │                    #   Curve, Violin, Dotplot + functional options
 │   ├── position.go      #   Pos interface: Identity, Dodge, Stack, Jitter, Nudge
 │   └── shim_test.go     #   Sugar ≡ pipeline equivalence tests
 │
@@ -63,6 +64,8 @@ github.com/TuSKan/ggplot
 │   ├── select.go        #   SelectX
 │   ├── sort.go          #   SortX
 │   ├── stack.go         #   StackY
+│   ├── violin.go        #   ViolinY (grouped KDE for violin plots)
+│   ├── dotbin.go        #   DotBin (Wilkinson-style greedy dot stacking)
 │   └── summary.go       #   Summary
 │
 ├── scale/               # Scale types + Resolve factory
@@ -114,7 +117,7 @@ github.com/TuSKan/ggplot
 │   └── fonts/           # Embedded fonts (Go Noto Sans), system font registry
 │
 ├── examples/
-│   ├── geometries/      # One self-contained example per geometry type (17 geoms)
+│   ├── geometries/      # One self-contained example per geometry type (23 geoms)
 │   ├── showcase/        # Clifford attractor, butterfly curve
 │   ├── phase2_geometries/
 │   ├── phase2_statistics/
@@ -162,7 +165,7 @@ Per panel:
   data, a `DiscreteScale` is used with automatic string→float64 position mapping. For boxplots,
   the Y scale additionally trains on `lower`, `q1`, `middle`, `q3`, `upper`, `notch_lower`,
   `notch_upper`. Padding is applied: 5% of range for continuous, plus extra half-bin for
-  bars/histograms.
+  bars/histograms/crossbars/violins/dotplots (computed from distinct X positions, not raw row count).
 
 ### 2. Draw Phase (`Built.Draw`)
 

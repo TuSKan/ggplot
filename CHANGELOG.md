@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+#### Advanced Geometries (Phase 8 — Batch A)
+- **`geom.Crossbar()`** — box with median line between ymin/ymax (no whiskers). Requires `x`, `y`, `ymin`, `ymax` aesthetics.
+- **`geom.Linerange()`** — vertical line from ymin to ymax without caps. Thin variant of ErrorBar.
+- **`geom.Pointrange()`** — point at `(x, y)` with vertical line from ymin to ymax. Combines point + linerange.
+- **`geom.Curve()`** — quadratic bezier curves from `(x, y)` to `(xend, yend)` via `Canvas.QuadraticTo`. Curvature controlled by `geom.WithCurvature()`.
+- **`geom.Violin()`** — mirrored kernel density estimate per group. Uses new `stat.ViolinY` with KDE. Supports `WithViolinScale("area"|"count"|"width")`.
+- **`geom.Dotplot()`** — stacked-dot plots. Uses new `stat.DotBin` with Wilkinson-style greedy binning. Also supports `"histodot"` mode.
+- **`stat.ViolinY()`** — dedicated stat transform for violin plots. Groups by X, runs KDE per group, outputs `x`, `y`, `xmin`, `xmax`, `violinwidth` columns.
+- **`stat.DotBin()`** — dot-stacking stat transform. Wilkinson-style greedy binning outputs one row per dot with stacked Y positions.
+- **`geom.WithCurvature()`** — functional option to control bezier curvature (default 0.5).
+- **`stat.WithViolinBandwidth()`**, **`stat.WithViolinPoints()`**, **`stat.WithViolinScale()`** — violin stat options.
+- **`stat.WithDotBinWidth()`**, **`stat.WithDotMethod()`** — dotbin stat options.
+- Six new `geom.Type` constants: `TypeCrossbar`, `TypeLinerange`, `TypePointrange`, `TypeCurve`, `TypeViolin`, `TypeDotplot`.
+- `geom.OptCurvature` flag and `paramRelevance` entries for all new geom types.
+- Six new geometry examples: `examples/geometries/{crossbar,linerange,pointrange,curve,violin,dotplot}/`.
+
+### Fixed
+- **Auto-expand for width-based geoms** — Crossbar, Violin, and Dotplot now automatically get X-axis padding (like Bar and BoxPlot), so elements at domain edges are not clipped.
+- **Distinct-X padding calculation** — X-axis padding for width-based geoms now counts distinct X positions instead of raw row count. This fixes near-zero padding for stat-transformed data (e.g., ViolinY outputs 128 grid points per group, making row-based padding negligible).
+- **Dotplot Y-axis rendering** — Dotplot now uses coordinate-based Y positioning through the normalize/transform pipeline. Dot radius is computed from Y domain spacing so adjacent dots touch visually. Previously dots were pixel-stacked at the baseline and ignored the Y scale entirely.
+- **Dotplot Y-domain floor** — Dotplot Y axis now anchors at zero (like Bar, Histogram, Area) so the baseline aligns with the stacking origin.
+
+### Changed
+- `docs/ROADMAP.md` Phase 8 marked as 🔶 (partially complete): 13 of 17 items shipped; remaining items: Contour, Hex, Jitter, Raster.
 ## [0.0.8] — 2026-05-24
 
 ### Added

@@ -1729,7 +1729,8 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 	// Ensure Y starts at 0 for bar/histogram/area/density/boxplot.
 	for _, rl := range resolved {
 		switch rl.Geom.Geom { //nolint:exhaustive // intentional subset; default case handles the rest.
-		case geom.TypeBar, geom.TypeHistogram, geom.TypeRect, geom.TypeArea, geom.TypeDensity:
+		case geom.TypeBar, geom.TypeHistogram, geom.TypeRect, geom.TypeArea, geom.TypeDensity,
+			geom.TypeDotplot:
 			yMin, yMax := yScale.Bounds()
 			if yMin > 0 {
 				if bs, ok := yScale.(scale.BoundsSetter); ok {
@@ -1777,7 +1778,8 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 
 			for _, rl := range resolved {
 				switch rl.Geom.Geom { //nolint:exhaustive // intentional subset; default case handles the rest.
-				case geom.TypeBar, geom.TypeHistogram, geom.TypeRect, geom.TypeBoxPlot:
+				case geom.TypeBar, geom.TypeHistogram, geom.TypeRect, geom.TypeBoxPlot,
+					geom.TypeCrossbar, geom.TypeViolin, geom.TypeDotplot:
 					hasBars = true
 				default:
 				}
@@ -1785,13 +1787,33 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 
 			if hasBars {
 				for _, rl := range resolved {
-					n := rl.Data.NumRows()
-					if n > 1 {
-						halfBin := (xMax - xMin) / float64(n-1) / 2.0
+					// Count distinct X positions for width-based padding.
+					// After stat transforms (e.g. ViolinY), a layer with
+					// 3 groups may have hundreds of rows. Using raw row
+					// count would give near-zero padding; distinct X
+					// positions give the correct group spacing.
+					xCol := rl.Mapping["x"]
+					if xCol == "" {
+						continue
+					}
+
+					xv, xerr := rl.Data.Float64(xCol)
+					if xerr != nil || len(xv) == 0 {
+						continue
+					}
+
+					seen := make(map[float64]struct{}, len(xv))
+					for _, v := range xv {
+						seen[v] = struct{}{}
+					}
+
+					nDistinct := len(seen)
+					if nDistinct > 1 {
+						halfBin := (xMax - xMin) / float64(nDistinct-1) / 2.0
 						if halfBin > xPad {
 							xPad = halfBin
 						}
-					} else if n == 1 {
+					} else if nDistinct == 1 {
 						xPad = 1.0
 					}
 				}
