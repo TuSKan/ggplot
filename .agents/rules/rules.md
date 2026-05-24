@@ -372,4 +372,6 @@ golangci-lint run
    - result of each command;
    - any remaining risks or skipped checks.
 
+Always update CHANGELOG.md and README.md before reporting a task as complete.
+
 If the agent cannot run the verification commands, it must explicitly say so and must not claim the task is fully verified.

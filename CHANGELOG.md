@@ -6,6 +6,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.8] — 2026-05-24
+
+### Added
+
+#### Aesthetics Mapping (Phase 7)
+- **`aes.Size(col)`** — map a continuous column to point radius.
+- **`aes.Alpha(col)`** — map a continuous column to opacity.
+- **`aes.Shape(col)`** — map a categorical column to point shape.
+- **`aes.Linetype(col)`** — map a categorical column to line dash pattern.
+
+#### New Scales
+- **`scale.SizeScale`** — continuous size mapping with `SizeModeLinear`, `SizeModeArea`, `SizeModeRadius`. Constructors: `NewSize(min, max)`, `NewSizeDefault()`, `NewSizeArea()`.
+- **`scale.AlphaScale`** — continuous opacity mapping. Constructors: `NewAlpha(min, max)`, `NewAlphaDefault()`.
+- **`scale.ShapeScale`** — discrete shape mapping with 10-shape default cycle. Constructors: `NewShape()`, `NewShapeManual(map)`.
+- **`scale.LinetypeScale`** — discrete linetype mapping with 6 dash patterns. Constructors: `NewLinetype()`, `NewLinetypeManual(map)`.
+- **`scale.IdentityScale`** — pass-through scale for raw pixel/opacity/color values.
+- **`scale.ValueMapper`** — named optional interface for scales providing `MapValue(float64) float64`.
+
+#### Shape Constants (canvas)
+- **Exported shape constants**: `canvas.ShapeCircle`, `ShapeSquare`, `ShapeTriangle`, `ShapeTriangleDown`, `ShapeDiamond`, `ShapePlus`, `ShapeCross`, `ShapeStar`, `ShapePentagon`, `ShapeHexagon`.
+- **`canvas.Shapes()`** — returns the ordered default shape cycle.
+- **`canvas.IsStrokeShape()`** — reports whether a shape should be stroked instead of filled.
+- **`canvas.DrawShapePath()`** — path-based fallback using `drawRegularPolygonPath()` matching `gg.Context.DrawRegularPolygon` orientation.
+
+#### Canvas Backend
+- **`GGCanvas.DrawShape()`** — uses `gg.Context.DrawRegularPolygon` natively for polygon shapes (triangle, square, diamond, pentagon, hexagon), eliminating manual vertex math.
+
+#### Builder API
+- **`Plot.ScaleSize(min, max)`**, **`ScaleSizeArea()`** — configure size scale.
+- **`Plot.ScaleAlpha(min, max)`** — configure alpha scale.
+- **`Plot.ScaleShape()`**, **`ScaleShapeManual(map)`** — configure shape scale.
+- **`Plot.ScaleLinetype()`**, **`ScaleLinetypeManual(map)`** — configure linetype scale.
+- **`Plot.ScaleSizeIdentity()`**, **`ScaleAlphaIdentity()`** — identity scale overrides.
+
+#### Examples
+- **`examples/phase7_aesthetics/`** — comprehensive demo of all Phase 7 aesthetics.
+
+### Changed
+- `NewAlpha(0, 0)` now means literal zero range (not defaults). Use `NewAlphaDefault()` for `[0.1, 1.0]`.
+- `NewSize(0, 0)` now means literal zero range. Use `NewSizeDefault()` for `[1.0, 6.0]`.
+- `SizeScale.String()` returns `"size"` (was `"size:linear"`). Use `Mode()` to query the sizing mode.
+- `NewShapeManual()` / `NewLinetypeManual()` now defensively copy the map argument (`maps.Clone`).
+- `SizeScale.MapValue()` / `AlphaScale.MapValue()` clamp normalized value to `[0, 1]` before range interpolation.
+- `drawPoints` / `drawLine` use `scale.ValueMapper` named interface instead of anonymous interface assertions.
+- All shape string comparisons in `drawer.go` and `ggplot.go` use `canvas.Shape*` constants and `canvas.IsStrokeShape()`.
+
+### Fixed
+- **Map aliasing bug**: `NewShapeManual(m)` and `NewLinetypeManual(m)` no longer store the caller's map by reference.
+- **Out-of-range MapValue**: Values outside the trained domain no longer produce negative radii or opacity > 1.0.
+
 ## [0.0.7] — 2026-05-22
 
 ### Added

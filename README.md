@@ -21,7 +21,8 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 |---|---|
 | **Geometries** | Point, Line, Step, Bar, Col, Histogram, Area, Density, Polygon, Rug, HLine, VLine, Segment, Text, BoxPlot, Smooth, Tile, ErrorBar |
 | **Statistics** | Identity, Bin/Count, Density (KDE), Smooth (LOESS + lm), Summary, BoxPlot (Tukey/range whiskers, notch CI) |
-| **Scales** | Linear, Log10, Sqrt, Reverse, Discrete, DateTime, Binned |
+| **Aesthetics** | Size, Alpha, Shape, Linetype — per-point and per-group mapping |
+| **Scales** | Linear, Log10, Sqrt, Reverse, Discrete, DateTime, Binned, Size, Alpha, Shape, Linetype, Identity |
 | **Color Palettes** | 60+ built-in palettes — Viridis, ColorBrewer, Tab10, Observable, Seaborn, and more |
 | **Faceting** | Grid (row ~ col), Wrap (NCols/NRows) |
 | **Data Backends** | Native Memory, Apache Arrow IPC/Parquet, BigQuery SQL pushdown |
@@ -31,59 +32,51 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 
 ---
 
-## What's New in v0.0.7
+## What's New in v0.0.8
 
-### CIELAB Gradient Constructors
+### Aesthetics Mapping
 
-Build perceptually uniform colour gradients using CIELAB interpolation — midpoints look equally different from both endpoints, unlike RGB lerps:
-
-```go
-white := colormap.Color{R: 1, G: 1, B: 1, A: 1}
-blue  := colormap.Color{R: 0, G: 0, B: 1, A: 1}
-
-ScaleColor(colormap.Gradient(white, blue))           // 2-stop gradient
-ScaleColor(colormap.Gradient2(cold, neutral, hot))   // diverging (3-stop)
-ScaleColor(colormap.GradientN([]colormap.Color{...})) // N-stop terrain/custom
-```
-
-### Theme-Aware Colour Defaults
-
-Themes now provide separate Color/Fill palettes. No explicit `ScaleColor()` needed — the pipeline picks the right default:
+Map data columns directly to visual properties — size, transparency, shape, and line style:
 
 ```go
-p.Theme("dark")      // dark theme → Observable10 discrete, Inferno fill
-p.Theme("okabe_ito") // colorblind-safe palette
-p.Theme("nord")      // Nord palette
+ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Size("magnitude"), aes.Alpha("confidence")).
+    Layer(geom.Point()).
+    ScaleSizeArea().              // area-proportional sizing
+    ScaleAlpha(0.2, 0.9).        // opacity range
+    Save(ctx, "scatter.png", 800, 500)
 ```
 
-### Legend Key Glyphs
+### Shape & Linetype Scales
 
-Legend keys now match their geom type — circles for points, lines for smooth/line, rectangles for bars:
+Categorical columns map to distinct shapes or dash patterns:
 
 ```go
-Layer(geom.Point(geom.WithLabel("Data"), geom.WithColor("red"))).    // ● circle key
-Layer(geom.Smooth(geom.WithLabel("Trend"), geom.WithColor("blue"))). // ── line key
-Layer(geom.Bar(geom.WithLabel("Count"), geom.WithFill("green")))     // ■ rect key
+ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Shape("species")).
+    Layer(geom.Point(geom.WithSize(5))).
+    Save(ctx, "shapes.png", 800, 500)
+
+ggplot.New(ds, aes.X("date"), aes.Y("value"), aes.Linetype("model")).
+    Layer(geom.Line()).
+    Save(ctx, "linetypes.png", 800, 500)
 ```
 
-### Guide Customization
+10 built-in shapes: `circle`, `square`, `triangle`, `diamond`, `triangleDown`, `plus`, `cross`, `star`, `pentagon`, `hexagon`.
+6 built-in linetypes: `solid`, `dashed`, `dotted`, `dotdash`, `longdash`, `twodash`.
 
-Fine-tune colour bar and legend appearance:
+### Shape Constants
 
-```go
-p.ColorBarWidth(20).  // wider gradient bar (default 12px)
-  ColorBarNBin(8).    // 8 discrete steps instead of smooth
-  LegendCols(2)       // 2-column legend layout
-```
+All shape names are now exported constants (`canvas.ShapeCircle`, `canvas.ShapeStar`, etc.) — no more magic strings.
 
-### NA Color
+<details>
+<summary><strong>What was new in v0.0.7</strong></summary>
 
-Control how missing values appear in colour scales:
+- **CIELAB gradient constructors**: `colormap.Gradient()`, `Gradient2()`, `GradientN()` with perceptually uniform interpolation
+- **Theme-aware colour defaults**: Separate Color/Fill palettes per theme
+- **Legend key glyphs**: Circle for points, line for smooth, rectangle for bars
+- **Guide customization**: `ColorBarWidth()`, `ColorBarNBin()`, `LegendCols()`
+- **NA color**: `scale.SetNAColor()` for missing value display
 
-```go
-red := gg.RGBA{R: 1, A: 1}
-scale.SetNAColor(&red)  // NaN → red instead of transparent
-```
+</details>
 
 <details>
 <summary><strong>What was new in v0.0.6</strong></summary>
