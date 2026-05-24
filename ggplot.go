@@ -40,6 +40,7 @@ import (
 
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -358,6 +359,78 @@ func (p *Plot) ScaleX(scaleType scale.Type, opts ...scale.Opt) *Plot {
 func (p *Plot) ScaleY(scaleType scale.Type, opts ...scale.Opt) *Plot {
 	cloned := p.clone()
 	cloned.spec.ScaleOverrides["y"] = ScaleOverride{Type: scaleType, Opts: opts}
+
+	return cloned
+}
+
+// ScaleSize configures a size scale mapping to the specified point-radius range.
+func (p *Plot) ScaleSize(rangeMin, rangeMax float64) *Plot {
+	cloned := p.clone()
+	cloned.spec.SizeScale = scale.NewSize(rangeMin, rangeMax)
+
+	return cloned
+}
+
+// ScaleSizeArea configures a size scale mapping values proportionally to point area.
+func (p *Plot) ScaleSizeArea() *Plot {
+	cloned := p.clone()
+	cloned.spec.SizeScale = scale.NewSizeArea()
+
+	return cloned
+}
+
+// ScaleAlpha configures an opacity scale mapping to the specified range.
+func (p *Plot) ScaleAlpha(rangeMin, rangeMax float64) *Plot {
+	cloned := p.clone()
+	cloned.spec.AlphaScale = scale.NewAlpha(rangeMin, rangeMax)
+
+	return cloned
+}
+
+// ScaleShape configures a categorical shape scale with automatic shape assignment.
+func (p *Plot) ScaleShape() *Plot {
+	cloned := p.clone()
+	cloned.spec.ShapeScale = scale.NewShape()
+
+	return cloned
+}
+
+// ScaleShapeManual configures a categorical shape scale with a manual mapping.
+func (p *Plot) ScaleShapeManual(m map[string]string) *Plot {
+	cloned := p.clone()
+	cloned.spec.ShapeScale = scale.NewShapeManual(m)
+
+	return cloned
+}
+
+// ScaleLinetype configures a categorical linetype scale with automatic dash pattern assignment.
+func (p *Plot) ScaleLinetype() *Plot {
+	cloned := p.clone()
+	cloned.spec.LinetypeScale = scale.NewLinetype()
+
+	return cloned
+}
+
+// ScaleLinetypeManual configures a categorical linetype scale with a manual mapping.
+func (p *Plot) ScaleLinetypeManual(m map[string]string) *Plot {
+	cloned := p.clone()
+	cloned.spec.LinetypeScale = scale.NewLinetypeManual(m)
+
+	return cloned
+}
+
+// ScaleSizeIdentity configures an identity scale for size, passing values through.
+func (p *Plot) ScaleSizeIdentity() *Plot {
+	cloned := p.clone()
+	cloned.spec.SizeScale = scale.NewIdentity()
+
+	return cloned
+}
+
+// ScaleAlphaIdentity configures an identity scale for alpha, passing values through.
+func (p *Plot) ScaleAlphaIdentity() *Plot {
+	cloned := p.clone()
+	cloned.spec.AlphaScale = scale.NewIdentity()
 
 	return cloned
 }
@@ -754,11 +827,19 @@ type Built struct {
 // layer was produced by group splitting, the system column group (int64) is
 // also present.
 type BuiltLayer struct {
-	Geom         geom.Layer
-	Data         dataset.Dataset
-	Mapping      AesMap
-	ContColorCol string
-	ContColScale *colormap.Scale
+	Geom          geom.Layer
+	Data          dataset.Dataset
+	Mapping       AesMap
+	ContColorCol  string
+	ContColScale  *colormap.Scale
+	SizeCol       string
+	SizeScale     scale.Scale
+	AlphaCol      string
+	AlphaScale    scale.Scale
+	ShapeCol      string
+	ShapeScale    scale.Scale
+	LinetypeCol   string
+	LinetypeScale scale.Scale
 }
 
 // BuiltPanel holds one facet panel with its resolved layers and trained scales.
@@ -986,9 +1067,15 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 			}
 		}
 
+		linetypeCol := merged["linetype"]
 		groupCol := merged["group"]
+
 		if groupCol == "" {
-			groupCol = colorCol // colour implies grouping (categorical only)
+			if colorCol != "" {
+				groupCol = colorCol
+			} else {
+				groupCol = linetypeCol
+			}
 		}
 
 		if groupCol != "" {
@@ -1006,8 +1093,12 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 				return BuiltPanel{}, Errorf(PhaseBuild, li, "group", err, "group split by %q", groupCol)
 			}
 
-			if legendTitle == "" && colorCol != "" {
-				legendTitle = colorCol
+			if legendTitle == "" {
+				if colorCol != "" {
+					legendTitle = colorCol
+				} else if linetypeCol != "" {
+					legendTitle = linetypeCol
+				}
 			}
 
 			for gi, grpLabel := range groups {
@@ -1038,16 +1129,19 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 					grpMerged = pipelineMapping
 				}
 
-				// Bake group color into geom params.
+				// Bake group color into geom params only if color was mapped.
 				grpGeom := layer.Geom
-				hex := fmt.Sprintf("#%02X%02X%02X",
-					uint8(grpRGBA.R*255+0.5),
-					uint8(grpRGBA.G*255+0.5),
-					uint8(grpRGBA.B*255+0.5))
-				grpGeom.Params.Color = hex
 
-				if grpGeom.Params.Fill == "" {
-					grpGeom.Params.Fill = hex
+				if colorCol != "" {
+					hex := fmt.Sprintf("#%02X%02X%02X",
+						uint8(grpRGBA.R*255+0.5),
+						uint8(grpRGBA.G*255+0.5),
+						uint8(grpRGBA.B*255+0.5))
+					grpGeom.Params.Color = hex
+
+					if grpGeom.Params.Fill == "" {
+						grpGeom.Params.Fill = hex
+					}
 				}
 
 				// Inject group system column.
@@ -1067,7 +1161,7 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 					Mapping: grpMerged,
 				})
 
-				if colorCol != "" && pi == 0 {
+				if (colorCol != "" || linetypeCol != "") && pi == 0 {
 					alreadyHas := false
 
 					for _, le := range legendEntries {
@@ -1078,9 +1172,23 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 					}
 
 					if !alreadyHas {
+						entryColor := grpRGBA
+
+						if colorCol == "" {
+							// Use default geom color or black
+							dcol := layer.Geom.Params.Color
+							if dcol == "" {
+								dcol = "#000000"
+							}
+
+							if parsed, err := colormap.Parse(dcol); err == nil {
+								entryColor = parsed
+							}
+						}
+
 						legendEntries = append(legendEntries, LegendEntry{
 							Label: grpLabel,
-							Color: grpRGBA,
+							Color: entryColor,
 							Glyph: glyphForGeom(layer.Geom.Geom),
 						})
 					}
@@ -1170,6 +1278,124 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 	// Apply hint-aware axis formatters from pipeline transforms.
 	// Only applies if the user hasn't explicitly set a formatter via scale overrides.
 	xScale, yScale = applyHintFormatters(p, resolved, xScale, yScale, xIsDiscrete)
+
+	// Initialize non-position scales.
+	sizeScale := p.spec.SizeScale
+	if sizeScale == nil {
+		sizeScale = scale.NewSizeDefault()
+	}
+
+	alphaScale := p.spec.AlphaScale
+	if alphaScale == nil {
+		alphaScale = scale.NewAlphaDefault()
+	}
+
+	shapeScale := p.spec.ShapeScale
+	if shapeScale == nil {
+		shapeScale = scale.NewShape()
+	}
+
+	linetypeScale := p.spec.LinetypeScale
+	if linetypeScale == nil {
+		linetypeScale = scale.NewLinetype()
+	}
+
+	// Train non-position scales and associate them with resolved layers.
+	for i := range resolved {
+		rl := &resolved[i]
+		if sizeCol, ok := rl.Mapping["size"]; ok && sizeCol != "" {
+			if col, err := rl.Data.Column(sizeCol); err == nil {
+				_ = sizeScale.Train(col)
+			}
+
+			rl.SizeCol = sizeCol
+			rl.SizeScale = sizeScale
+		}
+
+		if alphaCol, ok := rl.Mapping["alpha"]; ok && alphaCol != "" {
+			if col, err := rl.Data.Column(alphaCol); err == nil {
+				_ = alphaScale.Train(col)
+			}
+
+			rl.AlphaCol = alphaCol
+			rl.AlphaScale = alphaScale
+		}
+
+		if shapeCol, ok := rl.Mapping["shape"]; ok && shapeCol != "" {
+			if col, err := rl.Data.Column(shapeCol); err == nil {
+				_ = shapeScale.Train(col)
+			}
+
+			rl.ShapeCol = shapeCol
+			rl.ShapeScale = shapeScale
+		}
+
+		if linetypeCol, ok := rl.Mapping["linetype"]; ok && linetypeCol != "" {
+			if col, err := rl.Data.Column(linetypeCol); err == nil {
+				_ = linetypeScale.Train(col)
+			}
+
+			rl.LinetypeCol = linetypeCol
+			rl.LinetypeScale = linetypeScale
+		}
+	}
+
+	// Generate categorical legend entries for mapped shapes if not already present.
+	for _, rl := range resolved {
+		if rl.ShapeCol != "" && rl.ShapeScale != nil && pi == 0 {
+			if legendTitle == "" {
+				legendTitle = rl.ShapeCol
+			}
+
+			if shScale, ok := rl.ShapeScale.(*scale.ShapeScale); ok {
+				for _, cat := range shScale.Categories() {
+					alreadyHas := slices.ContainsFunc(legendEntries, func(le LegendEntry) bool {
+						return le.Label == cat
+					})
+
+					if !alreadyHas {
+						dcol := rl.Geom.Params.Color
+						if dcol == "" {
+							dcol = "#000000"
+						}
+
+						var entryColor gg.RGBA
+						if parsed, err := colormap.Parse(dcol); err == nil {
+							entryColor = parsed
+						}
+
+						legendEntries = append(legendEntries, LegendEntry{
+							Label: cat,
+							Color: entryColor,
+							Glyph: GlyphPoint,
+							Shape: shScale.ShapeName(cat),
+						})
+					}
+				}
+			}
+		}
+	}
+
+	// Post-process legend entries to assign shape and linetype patterns.
+	for i, le := range legendEntries {
+		for _, rl := range resolved {
+			if rl.ShapeCol != "" && rl.ShapeScale != nil {
+				if shScale, ok := rl.ShapeScale.(*scale.ShapeScale); ok {
+					if slices.Contains(shScale.Categories(), le.Label) {
+						legendEntries[i].Shape = shScale.ShapeName(le.Label)
+					}
+				}
+			}
+
+			if rl.LinetypeCol != "" && rl.LinetypeScale != nil {
+				if ltScale, ok := rl.LinetypeScale.(*scale.LinetypeScale); ok {
+					if slices.Contains(ltScale.Categories(), le.Label) {
+						legendEntries[i].Linetype = ltScale.DashPattern(le.Label)
+					}
+				}
+			}
+		}
+	}
 
 	return BuiltPanel{
 		Label:         label,
@@ -2059,8 +2285,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		yMin, yMax := pri.yScale.Bounds()
 
 		for _, rl := range pri.bp.Layers {
-			drawLayer(cv, b.coord, rl.Data, rl.Geom, rl.Mapping,
-				rl.ContColorCol, rl.ContColScale,
+			drawLayer(cv, b.coord, rl,
 				pri.cellW, pri.cellH, xMin, xMax, yMin, yMax, th)
 		}
 
@@ -2101,8 +2326,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 				yMin, yMax := pri.yScale.Bounds()
 
 				for _, rl := range pri.bp.Layers {
-					drawLayer(sub, b.coord, rl.Data, rl.Geom, rl.Mapping,
-						rl.ContColorCol, rl.ContColScale,
+					drawLayer(sub, b.coord, rl,
 						pri.cellW, pri.cellH, xMin, xMax, yMin, yMax, th)
 				}
 
@@ -2485,27 +2709,49 @@ func glyphForGeom(t geom.Type) LegendGlyph {
 
 // LegendEntry describes one item in the legend.
 type LegendEntry struct {
-	Label string
-	Color gg.RGBA
-	Glyph LegendGlyph
+	Label    string
+	Color    gg.RGBA
+	Glyph    LegendGlyph
+	Shape    string    // e.g. "square", "triangle"
+	Linetype []float64 // dash pattern
 }
 
 // drawGlyph draws a legend key glyph at (x, y) with the given size.
 // The color must be set by the caller before calling drawGlyph.
-func drawGlyph(cv canvas.Canvas, g LegendGlyph, x, y, size float64) {
-	switch g {
+func drawGlyph(cv canvas.Canvas, e LegendEntry, x, y, size float64) {
+	switch e.Glyph {
 	case GlyphRect:
 		cv.DrawRectangle(x, y-size/2, size, size)
 		cv.Fill()
 	case GlyphPoint:
-		radius := size / 2
-		cv.DrawCircle(x+radius, y, radius)
-		cv.Fill()
+		if e.Shape != "" {
+			if canvas.IsStrokeShape(e.Shape) {
+				cv.SetLineWidth(1.5)
+				cv.DrawShape(e.Shape, x+size/2, y, size/2)
+				cv.Stroke()
+			} else {
+				cv.DrawShape(e.Shape, x+size/2, y, size/2)
+				cv.Fill()
+			}
+		} else {
+			radius := size / 2
+			cv.DrawCircle(x+radius, y, radius)
+			cv.Fill()
+		}
 	case GlyphLine:
 		lw := 2.5 //nolint:mnd // Standard legend line stroke width.
 		cv.SetLineWidth(lw)
+
+		if len(e.Linetype) > 0 {
+			cv.SetLineDash(e.Linetype...)
+		}
+
 		cv.DrawLine(x, y, x+size, y)
 		cv.Stroke()
+
+		if len(e.Linetype) > 0 {
+			cv.SetLineDash()
+		}
 	}
 }
 
@@ -2529,7 +2775,7 @@ func drawLegendVertical(cv canvas.Canvas, title string, entries []LegendEntry, x
 
 	for _, e := range entries {
 		cv.SetRGBA(e.Color.R, e.Color.G, e.Color.B, e.Color.A)
-		drawGlyph(cv, e.Glyph, x, curY, swatchSize)
+		drawGlyph(cv, e, x, curY, swatchSize)
 
 		r, g, b, _ := rgbaOf(th.LegendTextElem().Color)
 		cv.SetRGBA(r, g, b, 1)
@@ -2648,7 +2894,7 @@ func drawLegendHorizontal(cv canvas.Canvas, title string, entries []LegendEntry,
 		}
 
 		cv.SetRGBA(e.Color.R, e.Color.G, e.Color.B, e.Color.A)
-		drawGlyph(cv, e.Glyph, curX, y, swatchSize)
+		drawGlyph(cv, e, curX, y, swatchSize)
 
 		cv.SetRGBA(tr, tg, tb, 1)
 		cv.SetFontSize(th.LegendTextElem().Size * 0.9)

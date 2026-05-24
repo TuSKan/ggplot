@@ -10,13 +10,16 @@
 (via internal `clone()`). The rendering pipeline is a strict sequence:
 
 ```
-PlotSpec → Facet Split → Stat Transform → Scale Training → Layout → Render
+PlotSpec → Facet Split → Stat Transform → Scale Training → Layout → Draw → Surface
 ```
 
-**Build** and **Draw** are separate phases. `Plot.Build()` produces a `Built` value containing
-all resolved layers, trained scales, and layout geometry. `Built.Draw()` renders data layers
-and chrome onto a canvas. Both phases execute **panel-parallel** via `errgroup` for
-multi-panel faceted plots.
+**Build**, **Draw**, and **Output** are separate phases. `Plot.Build()` produces an
+`output.Figure` (concretely a `*Built`) containing all resolved layers, trained scales, and
+layout geometry. `Figure.Draw()` — implemented by `Built.Draw` — renders data layers and
+chrome onto a `canvas.Canvas`. The **output layer** then carries a `Figure` to a destination
+`Surface`: a file, an in-memory image, a desktop GPU window, or a browser canvas. Build and
+Draw execute **panel-parallel** via `errgroup` for multi-panel faceted plots. The output
+layer is specified in [**OUTPUT-SPEC.md**](OUTPUT-SPEC.md).
 
 All data flows through the `dataset.Table` abstraction, which provides a columnar,
 iterator-based interface. Three engine backends implement it: native Go slices
@@ -86,11 +89,20 @@ github.com/TuSKan/ggplot
 ├── colormap/            # Color palettes: Viridis, ColorBrewer, Tab10, Observable10,
 │                        #   discrete/continuous/manual/cyclic scales
 │
-├── canvas/              # Canvas abstraction wrapping gogpu/gg
+├── canvas/              # Drawing seam — the path-level Canvas API and its backends
 │   ├── canvas.go        #   Canvas interface: MoveTo, LineTo, Stroke, Fill, DrawImage, …
-│   └── gg.go            #   GGCanvas (GPU/CPU auto), GGCanvasCPU (pure-CPU rasterizer)
+│   ├── raster.go        #   RasterCanvas (gg-backed; GPU or CPU rasterizer)   [was gg.go]
+│   ├── recording.go     #   RecordingCanvas (records ops; replayed to vector)
+│   └── export_*.go      #   SVG / PDF vector backends (replay a Recording)
 │
-├── output/              # Output format helpers (SVG, PDF via RecordingCanvas)
+├── output/              # Output layer — destinations for a Figure. See docs/OUTPUT-SPEC.md
+│   ├── output.go        #   Figure, Source, Sizer, Surface, LiveSurface, Event, Render
+│   ├── registry.go      #   blank-import surface registry: NewSurface / NewLiveSurface
+│   ├── session.go       #   Session + Controller — interaction loop for live surfaces
+│   ├── file/            #   FileSurface — PNG / SVG / PDF on disk
+│   ├── image/           #   BufferSurface — in-memory image.Image
+│   ├── window/          #   WindowSurface — desktop GPU window      (//go:build !js)
+│   └── web/             #   CanvasSurface — browser <canvas>        (//go:build js && wasm)
 │
 ├── dataset/             # Columnar data abstraction, see docs/DATASET.md
 │   ├── memory/          #   Native Go slices engine + stat kernels (LOESS, KDE, bin, boxplot)
@@ -111,6 +123,7 @@ github.com/TuSKan/ggplot
 │
 └── docs/
     ├── ARCHITECTURE.md  # (this file)
+    ├── OUTPUT-SPEC.md   # Output layer specification (Figure, Surface, Session)
     ├── ROADMAP.md       # Development plan aligned with ggplot2-book (3e)
     ├── DATASET.md       # Deep dive on dataset/engine architecture
     └── BENCHMARK.md     # Benchmark results (Arrow vs Memory, SIMD)
@@ -174,7 +187,7 @@ Axes are drawn conditionally:
 
 #### 2c. Data Layer Rendering (Parallel)
 
-Each panel's data layers are rendered to an independent `GGCanvasCPU` sub-canvas
+Each panel's data layers are rendered to an independent CPU `RasterCanvas` sub-canvas
 concurrently via `errgroup.Group`. The sub-canvas is then composited onto the
 main canvas via `DrawImage`.
 
@@ -296,15 +309,49 @@ type Error struct {
 }
 ```
 
-### Canvas Abstraction
+### Canvas Abstraction (the drawing seam)
 
-The `canvas` package wraps `gogpu/gg` contexts:
+The `canvas` package is the **front of the rendering pipe** — the path-level `Canvas`
+interface every `Figure` draws through, decoupled from any specific backend:
 
-- **`GGCanvas`** — default, uses GPU acceleration when available
-- **`GGCanvasCPU`** — pure-CPU analytic rasterizer, deterministic output
+- **`RasterCanvas`** — gg-backed pixel backend. `NewRasterCanvas` uses GPU acceleration
+  when available; `NewRasterCanvasCPU` is a pure-CPU analytic rasterizer with deterministic
+  output. `RasterFromContext` borrows an externally-owned `gg.Context` — used by the desktop
+  window surface for a zero-copy handoff; the borrower must not `Close()` it.
+- **`RecordingCanvas`** — records draw operations for replay into true vector SVG/PDF.
 
-`ggplot.WithCPU()` forces CPU rendering in `Save()` / `WriteTo()`.
-`DrawImage` on `GGCanvas` enables parallel sub-canvas compositing.
+`ggplot.WithCPU()` forces the CPU rasterizer. `DrawImage` enables parallel sub-canvas
+compositing. `RasterCanvas` was previously named `GGCanvas` (and its file `gg.go` → `raster.go`).
+
+### Output Layer
+
+> **Status:** target architecture. The `output` package and the `RasterCanvas` rename are
+> specified but not yet implemented — see [OUTPUT-SPEC.md](OUTPUT-SPEC.md) §11 for phasing.
+> Today the code still has `canvas.GGCanvas` and a stub `output` package.
+
+The `output` package is the **back of the rendering pipe** — it carries a `Figure` to a
+destination. One `Surface` abstraction serves four destinations:
+
+| Surface | Package | Destination |
+|---|---|---|
+| `FileSurface` | `output/file` | PNG / SVG / PDF on disk |
+| `BufferSurface` | `output/image` | in-memory `image.Image` |
+| `WindowSurface` | `output/window` (`!js`) | desktop GPU window — zero-copy via `gg/integration/ggcanvas` |
+| `CanvasSurface` | `output/web` (`js && wasm`) | browser `<canvas>` over the `wgpu` browser backend |
+
+`Surface` uses an `Acquire`/`Commit` frame model; `LiveSurface` adds an event stream for the
+interactive (window, web) targets. `output.Render(ctx, fig, surf)` presents one frame — the
+entire static story. `Session` + `Controller` drive the interactive loop with a **fast path**
+(redraw the current `Figure` under a new viewport transform) and a **slow path** (rebuild from
+the `Source` when an interaction crosses the trained data extent — scales retrain, stats
+recompute).
+
+Platform selection is by **blank import**: each platform subpackage's `init()` registers its
+surface, and `output.NewSurface(ctx, "window", …)` resolves it — no build tags appear in user
+code. Build constraints are confined to the platform leaf files. `Plot.Save` / `Encode` /
+`Image` are façades over `Render`; `window.Show` / `web.Mount` drive a `Session`. The full
+design — interfaces, the four surfaces, migration phasing — is in
+[**OUTPUT-SPEC.md**](OUTPUT-SPEC.md).
 
 ---
 
@@ -317,3 +364,6 @@ The `canvas` package wraps `gogpu/gg` contexts:
 | `golang.org/x/sync` | `errgroup` for panel-parallel build and draw |
 | `golang.org/x/image` | Font rendering support |
 | `go-text/typesetting` | Text shaping (indirect, via gg) |
+| `gg/integration/ggcanvas` | Zero-copy gg → GPU-surface presentation (optional, `output/window`) |
+| `gogpu/gogpu`, `gogpu/gpucontext` | Desktop window + GPU device provider (optional, `output/window`) |
+| `gogpu/wgpu` | WebGPU — browser backend for `output/web` (optional, `js/wasm`) |

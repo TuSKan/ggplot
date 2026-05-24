@@ -11,12 +11,14 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 
 	"github.com/TuSKan/ggplot/canvas"
 	"github.com/TuSKan/ggplot/colormap"
 	"github.com/TuSKan/ggplot/coord"
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/scale"
 	"github.com/TuSKan/ggplot/theme"
 )
 
@@ -24,17 +26,25 @@ import (
 // It encapsulates the canvas, coordinate system, data, aesthetic mappings,
 // and panel bounds so that Drawer implementations are self-contained.
 type DrawContext struct {
-	Canvas       canvas.Canvas
-	Coord        coord.Coord
-	Data         dataset.Dataset
-	Mapping      AesMap
-	Params       geom.Params
-	Theme        theme.Theme     // active theme for default styling
-	ContColorCol string          // continuous color column (empty if none)
-	ContScale    *colormap.Scale // continuous color scale (nil if none)
-	W, H         float64         // panel size in pixels
-	XMin, XMax   float64         // data domain bounds
-	YMin, YMax   float64         // data domain bounds
+	Canvas        canvas.Canvas
+	Coord         coord.Coord
+	Data          dataset.Dataset
+	Mapping       AesMap
+	Params        geom.Params
+	Theme         theme.Theme     // active theme for default styling
+	ContColorCol  string          // continuous color column (empty if none)
+	ContScale     *colormap.Scale // continuous color scale (nil if none)
+	W, H          float64         // panel size in pixels
+	XMin, XMax    float64         // data domain bounds
+	YMin, YMax    float64         // data domain bounds
+	SizeCol       string
+	SizeScale     scale.Scale
+	AlphaCol      string
+	AlphaScale    scale.Scale
+	ShapeCol      string
+	ShapeScale    scale.Scale
+	LinetypeCol   string
+	LinetypeScale scale.Scale
 }
 
 // Drawer renders a geometry type onto the canvas. Implementations are
@@ -96,47 +106,49 @@ func init() {
 func drawLayer(
 	cv canvas.Canvas,
 	c coord.Coord,
-	ds dataset.Dataset,
-	g geom.Layer,
-	mapping AesMap,
-	contColorCol string,
-	contScale *colormap.Scale,
+	rl BuiltLayer,
 	w, h, xMin, xMax, yMin, yMax float64,
 	th theme.Theme,
 ) {
-	d := LookupDrawer(g.Geom)
+	d := LookupDrawer(rl.Geom.Geom)
 	if d == nil {
 		return // unknown geom type — silently skip (validated at construction)
 	}
 
 	d.Draw(DrawContext{
-		Canvas:       cv,
-		Coord:        c,
-		Data:         ds,
-		Mapping:      mapping,
-		Params:       g.Params,
-		Theme:        th,
-		ContColorCol: contColorCol,
-		ContScale:    contScale,
-		W:            w,
-		H:            h,
-		XMin:         xMin,
-		XMax:         xMax,
-		YMin:         yMin,
-		YMax:         yMax,
+		Canvas:        cv,
+		Coord:         c,
+		Data:          rl.Data,
+		Mapping:       rl.Mapping,
+		Params:        rl.Geom.Params,
+		Theme:         th,
+		ContColorCol:  rl.ContColorCol,
+		ContScale:     rl.ContColScale,
+		W:             w,
+		H:             h,
+		XMin:          xMin,
+		XMax:          xMax,
+		YMin:          yMin,
+		YMax:          yMax,
+		SizeCol:       rl.SizeCol,
+		SizeScale:     rl.SizeScale,
+		AlphaCol:      rl.AlphaCol,
+		AlphaScale:    rl.AlphaScale,
+		ShapeCol:      rl.ShapeCol,
+		ShapeScale:    rl.ShapeScale,
+		LinetypeCol:   rl.LinetypeCol,
+		LinetypeScale: rl.LinetypeScale,
 	})
 }
 
 // --- Drawer adapters: bridge DrawContext to existing draw functions ---
 
 func drawPointsFn(dc DrawContext) {
-	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
-	drawPoints(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.ContColorCol, dc.ContScale, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+	drawPoints(dc)
 }
 
 func drawLineFn(dc DrawContext) {
-	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
-	drawLine(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.ContColorCol, dc.ContScale, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+	drawLine(dc)
 }
 
 func drawStepFn(dc DrawContext) {
@@ -192,65 +204,165 @@ func drawBoxplotFn(dc DrawContext) {
 	drawBoxplot(dc.Canvas, dc.Coord, dc.Data, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme)
 }
 
-func drawPoints(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, contColorCol string, contScale *colormap.Scale, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xVals, errX := ds.Float64(xCol)
+func columnAsStrings(col dataset.AnyColumn) []string {
+	if col == nil {
+		return nil
+	}
 
-	yVals, errY := ds.Float64(yCol)
+	switch tc := col.(type) {
+	case dataset.Column[string]:
+		return tc.Values()
+	case dataset.Column[float64]:
+		raw := tc.Values()
+		vals := make([]string, len(raw))
+
+		for i, v := range raw {
+			vals[i] = strconv.FormatFloat(v, 'g', -1, 64)
+		}
+
+		return vals
+	case dataset.Column[int64]:
+		raw := tc.Values()
+		vals := make([]string, len(raw))
+
+		for i, v := range raw {
+			vals[i] = strconv.FormatInt(v, 10)
+		}
+
+		return vals
+	default:
+		return nil
+	}
+}
+
+func drawPoints(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	xVals, errX := dc.Data.Float64(xCol)
+	yVals, errY := dc.Data.Float64(yCol)
+
 	if errX != nil || errY != nil {
 		return
 	}
 
-	r := p.Size
+	r := dc.Params.Size
 	if r <= 0 {
 		r = 3
 	}
 
-	alpha := p.Alpha
+	alpha := dc.Params.Alpha
 	if alpha <= 0 {
 		alpha = 1
 	}
 
-	// Continuous color: read z values through the scale.
-	var zVals []float64
-	if contColorCol != "" {
-		zVals, _ = ds.Float64(contColorCol)
+	// Size mapping
+	var (
+		sizeVals   []float64
+		sizeMapper func(float64) float64
+	)
+
+	if dc.SizeCol != "" && dc.SizeScale != nil {
+		sizeVals, _ = dc.Data.Float64(dc.SizeCol)
+		if s, ok := dc.SizeScale.(scale.ValueMapper); ok {
+			sizeMapper = s.MapValue
+		} else {
+			sizeMapper = dc.SizeScale.Map
+		}
 	}
 
-	cr, cg, cb := colormap.ParseRGB(p.Color, 0.3, 0.5, 0.8)
+	// Alpha mapping
+	var (
+		alphaVals   []float64
+		alphaMapper func(float64) float64
+	)
 
+	if dc.AlphaCol != "" && dc.AlphaScale != nil {
+		alphaVals, _ = dc.Data.Float64(dc.AlphaCol)
+		if s, ok := dc.AlphaScale.(scale.ValueMapper); ok {
+			alphaMapper = s.MapValue
+		} else {
+			alphaMapper = dc.AlphaScale.Map
+		}
+	}
+
+	// Shape mapping
+	var shapeVals []string
+
+	if dc.ShapeCol != "" {
+		if col, err := dc.Data.Column(dc.ShapeCol); err == nil {
+			shapeVals = columnAsStrings(col)
+		}
+	}
+
+	// Continuous color mapping
+	var zVals []float64
+	if dc.ContColorCol != "" {
+		zVals, _ = dc.Data.Float64(dc.ContColorCol)
+	}
+
+	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.3, 0.5, 0.8)
 	n := min(len(yVals), len(xVals))
 
 	for i := range n {
-		nx := normalize(xVals[i], xMin, xMax)
-		ny := normalize(yVals[i], yMin, yMax)
-		px, py := orientedTransform(c, nx, ny, w, h, p.Orientation)
+		nx := normalize(xVals[i], dc.XMin, dc.XMax)
+		ny := normalize(yVals[i], dc.YMin, dc.YMax)
+		px, py := orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
 
-		if i < len(zVals) && contScale != nil {
-			gc := contScale.At(zVals[i])
-			cv.SetRGBA(gc.R, gc.G, gc.B, alpha)
-		} else {
-			cv.SetRGBA(cr, cg, cb, alpha)
+		ptAlpha := alpha
+		if i < len(alphaVals) && alphaMapper != nil {
+			ptAlpha = alphaMapper(alphaVals[i])
 		}
 
-		cv.DrawCircle(px, py, r)
-		cv.Fill()
+		if i < len(zVals) && dc.ContScale != nil {
+			gc := dc.ContScale.At(zVals[i])
+			dc.Canvas.SetRGBA(gc.R, gc.G, gc.B, ptAlpha)
+		} else {
+			dc.Canvas.SetRGBA(cr, cg, cb, ptAlpha)
+		}
+
+		ptRadius := r
+		if i < len(sizeVals) && sizeMapper != nil {
+			ptRadius = sizeMapper(sizeVals[i])
+		}
+
+		shapeName := dc.Params.Shape
+		if shapeName == "" {
+			shapeName = canvas.ShapeCircle
+		}
+
+		if i < len(shapeVals) && dc.ShapeScale != nil {
+			if s, ok := dc.ShapeScale.(*scale.ShapeScale); ok {
+				shapeName = s.ShapeName(shapeVals[i])
+			} else if _, ok := dc.ShapeScale.(*scale.IdentityScale); ok {
+				shapeName = shapeVals[i]
+			}
+		}
+
+		if canvas.IsStrokeShape(shapeName) {
+			dc.Canvas.SetLineWidth(1.5)
+			dc.Canvas.DrawShape(shapeName, px, py, ptRadius)
+			dc.Canvas.Stroke()
+		} else {
+			dc.Canvas.DrawShape(shapeName, px, py, ptRadius)
+			dc.Canvas.Fill()
+		}
 	}
 }
 
-func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, contColorCol string, contScale *colormap.Scale, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
-	xVals, errX := ds.Float64(xCol)
+func drawLine(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	xVals, errX := dc.Data.Float64(xCol)
+	yVals, errY := dc.Data.Float64(yCol)
 
-	yVals, errY := ds.Float64(yCol)
 	if errX != nil || errY != nil {
 		return
 	}
 
-	lw := p.LineWidth
+	lw := dc.Params.LineWidth
 	if lw <= 0 {
 		lw = 2
 	}
 
-	alpha := p.Alpha
+	alpha := dc.Params.Alpha
 	if alpha <= 0 {
 		alpha = 1.0
 	}
@@ -259,8 +371,8 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 	type linePt struct{ x, y float64 }
 
 	n := min(len(yVals), len(xVals))
-
 	pts := make([]linePt, n)
+
 	for i := range n {
 		pts[i] = linePt{xVals[i], yVals[i]}
 	}
@@ -269,48 +381,93 @@ func drawLine(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol, c
 		return
 	}
 
-	// Continuous color samples the scale at each segment midpoint.
-	var zVals []float64
-	if contColorCol != "" {
-		zVals, _ = ds.Float64(contColorCol)
+	// Linetype mapping (constant for this line/group)
+	var dashPattern []float64
+
+	if dc.LinetypeCol != "" && dc.LinetypeScale != nil {
+		if col, err := dc.Data.Column(dc.LinetypeCol); err == nil {
+			vals := columnAsStrings(col)
+			if len(vals) > 0 {
+				if s, ok := dc.LinetypeScale.(*scale.LinetypeScale); ok {
+					dashPattern = s.DashPattern(vals[0])
+				}
+			}
+		}
 	}
 
-	cv.SetLineWidth(lw)
+	if len(dashPattern) > 0 {
+		dc.Canvas.SetLineDash(dashPattern...)
+		defer dc.Canvas.SetLineDash()
+	}
 
-	if len(zVals) >= len(pts) && contScale != nil {
-		// Per-segment gradient coloring.
+	// Alpha mapping
+	var (
+		alphaVals   []float64
+		alphaMapper func(float64) float64
+	)
+
+	if dc.AlphaCol != "" && dc.AlphaScale != nil {
+		alphaVals, _ = dc.Data.Float64(dc.AlphaCol)
+		if s, ok := dc.AlphaScale.(scale.ValueMapper); ok {
+			alphaMapper = s.MapValue
+		} else {
+			alphaMapper = dc.AlphaScale.Map
+		}
+	}
+
+	// Continuous color mapping
+	var zVals []float64
+	if dc.ContColorCol != "" {
+		zVals, _ = dc.Data.Float64(dc.ContColorCol)
+	}
+
+	dc.Canvas.SetLineWidth(lw)
+
+	if (len(zVals) >= len(pts) && dc.ContScale != nil) || len(alphaVals) >= len(pts) {
+		// Draw segment-by-segment because either color or alpha is varying.
+		cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.8, 0.2, 0.2)
 		for i := 1; i < len(pts); i++ {
-			nx0 := normalize(pts[i-1].x, xMin, xMax)
-			ny0 := normalize(pts[i-1].y, yMin, yMax)
-			nx1 := normalize(pts[i].x, xMin, xMax)
-			ny1 := normalize(pts[i].y, yMin, yMax)
-			px0, py0 := orientedTransform(c, nx0, ny0, w, h, p.Orientation)
-			px1, py1 := orientedTransform(c, nx1, ny1, w, h, p.Orientation)
+			nx0 := normalize(pts[i-1].x, dc.XMin, dc.XMax)
+			ny0 := normalize(pts[i-1].y, dc.YMin, dc.YMax)
+			nx1 := normalize(pts[i].x, dc.XMin, dc.XMax)
+			ny1 := normalize(pts[i].y, dc.YMin, dc.YMax)
+			px0, py0 := orientedTransform(dc.Coord, nx0, ny0, dc.W, dc.H, dc.Params.Orientation)
+			px1, py1 := orientedTransform(dc.Coord, nx1, ny1, dc.W, dc.H, dc.Params.Orientation)
 
-			zMid := (zVals[i-1] + zVals[i]) / 2
-			gc := contScale.At(zMid)
-			cv.SetRGBA(gc.R, gc.G, gc.B, alpha)
-			cv.DrawLine(px0, py0, px1, py1)
-			cv.Stroke()
+			ptAlpha := alpha
+			if i-1 < len(alphaVals) && alphaMapper != nil {
+				ptAlpha = alphaMapper(alphaVals[i-1])
+			}
+
+			if i-1 < len(zVals) && dc.ContScale != nil {
+				zMid := (zVals[i-1] + zVals[i]) / 2
+				gc := dc.ContScale.At(zMid)
+				dc.Canvas.SetRGBA(gc.R, gc.G, gc.B, ptAlpha)
+			} else {
+				dc.Canvas.SetRGBA(cr, cg, cb, ptAlpha)
+			}
+
+			dc.Canvas.DrawLine(px0, py0, px1, py1)
+			dc.Canvas.Stroke()
 		}
 	} else {
-		// Uniform color polyline.
-		cr, cg, cb := colormap.ParseRGB(p.Color, 0.8, 0.2, 0.2)
-		cv.SetRGBA(cr, cg, cb, alpha)
+		// Uniform color and alpha polyline.
+		cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.8, 0.2, 0.2)
+		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
 
-		nx := normalize(pts[0].x, xMin, xMax)
-		ny := normalize(pts[0].y, yMin, yMax)
-		px, py := orientedTransform(c, nx, ny, w, h, p.Orientation)
-		cv.MoveTo(px, py)
+		nx := normalize(pts[0].x, dc.XMin, dc.XMax)
+		ny := normalize(pts[0].y, dc.YMin, dc.YMax)
+		px, py := orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
+		dc.Canvas.MoveTo(px, py)
 
 		for i := 1; i < len(pts); i++ {
-			nx = normalize(pts[i].x, xMin, xMax)
-			ny = normalize(pts[i].y, yMin, yMax)
-			px, py = orientedTransform(c, nx, ny, w, h, p.Orientation)
-			cv.LineTo(px, py)
+			nx = normalize(pts[i].x, dc.XMin, dc.XMax)
+			ny = normalize(pts[i].y, dc.YMin, dc.YMax)
+			px, py = orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
+			dc.Canvas.LineTo(px, py)
 		}
 
-		cv.Stroke()
+		dc.Canvas.Stroke()
 	}
 }
 

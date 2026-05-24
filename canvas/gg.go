@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"io"
+	"math"
 	"sync"
 
 	"github.com/gogpu/gg"
@@ -158,6 +159,38 @@ func (c *GGCanvas) DrawRectangle(x, y, w, h float64) { c.ctx.DrawRectangle(x, y,
 
 // DrawLine adds a line path from (x1, y1) to (x2, y2).
 func (c *GGCanvas) DrawLine(x1, y1, x2, y2 float64) { c.ctx.DrawLine(x1, y1, x2, y2) }
+
+// DrawShape adds a path for the specified shape centered at (cx, cy) with size/radius r.
+// Uses gg.Context.DrawRegularPolygon for polygon shapes for optimal rendering.
+func (c *GGCanvas) DrawShape(shape string, cx, cy, r float64) {
+	switch shape {
+	case ShapeCircle:
+		c.ctx.DrawCircle(cx, cy, r)
+	case ShapeSquare:
+		c.ctx.DrawRegularPolygon(4, cx, cy, r, 0) //nolint:mnd // 4-sided polygon
+	case ShapeTriangle:
+		c.ctx.DrawRegularPolygon(3, cx, cy, r, 0) //nolint:mnd // 3-sided polygon
+	case ShapeTriangleDown:
+		c.ctx.DrawRegularPolygon(3, cx, cy, r, math.Pi) //nolint:mnd // 3-sided polygon rotated π
+	case ShapeDiamond:
+		c.ctx.DrawRegularPolygon(4, cx, cy, r, math.Pi/4) //nolint:mnd // 4-sided polygon rotated 45°
+	case ShapePentagon:
+		c.ctx.DrawRegularPolygon(5, cx, cy, r, 0) //nolint:mnd // 5-sided polygon
+	case ShapeHexagon:
+		c.ctx.DrawRegularPolygon(6, cx, cy, r, 0) //nolint:mnd // 6-sided polygon
+	case ShapePlus:
+		c.ctx.DrawLine(cx, cy-r, cx, cy+r)
+		c.ctx.DrawLine(cx-r, cy, cx+r, cy)
+	case ShapeCross:
+		c.ctx.DrawLine(cx-r, cy-r, cx+r, cy+r)
+		c.ctx.DrawLine(cx-r, cy+r, cx+r, cy-r)
+	case ShapeStar:
+		// Star is not a regular polygon — use path-based fallback.
+		DrawShapePath(c, shape, cx, cy, r)
+	default:
+		c.ctx.DrawCircle(cx, cy, r)
+	}
+}
 
 // --- Text ---
 

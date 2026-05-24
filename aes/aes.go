@@ -13,7 +13,7 @@ package aes
 
 // Mapping binds an aesthetic channel to a data source.
 type Mapping struct {
-	Channel string // aesthetic name: "x", "y", "color", "fill", "size", "shape", "alpha", "group", "label"
+	Channel string // aesthetic name: "x", "y", "color", "fill", "size", "shape", "alpha", "group", "label", "linetype"
 	Column  string // column name in the dataset
 }
 
@@ -37,6 +37,9 @@ func Alpha(col string) Mapping { return Mapping{Channel: "alpha", Column: col} }
 
 // Shape maps a column to the point shape aesthetic.
 func Shape(col string) Mapping { return Mapping{Channel: "shape", Column: col} }
+
+// Linetype maps a column to the line dash pattern aesthetic.
+func Linetype(col string) Mapping { return Mapping{Channel: "linetype", Column: col} }
 
 // Group maps a column to the grouping aesthetic (for line connections, etc.).
 func Group(col string) Mapping { return Mapping{Channel: "group", Column: col} }

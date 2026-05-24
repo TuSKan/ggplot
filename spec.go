@@ -72,6 +72,12 @@ type PlotSpec struct {
 	// LegendNCols sets the number of columns for the categorical legend.
 	// Zero means single column (vertical) or single row (horizontal).
 	LegendNCols int
+
+	// Mapped scale overrides configured via Plot builder methods.
+	SizeScale     scale.Scale
+	AlphaScale    scale.Scale
+	ShapeScale    scale.Scale
+	LinetypeScale scale.Scale
 }
 
 // AesMap maps aesthetic channel names to column names.

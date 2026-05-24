@@ -1,6 +1,6 @@
 module github.com/TuSKan/ggplot
 
-go 1.26.2
+go 1.26.0
 
 require (
 	cloud.google.com/go/bigquery v1.77.0
@@ -32,10 +32,10 @@ require (
 	github.com/go-text/typesetting v0.3.4 // indirect
 	github.com/go-webgpu/goffi v0.5.1 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
-	github.com/gogpu/gpucontext v0.18.0 // indirect
+	github.com/gogpu/gpucontext v0.19.0 // indirect
 	github.com/gogpu/gputypes v0.5.0 // indirect
 	github.com/gogpu/naga v0.17.13 // indirect
-	github.com/gogpu/wgpu v0.27.5 // indirect
+	github.com/gogpu/wgpu v0.28.7 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -75,4 +75,4 @@ require (
 	google.golang.org/grpc v1.81.1 // indirect
 )
 
-replace github.com/gogpu/gg => github.com/TuSKan/gogpugg v0.0.0-20260514231116-53271ec1afca
+replace github.com/gogpu/gg => github.com/TuSKan/gogpugg v0.0.0-20260523223458-25c883b6a9b8

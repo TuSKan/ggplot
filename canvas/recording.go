@@ -117,6 +117,11 @@ func (c *RecordingCanvas) DrawRectangle(x, y, w, h float64) { c.rec.DrawRectangl
 // DrawLine adds a line path from (x1, y1) to (x2, y2).
 func (c *RecordingCanvas) DrawLine(x1, y1, x2, y2 float64) { c.rec.DrawLine(x1, y1, x2, y2) }
 
+// DrawShape adds a path for the specified shape centered at (cx, cy) with size/radius r.
+func (c *RecordingCanvas) DrawShape(shape string, cx, cy, r float64) {
+	DrawShapePath(c, shape, cx, cy, r)
+}
+
 // --- Text ---
 
 // SetFontSize resolves the best available font at the given size.

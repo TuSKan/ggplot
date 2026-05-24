@@ -277,15 +277,15 @@ The public extension API — implemented via Go interfaces + registration, not g
 
 ---
 
-### Phase 7 — Other Aesthetic Scales 🔲
+### Phase 7 — Other Aesthetic Scales ✅
 
 > Book Ch.12 (Other aesthetics)
 
-- 🔲 **Size** — `scale.Size(range)`, `scale.SizeArea()` (proportional to value), `scale.Radius()`
-- 🔲 **Shape** — `scale.ShapeManual()` with 25+ built-in point shapes
-- 🔲 **Linetype** — `scale.Linetype()` — solid, dashed, dotted, dotdash, longdash, twodash + custom dash arrays
-- 🔲 **Alpha** — `scale.Alpha(range)` for opacity mapping
-- 🔲 **Identity scales** — `scale.*Identity()` to use raw column values directly as aesthetic values
+- ✅ **Size** — `scale.Size(range)`, `scale.SizeArea()` (proportional to value), `scale.Radius()`
+- ✅ **Shape** — `scale.ShapeManual()` with 25+ built-in point shapes
+- ✅ **Linetype** — `scale.Linetype()` — solid, dashed, dotted, dotdash, longdash, twodash + custom dash arrays
+- ✅ **Alpha** — `scale.Alpha(range)` for opacity mapping
+- ✅ **Identity scales** — `scale.*Identity()` to use raw column values directly as aesthetic values
 
 ---
 
@@ -354,6 +354,7 @@ The public extension API — implemented via Go interfaces + registration, not g
 - 🔲 **Legend layout** — `legend.box`, `legend.key`, `legend.background`, `legend.margin`
 - 🔲 **Strip styling** — `strip.text`, `strip.background`, `strip.clip`
 - 🔲 **Theme inheritance proofs** — golden tests that `axis.title.x` correctly inherits from `axis.title` from `text` from root
+- 🔲 **Continuous legends** — graduated-size and continuous-alpha legend rendering (deferred from Phase 7)
 
 ---
 

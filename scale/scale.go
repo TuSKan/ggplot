@@ -73,6 +73,14 @@ type Expander interface {
 	HasExpand() bool
 }
 
+// ValueMapper is an optional interface for scales that provide a direct
+// data-to-visual mapping (e.g., size in pixels, opacity). Drawing code
+// prefers MapValue over Map when available because Map returns a normalized
+// [0, 1] fraction that still needs range interpolation.
+type ValueMapper interface {
+	MapValue(v float64) float64
+}
+
 // --- Shared training state ---
 
 // domain holds the trained min/max and provides reusable Train logic.

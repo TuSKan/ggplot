@@ -1352,3 +1352,42 @@ func TestWriteTo_PDF(t *testing.T) { //nolint:dupl // type-specialized code path
 		t.Error("WriteTo PDF output missing %PDF- header")
 	}
 }
+
+func TestRender_Phase7_Scales(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{1, 2, 3}),
+		eng.NewFloat64Column("y", []float64{10, 20, 30}),
+		eng.NewFloat64Column("size_val", []float64{2.0, 4.0, 6.0}),
+		eng.NewFloat64Column("alpha_val", []float64{0.1, 0.5, 0.9}),
+		eng.NewStringColumn("shape_val", []string{"A", "B", "C"}),
+		eng.NewStringColumn("line_val", []string{"X", "Y", "Z"}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point(), aes.Size("size_val"), aes.Alpha("alpha_val"), aes.Shape("shape_val")).
+		Layer(geom.Line(), aes.Linetype("line_val")).
+		ScaleSize(2, 8).
+		ScaleAlpha(0.2, 0.8).
+		ScaleShapeManual(map[string]string{"A": "square", "B": "triangle"}).
+		ScaleLinetype()
+
+	built, err := p.Build(context.Background())
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+
+	cv, err := built.DrawCanvas(context.Background(), 400, 300)
+	if err != nil {
+		t.Fatalf("drawing failed: %v", err)
+	}
+	defer func() {
+		_ = cv.Close()
+	}()
+}

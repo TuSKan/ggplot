@@ -75,6 +75,10 @@ type Canvas interface {
 	DrawRectangle(x, y, w, h float64)
 	// DrawLine adds a line path from (x1, y1) to (x2, y2).
 	DrawLine(x1, y1, x2, y2 float64)
+	// DrawShape adds a path for the specified shape centered at (cx, cy) with size/radius r.
+	// Supported shapes: "circle", "square", "triangle", "diamond", "triangleDown",
+	// "plus", "cross", "star", "pentagon", "hexagon".
+	DrawShape(shape string, cx, cy, r float64)
 
 	// --- Text ---
 
