@@ -72,11 +72,13 @@ github.com/TuSKan/ggplot
 ├── scale/               # Scale types + Resolve factory
 │   └── scale.go         #   Linear, Log10, Sqrt, Reverse, Discrete + NiceSequence, FormatNumber
 │
-├── coord/               # Coordinate systems
-│   └── coord.go         #   Cartesian, CartesianZoom (Zoomer interface), Fixed (Fixer interface), Polar
+├── coord/               # Coordinate systems (pure specification — zero math)
+│   └── coord.go         #   Cartesian, CartesianZoom (Zoomer), Fixed (Fixer), Polar, Trans
+│                        #   TransFunc is name-only; pipeline dispatches to MathKernel
 │
 ├── facet/               # Faceting strategies
-│   └── facet.go         #   None, Wrap (NCols/NRows), Grid (row ~ col)
+│   └── facet.go         #   None, Wrap (NCols, Labeller, Drop), Grid (row ~ col, Labeller, Drop, Margins)
+│                        #   Panel carries RowVal/ColVal/NumRows/IsMargin; mask-based lazy splitting
 │
 ├── theme/               # Theme definitions (60+ built-in themes)
 │   ├── theme.go         #   Name, Theme struct, Element types, inheritance resolver, registry
@@ -144,14 +146,46 @@ The pipeline runs across `Plot.Build()` and `Built.Draw()`:
 #### 1a. Facet Split
 
 ```go
-panels, _ := p.spec.Facet.Split(p.spec.Dataset)
+panels, _ := p.spec.Facet.Split(ctx, p.spec.Dataset)
 rows, cols := p.spec.Facet.GridDims(len(panels))
 ```
 
-The `Facet` interface produces `[]FacetPanel`, each containing a filtered `Dataset`
-and a display label. For `FacetNone`, this is a single panel with the full dataset.
+The `Facet` interface produces `[]facet.Panel`, each containing a lazy-filtered `Dataset`,
+a display label, and grid metadata (`RowVal`, `ColVal`, `NumRows`, `IsMargin`).
+For `FacetNone`, this is a single panel with the full dataset.
 
-#### 1b. Panel-Parallel Build
+**Labellers** (`LabelValue`, `LabelBoth`, `LabelContext`, custom `Label(fn)`) control
+strip text formatting. `LabelContext` is the sentinel default — resolves to `LabelValue`
+for Wrap and `LabelBoth` for Grid.
+
+**Drop** (`Drop(false)`) preserves empty panels for missing value combinations.
+Emptiness is checked via `maskHasTrue(mask)` without materializing data.
+
+**Margins** (`GridMargins(true)`) produces extra panels: row margins (across all columns),
+column margins (across all rows), and the corner margin (full dataset). Margin panels
+have `IsMargin=true` and use `MarginLabel` ("All") as their `RowVal`/`ColVal`.
+
+**Lazy pipeline**: `Split()` never calls `Collect`. Datasets are filtered via
+`dataset.Filter(mask)` which is lazy. `Panel.NumRows` is computed from `maskCount(mask)`.
+Materialization happens once per panel in `buildPanel` (step 1c below).
+
+#### 1b. Grid Placement
+
+```go
+rowIndex[panel.RowVal] → grid row
+colIndex[panel.ColVal] → grid column
+```
+
+For Grid facets, `PanelLayout.Row`/`.Col` are computed from `RowVal`/`ColVal` index maps
+(preserving insertion order, with `"All"` margins at the end). For Wrap/None, fallback
+to sequential `pi / cols`, `pi % cols`.
+
+#### 1c. PANEL Column Injection
+
+A `ColPANEL` system column (constant int64 = panel index) is lazily chained via
+`WithColumn`, then the entire filter + PANEL chain is materialized with a single `Collect`.
+
+#### 1d. Panel-Parallel Build
 
 For multi-panel plots, each panel's data pipeline runs concurrently via `errgroup.Group`.
 A single-panel fast path avoids goroutine overhead for simple plots.

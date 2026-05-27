@@ -117,4 +117,7 @@ var (
 
 	// ErrInvalidConfig is returned for invalid plot configuration.
 	ErrInvalidConfig = errors.New("ggplot: invalid configuration")
+
+	// ErrUnsupportedTransform is returned for unknown coord transform names.
+	ErrUnsupportedTransform = errors.New("ggplot: unsupported coordinate transform")
 )

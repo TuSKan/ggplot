@@ -24,7 +24,7 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 | **Aesthetics** | Size, Alpha, Shape, Linetype — per-point and per-group mapping |
 | **Scales** | Linear, Log10, Sqrt, Reverse, Discrete, DateTime, Binned, Size, Alpha, Shape, Linetype, Identity |
 | **Color Palettes** | 60+ built-in palettes — Viridis, ColorBrewer, Tab10, Observable, Seaborn, and more |
-| **Faceting** | Grid (row ~ col), Wrap (NCols/NRows) |
+| **Faceting** | Grid (row ~ col, margins, drop), Wrap (NCols, drop), Labellers (Value, Both, Context, custom) |
 | **Data Backends** | Native Memory, Apache Arrow IPC/Parquet, BigQuery SQL pushdown |
 | **Data Types** | Float64, Int64, String, Bool, Timestamp, Date, Time |
 | **Output** | PNG, SVG 1.1, PDF 1.4, HiDPI via `WithScale()` |
@@ -192,7 +192,7 @@ func main() {
 ```go
 ggplot.New(ds, aes.X("day"), aes.Y("temp")).
     Layer(geom.Line(geom.WithColor("seagreen"), geom.WithLineWidth(1.5))).
-    FacetWrap("season", 2, 0).
+    FacetWrap("season", facet.NCols(2)).
     Labs(ggplot.Title("Temperature by Season")).
     Theme("dark").
     Save(ctx, "facets.png", 900, 600)

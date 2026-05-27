@@ -375,6 +375,37 @@ func (e *Engine) BitShiftRight(col dataset.AnyColumn, n int) (dataset.AnyColumn,
 	return e.lazyExprCol(bqCol, fmt.Sprintf("`%s` >> %d", bqCol.name, n), bqCol.name, dataset.DTypeInt64)
 }
 
+// MapFloat64 implements [dataset.MathKernel]. BigQuery cannot execute
+// arbitrary Go functions in SQL, so this downloads the column and
+// delegates to the local memory engine.
+func (e *Engine) MapFloat64(col dataset.AnyColumn, fn func(float64) float64) (dataset.AnyColumn, error) {
+	if bqCol, ok := col.(*bqColumn); ok {
+		ds, err := bqCol.ds.download()
+		if err != nil {
+			return nil, err
+		}
+
+		localCol, err := ds.Column(bqCol.name)
+		if err != nil {
+			return nil, fmt.Errorf("bigquery: %w", err)
+		}
+
+		result, mapErr := e.localEngine().MapFloat64(localCol, fn)
+		if mapErr != nil {
+			return nil, fmt.Errorf("bigquery: %w", mapErr)
+		}
+
+		return result, nil
+	}
+
+	result, err := e.localEngine().MapFloat64(col, fn)
+	if err != nil {
+		return nil, fmt.Errorf("bigquery: %w", err)
+	}
+
+	return result, nil
+}
+
 // --- Shared helpers ---
 
 // unaryMathFn generates SELECT FN(col) AS col FROM source.

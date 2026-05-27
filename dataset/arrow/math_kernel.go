@@ -121,6 +121,13 @@ func (e *Engine) applyScalarFunc(col dataset.AnyColumn, fn func(float64) float64
 	return e.NewFloat64Column(c.name, out), nil
 }
 
+// MapFloat64 implements [dataset.MathKernel]. It applies a scalar function
+// element-wise on a float64 column. This is the generic fallback for
+// domain-specific transforms not covered by named Arrow compute operations.
+func (e *Engine) MapFloat64(col dataset.AnyColumn, fn func(float64) float64) (dataset.AnyColumn, error) {
+	return e.applyScalarFunc(col, fn)
+}
+
 // --- Binary arithmetic (Arrow native) ---
 
 // AddCols returns the element-wise sum of two float64 columns (Arrow native).

@@ -360,15 +360,25 @@ The public extension API — implemented via Go interfaces + registration, not g
 
 ---
 
-### Phase 11 — Faceting Deep Dive 🔲
+### Phase 11 — Faceting Deep Dive 🟡
 
 > Book Ch.16 (Faceting). Unblocked by Phase 4.1 (per-panel scale state).
 
+**Shipped — Labellers & Options:**
+- ✅ **Labellers** — `LabelValue()` (value only), `LabelBoth()` (col: value), `LabelContext()` (auto: Value for Wrap, Both for Grid), `Label(fn)` (custom formatter)
+- ✅ **`GridOpt` functional options** — `GridLabeller(l)`, `GridDrop(bool)`, `GridMargins(bool)` for grid facet configuration
+- ✅ **`WrapOpt` expanded** — `WithLabeller(l)`, `WithDrop(bool)`, `NCols(n)` for wrap facet configuration
+- ✅ **Drop control** — `Drop(false)` shows empty panels for missing value combinations (Wrap and Grid)
+- ✅ **Grid margins** — `GridMargins(true)` produces row/column/corner margin panels aggregated with "All" label; placed at grid edges via `RowVal`/`ColVal` index maps
+- ✅ **Panel metadata** — `Panel.RowVal`, `Panel.ColVal`, `Panel.NumRows` (mask-counted, no materialization), `Panel.IsMargin`
+- ✅ **Grid strip labels** — column headers on first row, rotated row labels on rightmost column; `PanelBorder().Color` nil-guarded
+- ✅ **Grid cell placement** — `PanelLayout.Row`/`.Col` from semantic `RowVal`/`ColVal` maps, not sequential index
+- ✅ **Lazy pipeline** — `facet.Split()` never materializes; single `Collect` per panel in `buildPanel`
+- ✅ **Example** — `examples/facet_labeller/` with 4 plots (Wrap+LabelBoth, Grid+Margins, Wrap+Drop=false, Grid default)
+
+**Remaining:**
 - 🔲 **Free scales** — `facet.Wrap(col, FreeX(), FreeY())` per-panel independent axes (requires per-panel scale clones in `Built.Layout`)
 - 🔲 **Free space** — `facet.Grid(row, col, Space("free"))` proportional panel sizing
-- 🔲 **Labellers** — `labeller.Both()`, `labeller.Parsed()`, custom label formatters
-- 🔲 **Facet margins** — `Margins(true)` for aggregate panels alongside facets
-- 🔲 **Drop control** — `Drop(false)` to show empty panels for missing combinations
 - 🔲 **Strip placement** — `StripPosition("bottom" | "left")` for axis-adjacent strips
 
 ---

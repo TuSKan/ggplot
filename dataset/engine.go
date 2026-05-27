@@ -306,6 +306,13 @@ type MathKernel interface {
 	BitNot(col AnyColumn) (AnyColumn, error)
 	BitShiftLeft(col AnyColumn, n int) (AnyColumn, error)
 	BitShiftRight(col AnyColumn, n int) (AnyColumn, error)
+
+	// Generic element-wise transform
+	//
+	// MapFloat64 applies a scalar function element-wise to a float64 column.
+	// Use this for domain-specific transforms not covered by named operations
+	// (e.g., domain-clamped logarithms, bijective axis transforms).
+	MapFloat64(col AnyColumn, fn func(float64) float64) (AnyColumn, error)
 }
 
 // StatKernel provides statistical compute kernels that produce new Tables.

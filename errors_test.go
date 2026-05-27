@@ -1,9 +1,15 @@
 package ggplot
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"math"
 	"testing"
+
+	"github.com/TuSKan/ggplot/coord"
+	"github.com/TuSKan/ggplot/dataset"
+	"github.com/TuSKan/ggplot/dataset/memory"
 )
 
 // Test-only sentinel errors for err113 compliance.
@@ -144,5 +150,243 @@ func TestPhase_String(t *testing.T) {
 				t.Errorf("Phase(%d).String() = %q, want %q", tt.phase, got, tt.want)
 			}
 		})
+	}
+}
+
+// --- coordApplyKernel: direct MathKernel dispatch ---
+
+func newTestMathKernel() (dataset.MathKernel, func(string, []float64) dataset.AnyColumn) {
+	eng := memory.NewEngine(context.Background())
+
+	mk, ok := dataset.Engine(eng).(dataset.MathKernel)
+	if !ok {
+		panic("memory engine does not implement MathKernel")
+	}
+
+	return mk, func(name string, data []float64) dataset.AnyColumn {
+		return eng.NewFloat64Column(name, data)
+	}
+}
+
+func TestCoordApplyKernel_Log10(t *testing.T) {
+	t.Parallel()
+
+	mk, newCol := newTestMathKernel()
+	col := newCol("x", []float64{1, 10, 100, 1000, 0.01})
+
+	result, err := coordApplyKernel(mk, col, "log10")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fc, ok := result.(dataset.Column[float64])
+	if !ok {
+		t.Fatal("result is not Column[float64]")
+	}
+
+	vals := fc.Values()
+	want := []float64{0, 1, 2, 3, -2}
+
+	for i, v := range vals {
+		if math.Abs(v-want[i]) > 1e-12 {
+			t.Errorf("log10[%d] = %g, want %g", i, v, want[i])
+		}
+	}
+}
+
+func TestCoordApplyKernel_Log2(t *testing.T) {
+	t.Parallel()
+
+	mk, newCol := newTestMathKernel()
+	col := newCol("x", []float64{1, 2, 4, 8, 0.5})
+
+	result, err := coordApplyKernel(mk, col, "log2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fc, ok := result.(dataset.Column[float64])
+	if !ok {
+		t.Fatal("result is not Column[float64]")
+	}
+
+	vals := fc.Values()
+	want := []float64{0, 1, 2, 3, -1}
+
+	for i, v := range vals {
+		if math.Abs(v-want[i]) > 1e-12 {
+			t.Errorf("log2[%d] = %g, want %g", i, v, want[i])
+		}
+	}
+}
+
+func TestCoordApplyKernel_Sqrt(t *testing.T) {
+	t.Parallel()
+
+	mk, newCol := newTestMathKernel()
+	col := newCol("x", []float64{0, 1, 4, 9, 100})
+
+	result, err := coordApplyKernel(mk, col, "sqrt")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fc, ok := result.(dataset.Column[float64])
+	if !ok {
+		t.Fatal("result is not Column[float64]")
+	}
+
+	vals := fc.Values()
+	want := []float64{0, 1, 2, 3, 10}
+
+	for i, v := range vals {
+		if math.Abs(v-want[i]) > 1e-12 {
+			t.Errorf("sqrt[%d] = %g, want %g", i, v, want[i])
+		}
+	}
+}
+
+func TestCoordApplyKernel_Reverse(t *testing.T) {
+	t.Parallel()
+
+	mk, newCol := newTestMathKernel()
+	col := newCol("x", []float64{-5, 0, 3.14, 100})
+
+	result, err := coordApplyKernel(mk, col, "reverse")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fc, ok := result.(dataset.Column[float64])
+	if !ok {
+		t.Fatal("result is not Column[float64]")
+	}
+
+	vals := fc.Values()
+	want := []float64{5, 0, -3.14, -100}
+
+	for i, v := range vals {
+		if math.Abs(v-want[i]) > 1e-12 {
+			t.Errorf("reverse[%d] = %g, want %g", i, v, want[i])
+		}
+	}
+}
+
+func TestCoordApplyKernel_Unknown_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	mk, newCol := newTestMathKernel()
+	col := newCol("x", []float64{1, 2, 3})
+
+	_, err := coordApplyKernel(mk, col, "unknown")
+	if err == nil {
+		t.Fatal("expected error for unknown transform name")
+	}
+}
+
+// --- Roundtrip: kernel + inverse ---
+
+func TestCoordRoundtrip_Log10(t *testing.T) {
+	t.Parallel()
+
+	mk, newCol := newTestMathKernel()
+	data := []float64{0.001, 1, 42, 1e6}
+	col := newCol("x", data)
+
+	result, err := coordApplyKernel(mk, col, "log10")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fc, ok := result.(dataset.Column[float64])
+	if !ok {
+		t.Fatal("result is not Column[float64]")
+	}
+
+	for i, v := range fc.Values() {
+		back := math.Pow(10, v) //nolint:mnd // 10^v inverse of log10.
+		if math.Abs(back-data[i])/math.Max(math.Abs(data[i]), 1e-15) > 1e-10 {
+			t.Errorf("log10 roundtrip(%g) = %g, want %g", data[i], back, data[i])
+		}
+	}
+}
+
+func TestCoordRoundtrip_Sqrt(t *testing.T) {
+	t.Parallel()
+
+	mk, newCol := newTestMathKernel()
+	data := []float64{0, 1, 25, 100}
+	col := newCol("x", data)
+
+	result, err := coordApplyKernel(mk, col, "sqrt")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fc, ok := result.(dataset.Column[float64])
+	if !ok {
+		t.Fatal("result is not Column[float64]")
+	}
+
+	for i, v := range fc.Values() {
+		back := v * v
+		if math.Abs(back-data[i]) > 1e-12 {
+			t.Errorf("sqrt roundtrip(%g) = %g, want %g", data[i], back, data[i])
+		}
+	}
+}
+
+// --- coordTickFormatter ---
+
+func TestCoordTickFormatter_Log10(t *testing.T) {
+	t.Parallel()
+
+	fmtFn := coordTickFormatter(coord.TransLog10)
+	if fmtFn == nil {
+		t.Fatal("coordTickFormatter(log10) returned nil")
+	}
+
+	lbl := fmtFn(2)
+	if lbl != "100" {
+		t.Errorf("FormatTick(2) = %q, want %q", lbl, "100")
+	}
+}
+
+func TestCoordTickFormatter_Sqrt(t *testing.T) {
+	t.Parallel()
+
+	fmtFn := coordTickFormatter(coord.TransSqrt)
+	if fmtFn == nil {
+		t.Fatal("coordTickFormatter(sqrt) returned nil")
+	}
+
+	lbl := fmtFn(5)
+	if lbl != "25" {
+		t.Errorf("FormatTick(5) = %q, want %q", lbl, "25")
+	}
+}
+
+func TestCoordTickFormatter_NaN(t *testing.T) {
+	t.Parallel()
+
+	fmtFn := coordTickFormatter(coord.TransLog10)
+
+	lbl := fmtFn(math.NaN())
+	if lbl != "" {
+		t.Errorf("FormatTick(NaN) = %q, want empty", lbl)
+	}
+
+	lbl = fmtFn(math.Inf(1))
+	if lbl != "" {
+		t.Errorf("FormatTick(+Inf) = %q, want empty", lbl)
+	}
+}
+
+func TestCoordTickFormatter_Identity_ReturnsNil(t *testing.T) {
+	t.Parallel()
+
+	fmtFn := coordTickFormatter(coord.TransIdentity)
+	if fmtFn != nil {
+		t.Error("coordTickFormatter(identity) should return nil")
 	}
 }

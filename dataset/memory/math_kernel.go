@@ -63,6 +63,13 @@ func (e *Engine) scalarUnaryFloat64(col dataset.AnyColumn, fn func(float64) floa
 	return &float64Column{name: c.name, data: out}, nil
 }
 
+// MapFloat64 implements [dataset.MathKernel]. It applies a scalar function
+// element-wise on a float64 column. This is the generic fallback for
+// domain-specific transforms not covered by named SIMD-accelerated operations.
+func (e *Engine) MapFloat64(col dataset.AnyColumn, fn func(float64) float64) (dataset.AnyColumn, error) {
+	return e.scalarUnaryFloat64(col, fn)
+}
+
 // sliceTransformFloat64 applies a highway (dst, src) slice transform on float64 column data.
 // Currently unused: go-highway v0.0.12 AVX2 codegen bug causes SIGILL on AMD EPYC.
 // Will be re-enabled when the upstream fix lands.

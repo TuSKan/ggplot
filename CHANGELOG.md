@@ -6,7 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+#### Coordinate Transforms — Engine-Native Dispatch
+- **`coord.TransFunc`** is now a pure specification type (`Name string` only). All math (Forward/Inverse closures, safe helpers) removed from the `coord` package.
+- **`applyCoordTransform`** dispatches directly to named `MathKernel` operations (`mk.Log10`, `mk.Sqrt`, `mk.Neg`, etc.) — no `MapFloat64` scalar fallback. Arrow compute kernels, SIMD highway, and SQL math functions are used natively.
+- **`coordTickFormatter`** resolves transform names to scalar inverses for tick labels via `scale.FormatNumber`. Tick formatting is inherently scalar (one value per label).
+- **`Transformer` interface** simplified to `XTrans()`/`YTrans()` returning `TransFunc`. Removed `FormatTickX`/`FormatTickY` methods.
+- Added `ErrUnsupportedTransform` sentinel error for unknown transform names.
+
+#### Faceting API (Phase 11 — Breaking)
+- **`Plot.FacetWrap(col, opts ...WrapOpt)`** — signature changed from positional `(col string, nCols, nRows int)` to variadic functional options.
+- **`Plot.FacetGrid(row, col, opts ...GridOpt)`** — new method; replaces the old `(row, col string)` two-arg form with variadic functional options.
+- **`facet.Grid(row, col, opts ...GridOpt)`** — constructor signature changed to accept `GridOpt` functional options.
+
 ### Added
+
+#### Faceting Deep Dive (Phase 11)
+- **Labellers** — `facet.LabelValue()`, `facet.LabelBoth()`, `facet.LabelContext()`, and `facet.Label(func(col, val string) string)` custom labeller. `LabelContext` resolves to `LabelValue` for Wrap and `LabelBoth` for Grid.
+- **`facet.GridOpt`** functional options — `GridLabeller(l)`, `GridDrop(bool)`, `GridMargins(bool)`.
+- **`facet.WrapOpt`** expanded — `WithLabeller(l)`, `WithDrop(bool)`, `NCols(n)`.
+- **`facet.Panel`** — added `RowVal`, `ColVal` (raw facet values), `NumRows` (row count from mask, no materialization), and `IsMargin` (aggregate margin flag).
+- **Grid margins** — `GridMargins(true)` produces row-margin panels (aggregate across columns), column-margin panels (aggregate across rows), and corner margin (full dataset). Margin panels use `"All"` label and are placed at the grid edges.
+- **Drop control** — `GridDrop(false)` / `WithDrop(false)` preserves empty panels for missing value combinations.
+- **`facet.MarginLabel`** constant — `"All"`, the display value for aggregate margin panels.
+- **Grid cell placement** — `PanelLayout.Row`/`.Col` computed from `RowVal`/`ColVal` index maps instead of sequential panel index. Ensures margin panels render in correct grid cells.
+- **Panel-parallel mask helpers** — `maskHasTrue(mask)` for drop check, `maskCount(mask)` for `Panel.NumRows`. Both avoid dataset materialization.
+- **Strip labels** — column headers on first grid row, rotated row labels on rightmost grid column. `PanelBorder().Color` nil-guarded for themes without panel borders (e.g. "minimal").
+- New example: `examples/facet_labeller/` — 4 plots demonstrating Wrap+LabelBoth, Grid+Margins, Wrap+Drop=false, Grid default labels.
+- 29 new tests in `facet/facet_test.go` covering labellers, drop, margins, column types, and grid dimensions.
 
 #### Advanced Geometries (Phase 8 — Batch A)
 - **`geom.Crossbar()`** — box with median line between ymin/ymax (no whiskers). Requires `x`, `y`, `ymin`, `ymax` aesthetics.
@@ -62,6 +90,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - New example: `examples/axis_label_rows/`.
 
 ### Fixed
+- **`PanelBorder().Color` nil dereference** — themes without a panel border (e.g. "minimal") crashed when rendering facet strip labels. Added nil guard with fallback grey.
+- **Grid margin panel placement** — margin panels were placed using sequential `pi / cols` index, causing incorrect grid cell assignment. Now uses `RowVal`/`ColVal` index maps for correct placement.
 - **Auto-expand for width-based geoms** — Crossbar, Violin, and Dotplot now automatically get X-axis padding (like Bar and BoxPlot), so elements at domain edges are not clipped.
 - **Distinct-X padding calculation** — X-axis padding for width-based geoms now counts distinct X positions instead of raw row count. This fixes near-zero padding for stat-transformed data (e.g., ViolinY outputs 128 grid points per group, making row-based padding negligible).
 - **Dotplot Y-axis rendering** — Dotplot now uses coordinate-based Y positioning through the normalize/transform pipeline. Dot radius is computed from Y domain spacing so adjacent dots touch visually. Previously dots were pixel-stacked at the baseline and ignored the Y scale entirely.

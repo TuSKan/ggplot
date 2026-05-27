@@ -266,9 +266,9 @@ func (p *Plot) FacetWrap(col string, opts ...facet.WrapOpt) *Plot {
 }
 
 // FacetGrid applies grid faceting by row and column variables.
-func (p *Plot) FacetGrid(rowCol, colCol string) *Plot {
+func (p *Plot) FacetGrid(rowCol, colCol string, opts ...facet.GridOpt) *Plot {
 	cloned := p.clone()
-	cloned.spec.Facet = facet.Grid(rowCol, colCol)
+	cloned.spec.Facet = facet.Grid(rowCol, colCol, opts...)
 
 	return cloned
 }
@@ -334,6 +334,17 @@ func (p *Plot) CoordCartesian(xmin, xmax, ymin, ymax float64) *Plot {
 func (p *Plot) CoordFixed(ratio float64) *Plot {
 	cloned := p.clone()
 	cloned.spec.Coord = coord.Fixed(ratio)
+
+	return cloned
+}
+
+// CoordTrans sets a Cartesian coordinate system with per-axis mathematical
+// transforms applied post-stat. Unlike scale transforms (e.g., scale.Log10)
+// which transform data before stat computations, CoordTrans transforms
+// the display without affecting statistics.
+func (p *Plot) CoordTrans(xtrans, ytrans coord.TransFunc) *Plot {
+	cloned := p.clone()
+	cloned.spec.Coord = coord.Trans(xtrans, ytrans)
 
 	return cloned
 }
@@ -917,8 +928,34 @@ type Layout struct {
 type PanelLayout struct {
 	Row    int
 	Col    int
+	RowVal string // raw row facet value (Grid only, "" for Wrap/None)
+	ColVal string // raw column facet value (Grid only, "" for Wrap/None)
 	XScale scale.Scale
 	YScale scale.Scale
+}
+
+// panelGridRow returns the grid row for a panel. For Grid facets (RowVal set),
+// it looks up the row index map. For Wrap/None it falls back to pi / cols.
+func panelGridRow(fp facet.Panel, idx map[string]int, pi, cols int) int {
+	if fp.RowVal != "" {
+		if r, ok := idx[fp.RowVal]; ok {
+			return r
+		}
+	}
+
+	return pi / cols
+}
+
+// panelGridCol returns the grid column for a panel. For Grid facets (ColVal set),
+// it looks up the column index map. For Wrap/None it falls back to pi % cols.
+func panelGridCol(fp facet.Panel, idx map[string]int, pi, cols int) int {
+	if fp.ColVal != "" {
+		if c, ok := idx[fp.ColVal]; ok {
+			return c
+		}
+	}
+
+	return pi % cols
 }
 
 // LayerData returns the resolved dataset for the given layer in the given panel.
@@ -1005,19 +1042,57 @@ func (p *Plot) Build(ctx context.Context) (*Built, error) {
 		cols = 1
 	}
 
-	// 2. Inject PANEL system column into each panel's dataset.
+	// 2. Build row/col index maps for grid placement.
+	// For Grid facets, panels carry RowVal/ColVal that determines grid position.
+	// Margins use "All" and appear in extra row/column at the end.
+	rowIndex := make(map[string]int) // RowVal → grid row
+	colIndex := make(map[string]int) // ColVal → grid col
+
+	for _, fp := range facetPanels {
+		if fp.RowVal != "" {
+			if _, ok := rowIndex[fp.RowVal]; !ok && fp.RowVal != facet.MarginLabel {
+				rowIndex[fp.RowVal] = len(rowIndex)
+			}
+		}
+
+		if fp.ColVal != "" {
+			if _, ok := colIndex[fp.ColVal]; !ok && fp.ColVal != facet.MarginLabel {
+				colIndex[fp.ColVal] = len(colIndex)
+			}
+		}
+	}
+
+	// Place "All" margin at the end if present.
+	for _, fp := range facetPanels {
+		if fp.RowVal == facet.MarginLabel {
+			if _, ok := rowIndex[facet.MarginLabel]; !ok {
+				rowIndex[facet.MarginLabel] = len(rowIndex)
+			}
+		}
+
+		if fp.ColVal == facet.MarginLabel {
+			if _, ok := colIndex[facet.MarginLabel]; !ok {
+				colIndex[facet.MarginLabel] = len(colIndex)
+			}
+		}
+	}
+
+	// 3. Inject PANEL system column into each panel's dataset.
 	eng := dataset.GetEngine(p.spec.Dataset.Table())
 
 	for pi := range facetPanels {
-		panelCol := dataset.ConstInt64Column(eng, ColPANEL, int64(pi), int(facetPanels[pi].Dataset.NumRows()))
+		panelCol := dataset.ConstInt64Column(eng, ColPANEL, int64(pi), facetPanels[pi].NumRows)
 		if panelCol != nil {
-			augmented, cerr := facetPanels[pi].Dataset.WithColumn(panelCol).Collect(ctx)
-			if cerr != nil {
-				return nil, Errorf(PhaseBuild, -1, "facet", cerr, "inject PANEL column")
-			}
-
-			facetPanels[pi].Dataset = augmented
+			facetPanels[pi].Dataset = facetPanels[pi].Dataset.WithColumn(panelCol)
 		}
+
+		// Single Collect materializes the lazy filter + PANEL column.
+		collected, cerr := facetPanels[pi].Dataset.Collect(ctx)
+		if cerr != nil {
+			return nil, Errorf(PhaseBuild, -1, "facet", cerr, "collect panel dataset")
+		}
+
+		facetPanels[pi].Dataset = collected
 	}
 
 	// 3. Build each facet panel (parallel when >1 panel).
@@ -1033,8 +1108,10 @@ func (p *Plot) Build(ctx context.Context) (*Built, error) {
 
 		builtPanels[0] = bp
 		panelLayouts[0] = PanelLayout{
-			Row:    0,
-			Col:    0,
+			Row:    panelGridRow(facetPanels[0], rowIndex, 0, cols),
+			Col:    panelGridCol(facetPanels[0], colIndex, 0, cols),
+			RowVal: facetPanels[0].RowVal,
+			ColVal: facetPanels[0].ColVal,
 			XScale: bp.XScale,
 			YScale: bp.YScale,
 		}
@@ -1050,8 +1127,10 @@ func (p *Plot) Build(ctx context.Context) (*Built, error) {
 
 				builtPanels[pi] = bp
 				panelLayouts[pi] = PanelLayout{
-					Row:    pi / cols,
-					Col:    pi % cols,
+					Row:    panelGridRow(panel, rowIndex, pi, cols),
+					Col:    panelGridCol(panel, colIndex, pi, cols),
+					RowVal: panel.RowVal,
+					ColVal: panel.ColVal,
 					XScale: bp.XScale,
 					YScale: bp.YScale,
 				}
@@ -1323,6 +1402,17 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 		}
 	}
 
+	// Apply coord post-stat transforms at the engine level (if coord
+	// implements Transformer). This transforms x/y data columns via the
+	// forward function before scale training — statistics have already
+	// run on raw data, but scales will now train on transformed values.
+	if tr, ok := p.spec.Coord.(coord.Transformer); ok {
+		for i := range resolved {
+			rl := &resolved[i]
+			rl.Data = applyCoordTransform(ctx, rl.Data, rl.Mapping, tr)
+		}
+	}
+
 	// Train scales and apply position adjustments (after categorical mapping).
 	xScale, yScale, xIsDiscrete, err := p.trainPanelScales(ctx, resolved, layerSpans)
 	if err != nil {
@@ -1332,6 +1422,19 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 	// Apply hint-aware axis formatters from pipeline transforms.
 	// Only applies if the user hasn't explicitly set a formatter via scale overrides.
 	xScale, yScale = applyHintFormatters(p, resolved, xScale, yScale, xIsDiscrete)
+
+	// Apply coord.Trans tick formatters so axis labels show original
+	// (inverse-transformed) values. The data is in transformed space but
+	// tick labels should display original data units.
+	if tr, ok := p.spec.Coord.(coord.Transformer); ok {
+		if xFmt := coordTickFormatter(tr.XTrans()); xFmt != nil {
+			xScale = scale.Configure(xScale, scale.WithFormatter(xFmt))
+		}
+
+		if yFmt := coordTickFormatter(tr.YTrans()); yFmt != nil {
+			yScale = scale.Configure(yScale, scale.WithFormatter(yFmt))
+		}
+	}
 
 	// Initialize non-position scales.
 	sizeScale := p.spec.SizeScale
@@ -2031,6 +2134,112 @@ func hintFormatter(hint stat.ChannelHint) func(float64) string {
 	return nil
 }
 
+// applyCoordTransform dispatches position columns to named [dataset.MathKernel]
+// operations (Log10, Log2, Sqrt, Neg) post-stat, pre-scale-training.
+func applyCoordTransform(ctx context.Context, ds dataset.Dataset, mapping AesMap, tr coord.Transformer) dataset.Dataset {
+	eng := dataset.GetEngine(ds)
+	mk, ok := eng.(dataset.MathKernel)
+
+	if !ok {
+		return ds
+	}
+
+	result := ds
+
+	xt := tr.XTrans()
+	if !xt.IsIdentity() {
+		for _, key := range [...]string{"x", "xmin", "xmax", "xend"} {
+			result = coordTransformColumn(result, mapping, key, xt.Name, mk)
+		}
+	}
+
+	yt := tr.YTrans()
+	if !yt.IsIdentity() {
+		for _, key := range [...]string{"y", "ymin", "ymax", "yend"} {
+			result = coordTransformColumn(result, mapping, key, yt.Name, mk)
+		}
+	}
+
+	if collected, err := result.Collect(ctx); err == nil {
+		return collected
+	}
+
+	return result
+}
+
+// coordTransformColumn dispatches a named transform to [dataset.MathKernel].
+func coordTransformColumn(ds dataset.Dataset, mapping AesMap, aesKey, name string, mk dataset.MathKernel) dataset.Dataset {
+	colName := mapping[aesKey]
+	if colName == "" {
+		return ds
+	}
+
+	col, err := ds.Column(colName)
+	if err != nil {
+		return ds
+	}
+
+	transformed, err := coordApplyKernel(mk, col, name)
+	if err != nil {
+		return ds
+	}
+
+	return ds.WithColumn(transformed)
+}
+
+// coordApplyKernel dispatches to native engine operations.
+func coordApplyKernel(mk dataset.MathKernel, col dataset.AnyColumn, name string) (dataset.AnyColumn, error) {
+	var (
+		result dataset.AnyColumn
+		err    error
+	)
+
+	switch name {
+	case "log10":
+		result, err = mk.Log10(col)
+	case "log2":
+		result, err = mk.Log2(col)
+	case "sqrt":
+		result, err = mk.Sqrt(col)
+	case "reverse":
+		result, err = mk.Neg(col)
+	default:
+		return nil, fmt.Errorf("coord transform %q: %w", name, ErrUnsupportedTransform)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("coord transform %q: %w", name, err)
+	}
+
+	return result, nil
+}
+
+// coordTickFormatter returns a scalar tick-label formatter that inverts
+// the transform back to data space. Returns nil for identity.
+func coordTickFormatter(t coord.TransFunc) func(float64) string {
+	switch t.Name {
+	case "log10":
+		return func(v float64) string { return coordFormatTick(math.Pow(10, v)) } //nolint:mnd // 10^v.
+	case "log2":
+		return func(v float64) string { return coordFormatTick(math.Exp2(v)) }
+	case "sqrt":
+		return func(v float64) string { return coordFormatTick(v * v) }
+	case "reverse":
+		return func(v float64) string { return coordFormatTick(-v) }
+	default:
+		return nil
+	}
+}
+
+// coordFormatTick formats a tick value, returning "" for non-finite values.
+func coordFormatTick(v float64) string {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return ""
+	}
+
+	return scale.FormatNumber(v)
+}
+
 // applyHintFormatters checks all pipeline layers for OutputHints and wraps the
 // X/Y scales with hint-based formatters. User-supplied formatter overrides are
 // respected — hints only apply when no explicit formatter is set.
@@ -2393,26 +2602,79 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 
 		cellW = panelW / float64(cols)
 		cellH = panelH / float64(rows)
-		row := pi / cols
-		col := pi % cols
-		dataX = mLeft + float64(col)*cellW
-		dataY = mTop + float64(row)*cellH
+
+		pl := b.layout.Panels[pi]
+
+		dataX = mLeft + float64(pl.Col)*cellW
+		dataY = mTop + float64(pl.Row)*cellH
 
 		// Facet strip label above each panel.
 		stripH := 0.0
-		if bp.Label != "" {
-			stripH = th.AxisTextElem().Size + 8
-			sr, sg, sb, _ := th.PanelBorder().Color.RGBA()
-			cv.SetRGBA(float64(sr)/65535.0, float64(sg)/65535.0, float64(sb)/65535.0, 0.25)
+		stripLabel := bp.Label
+
+		// For Grid facets with RowVal/ColVal, show column header on first
+		// row and row header on first column for cleaner grid layouts.
+
+		if pl.RowVal != "" && pl.ColVal != "" {
+			if pl.Row == 0 {
+				stripLabel = pl.ColVal
+			} else {
+				stripLabel = ""
+			}
+		}
+
+		if stripLabel != "" {
+			stripH = th.AxisTextElem().Size + 8 //nolint:mnd // Strip padding.
+
+			if border := th.PanelBorder(); border.Color != nil {
+				sr, sg, sb, _ := border.Color.RGBA()
+				cv.SetRGBA(float64(sr)/65535.0, float64(sg)/65535.0, float64(sb)/65535.0, 0.25) //nolint:mnd // Quarter-opacity strip background.
+			} else {
+				cv.SetRGBA(0.6, 0.6, 0.6, 0.15) //nolint:mnd // Fallback light-grey strip background.
+			}
+
 			cv.DrawRectangle(dataX, dataY, cellW, stripH)
 			cv.Fill()
 			cv.SetColor(th.AxisTitle().Color)
 			cv.SetFontSize(th.AxisTextElem().Size)
-			cv.DrawStringAnchored(bp.Label, dataX+cellW/2, dataY+stripH/2, 0.5, 0.5)
+			cv.DrawStringAnchored(stripLabel, dataX+cellW/2, dataY+stripH/2, 0.5, 0.5) //nolint:mnd // Centered anchor.
 		}
 
 		dataY += stripH
 		cellH -= stripH
+
+		// Right-side row strip label for Grid facets (last column only).
+		rowStripW := 0.0
+
+		if pl.RowVal != "" && pl.ColVal != "" {
+			if pl.Col == cols-1 {
+				rowStripW = th.AxisTextElem().Size + 8 //nolint:mnd // Strip padding.
+
+				if border := th.PanelBorder(); border.Color != nil {
+					sr, sg, sb, _ := border.Color.RGBA()
+					cv.SetRGBA(float64(sr)/65535.0, float64(sg)/65535.0, float64(sb)/65535.0, 0.25) //nolint:mnd // Quarter-opacity strip background.
+				} else {
+					cv.SetRGBA(0.6, 0.6, 0.6, 0.15) //nolint:mnd // Fallback light-grey strip background.
+				}
+
+				cv.DrawRectangle(dataX+cellW-rowStripW, dataY, rowStripW, cellH)
+				cv.Fill()
+				cv.SetColor(th.AxisTitle().Color)
+				cv.SetFontSize(th.AxisTextElem().Size)
+
+				// Draw rotated row label using Save/Translate/Rotate/Restore.
+				cx := dataX + cellW - rowStripW/2 //nolint:mnd // Centre X of strip.
+				cy := dataY + cellH/2             //nolint:mnd // Centre Y of strip.
+
+				cv.Save()
+				cv.Translate(cx, cy)
+				cv.Rotate(-math.Pi / 2)                          //nolint:mnd // 90° counter-clockwise.
+				cv.DrawStringAnchored(pl.RowVal, 0, 0, 0.5, 0.5) //nolint:mnd // Centred anchor.
+				cv.Restore()
+			}
+		}
+
+		cellW -= rowStripW
 
 		// Apply fixed aspect ratio if coord implements Fixer.
 		if f, ok := b.coord.(coord.Fixer); ok {
@@ -2482,8 +2744,8 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 
 		// Draw axes.
 		isMultiPanel := len(b.panels) > 1
-		isBottomRow := row == rows-1
-		isLeftCol := col == 0
+		isBottomRow := pl.Row == rows-1
+		isLeftCol := pl.Col == 0
 
 		if !isMultiPanel || isBottomRow {
 			drawXAxis(cv, renderXScale, renderXLabel, dataX, dataY+cellH, cellW, th, b.ndodgeX)
