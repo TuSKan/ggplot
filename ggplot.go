@@ -140,6 +140,7 @@ func (p *Plot) clone() *Plot {
 			XLim:           p.spec.XLim,
 			YLim:           p.spec.YLim,
 			LegendPosition: p.spec.LegendPosition,
+			AxisGuideX:     p.spec.AxisGuideX,
 		},
 	}
 }
@@ -339,6 +340,17 @@ func (p *Plot) ColorBarNBin(n int) *Plot {
 func (p *Plot) LegendCols(n int) *Plot {
 	cloned := p.clone()
 	cloned.spec.LegendNCols = n
+
+	return cloned
+}
+
+// AxisLabelRows controls the X-axis label layout. N sets the number of
+// stagger rows for tick labels. When n is 0 (default), overlapping labels
+// are automatically detected and staggered across 2 rows. Set n to 1 to
+// disable staggering. Values ≥ 2 force that many rows.
+func (p *Plot) AxisLabelRows(n int) *Plot {
+	cloned := p.clone()
+	cloned.spec.AxisGuideX.NDodge = n
 
 	return cloned
 }
@@ -820,6 +832,7 @@ type Built struct {
 	theme     theme.Theme
 	labels    Labels
 	legendPos string
+	ndodgeX   int // X-axis label dodge rows (0 = auto, 1 = no dodge, ≥ 2 = forced)
 }
 
 // BuiltLayer holds one resolved layer's data after stat transform and grouping.
@@ -1024,6 +1037,7 @@ func (p *Plot) Build(ctx context.Context) (*Built, error) {
 		theme:     th,
 		labels:    p.spec.Labels,
 		legendPos: p.spec.LegendPosition,
+		ndodgeX:   p.spec.AxisGuideX.NDodge,
 	}, nil
 }
 
@@ -2106,7 +2120,78 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 			mTop = 15.0
 			mRight = 20.0
 			mBottom = 15.0 + th.AxisTextElem().Size + th.Spacing.TickLength + 14
+
+			// When axis labels are rotated, their projected height can be
+			// much larger than the raw font size. Measure the worst-case
+			// rotated label extent for accurate bottom margin.
+			xAngle := th.AxisTextElem().Angle
+			if xAngle != 0 {
+				// Measure the widest X-axis tick label.
+				bottomAxisScale := xScale
+				if allLayersHorizontal(builtLayersToLayerSpecs(bp.Layers)) {
+					bottomAxisScale = yScale
+				}
+
+				cv.SetFontSize(th.AxisTextElem().Size)
+
+				maxXLabelW := 0.0
+
+				for _, v := range bottomAxisScale.Ticks(5) {
+					tw, _ := cv.MeasureString(bottomAxisScale.Format(v))
+					if tw > maxXLabelW {
+						maxXLabelW = tw
+					}
+				}
+
+				rad := xAngle * math.Pi / 180 //nolint:mnd // degrees-to-radians conversion.
+				rotH := math.Abs(maxXLabelW*math.Sin(rad)) + math.Abs(th.AxisTextElem().Size*math.Cos(rad))
+				mBottom = 15.0 + rotH + th.Spacing.TickLength + 14
+			}
+
 			mLeft = 15.0 + maxTickW + th.Spacing.TickLength + 10
+
+			// When axis labels are dodged across multiple rows, the
+			// bottom margin must grow by (nRows−1) × rowHeight.
+			dodgeRowH := th.AxisTextElem().Size + 4 //nolint:mnd // Must match rowHeight in drawXAxis.
+			if b.ndodgeX >= 2 {
+				mBottom += float64(b.ndodgeX-1) * dodgeRowH
+			} else if b.ndodgeX == 0 {
+				// Auto-dodge: measure whether labels will overlap.
+				// If so, predict 2-row stagger and reserve space.
+				bottomAxisScale := xScale
+				if allLayersHorizontal(builtLayersToLayerSpecs(bp.Layers)) {
+					bottomAxisScale = yScale
+				}
+
+				cv.SetFontSize(th.AxisTextElem().Size)
+
+				ticks := bottomAxisScale.Ticks(5)
+
+				const labelGap = 4
+
+				overlaps := false
+
+				if len(ticks) >= 2 {
+					// Estimate pixel positions assuming uniform spacing.
+					plotW := float64(width) - mLeft - mRight
+
+					for j := 1; j < len(ticks); j++ {
+						prevW, _ := cv.MeasureString(bottomAxisScale.Format(ticks[j-1]))
+						currW, _ := cv.MeasureString(bottomAxisScale.Format(ticks[j]))
+						spacing := plotW / float64(len(ticks)-1)
+
+						if spacing < (prevW+currW)/2+labelGap {
+							overlaps = true
+
+							break
+						}
+					}
+				}
+
+				if overlaps {
+					mBottom += dodgeRowH // auto-dodge adds 1 extra row (2 total)
+				}
+			}
 
 			if b.labels.Title != "" {
 				mTop += th.PlotTitle().Size + 8
@@ -2280,7 +2365,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		isLeftCol := col == 0
 
 		if !isMultiPanel || isBottomRow {
-			drawXAxis(cv, renderXScale, renderXLabel, dataX, dataY+cellH, cellW, th)
+			drawXAxis(cv, renderXScale, renderXLabel, dataX, dataY+cellH, cellW, th, b.ndodgeX)
 		}
 
 		if !isMultiPanel || isLeftCol {
@@ -2474,7 +2559,7 @@ func builtLayersToLayerSpecs(layers []BuiltLayer) []LayerSpec {
 // ---------------------------------------------------------------------------
 // Guide rendering (axes, grid, legend, color bar)
 // ---------------------------------------------------------------------------
-func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, th theme.Theme) {
+func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, th theme.Theme, ndodge int) {
 	ticks := sc.Ticks(5)
 	tickLen := th.Spacing.TickLength
 	r, g, b, _ := rgbaOf(th.AxisTicks().Color)
@@ -2488,7 +2573,23 @@ func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, 
 
 	xMin, xMax := sc.Bounds()
 	angle := th.AxisTextElem().Angle
-	labelY := y + tickLen + 12 //nolint:mnd // Tick-to-label gap in pixels.
+	fontSize := th.AxisTextElem().Size
+	baseLabelY := y + tickLen + 12 //nolint:mnd // Tick-to-label gap in pixels.
+
+	// Pre-measure all label pixel positions and widths for overlap detection.
+	type tickLabel struct {
+		v       float64
+		frac    float64
+		px      float64 // center x in pixels
+		lbl     string
+		lblW    float64 // measured text width
+		visible bool
+	}
+
+	cv.SetFontSize(fontSize)
+	cv.SetTabularNums(true)
+
+	labels := make([]tickLabel, 0, len(ticks))
 
 	for _, v := range ticks {
 		frac := (v - xMin) / (xMax - xMin)
@@ -2497,26 +2598,113 @@ func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, 
 		}
 
 		px := x + frac*w
+		lbl := sc.Format(v)
+		tw, _ := cv.MeasureString(lbl)
 
-		// Tick mark.
+		labels = append(labels, tickLabel{
+			v:    v,
+			frac: frac,
+			px:   px,
+			lbl:  lbl,
+			lblW: tw,
+		})
+	}
+
+	cv.SetTabularNums(false)
+
+	// Auto-dodge: when ndodge == 0, detect overlapping labels and enable
+	// 2-row staggering if any pair of adjacent labels would collide.
+	effectiveNDodge := ndodge
+	if effectiveNDodge == 0 && angle == 0 {
+		// Check for overlaps in a single-row layout.
+		const labelGap = 4 // minimum px between adjacent labels
+
+		for i := 1; i < len(labels); i++ {
+			prevRight := labels[i-1].px + labels[i-1].lblW/2
+			currLeft := labels[i].px - labels[i].lblW/2
+
+			if currLeft-prevRight < labelGap {
+				effectiveNDodge = 2 //nolint:mnd // Auto-dodge to 2 rows on overlap.
+
+				break
+			}
+		}
+	}
+
+	// Mark all labels as visible, then skip overlapping ones within each
+	// dodge row. This ensures labels don't collide even after staggering.
+	for i := range labels {
+		labels[i].visible = true
+	}
+
+	if angle == 0 {
+		const labelGap = 4
+
+		nRows := max(effectiveNDodge, 1)
+
+		// Track the last visible label per dodge row.
+		lastVisible := make([]int, nRows)
+		for i := range lastVisible {
+			lastVisible[i] = -1
+		}
+
+		for i := range labels {
+			row := 0
+			if nRows > 1 {
+				row = i % nRows
+			}
+
+			prev := lastVisible[row]
+			if prev >= 0 {
+				prevRight := labels[prev].px + labels[prev].lblW/2
+				currLeft := labels[i].px - labels[i].lblW/2
+
+				if currLeft-prevRight < labelGap {
+					labels[i].visible = false
+
+					continue
+				}
+			}
+
+			lastVisible[row] = i
+		}
+	}
+
+	// Draw tick marks and labels.
+	rowHeight := fontSize + 4 //nolint:mnd // Per-row spacing for dodged labels.
+
+	for i, tl := range labels {
+		// Tick mark — always drawn.
 		cv.SetRGBA(r, g, b, 1)
-		cv.DrawLine(px, y, px, y+tickLen)
+		cv.DrawLine(tl.px, y, tl.px, y+tickLen)
 		cv.Stroke()
+
+		if !tl.visible {
+			continue
+		}
+
+		// Determine Y offset for this label's dodge row.
+		labelY := baseLabelY
+
+		if effectiveNDodge >= 2 {
+			row := i % effectiveNDodge
+			labelY += float64(row) * rowHeight
+		}
 
 		// Label.
 		cv.SetRGBA(tr, tg, tb, 1)
-		cv.SetFontSize(th.AxisTextElem().Size)
+		cv.SetFontSize(fontSize)
 		cv.SetTabularNums(true)
 
 		if angle != 0 {
 			cv.Save()
-			cv.Translate(px, labelY)
+			cv.Translate(tl.px, labelY)
 			cv.Rotate(angle * math.Pi / 180) //nolint:mnd // degrees-to-radians conversion.
 			// Right-aligned anchor for rotated text so labels don't overlap the axis.
-			cv.DrawStringAnchored(sc.Format(v), 0, 0, 1.0, 0.5)
+			cv.DrawStringAnchored(tl.lbl, 0, 0, 1.0, 0.5)
 			cv.Restore()
 		} else {
-			cv.DrawStringAnchored(sc.Format(v), px, labelY, 0.5, 0.5)
+			cv.DrawStringAnchored(tl.lbl, tl.px, labelY, 0.5, 0.5)
 		}
 
 		cv.SetTabularNums(false)
@@ -2527,7 +2715,14 @@ func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, 
 		lr, lg, lb, _ := rgbaOf(th.AxisTitle().Color)
 		cv.SetRGBA(lr, lg, lb, 1)
 		cv.SetFontSize(th.AxisTitle().Size)
-		cv.DrawStringAnchored(label, x+w/2, y+tickLen+28, 0.5, 0.5)
+
+		// Push title below the last dodge row.
+		titleGapY := tickLen + 28 //nolint:mnd // Tick-to-title gap in pixels.
+		if effectiveNDodge >= 2 {
+			titleGapY += float64(effectiveNDodge-1) * rowHeight
+		}
+
+		cv.DrawStringAnchored(label, x+w/2, y+titleGapY, 0.5, 0.5)
 	}
 }
 

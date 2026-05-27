@@ -32,6 +32,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - `docs/ROADMAP.md` Phase 8 marked as 🔶 (partially complete): 13 of 17 items shipped; remaining items: Contour, Hex, Jitter, Raster.
+
+#### Axis Label Dodge (Phase 5b)
+- **`Plot.AxisLabelRows(n)`** — auto-detect overlapping X-axis labels and stagger across `n` rows. When `n=0` (default), overlap is measured and labels are auto-staggered to 2 rows when collisions are detected. `n=1` disables staggering; `n≥2` forces that many rows.
+- **X-axis overlap skipping** — within each dodge row, labels that would still overlap are hidden (tick marks remain visible).
+- **Rotated label margin fix** — bottom margin now accounts for projected label height when `ElementText.Angle ≠ 0`, preventing label clipping.
+- **`AxisGuide` type** — new struct in `spec.go` carrying axis guide configuration.
+
+#### Dense Pixel Grid (Phase 8)
+- **`geom.Raster()`** — dense pixel-aligned image grid geometry. Composites all cells into a single `image.RGBA` and renders via `Canvas.DrawImage` with native `Save/Translate/ScaleXY/DrawImage/Restore` transform-based compositing — GPU texture sampler handles upscaling (zero Go-side pixel loops).
+- **`geom.WithInterpolate(bool)`** — option for bilinear interpolation (reserved for canvas-level control; currently both paths use native canvas sampling).
+- **`geom.TypeRaster`**, **`geom.OptInterpolate`** — type constant and option flag.
 ## [0.0.8] — 2026-05-24
 
 ### Added

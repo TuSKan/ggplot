@@ -63,6 +63,9 @@ type PlotSpec struct {
 	// LegendPosition controls where the legend is drawn.
 	LegendPosition string
 
+	// AxisGuideX controls X-axis label layout (dodging, overlap handling).
+	AxisGuideX AxisGuide
+
 	// ColorBarWidth sets the width of the continuous color bar in pixels.
 	// Zero means default (12px).
 	ColorBarWidth float64
@@ -123,4 +126,15 @@ type Labels struct {
 	X        string
 	Y        string
 	Caption  string
+}
+
+// AxisGuide controls axis label layout — dodging, overlap handling,
+// and rotation for dense categorical axes.
+//
+// NDodge sets the number of stagger rows for axis tick labels.
+// When NDodge is 0, the renderer auto-detects overlapping labels and
+// staggers them across 2 rows. Set NDodge to 1 to disable dodging.
+// Values ≥ 2 force that many stagger rows.
+type AxisGuide struct {
+	NDodge int
 }

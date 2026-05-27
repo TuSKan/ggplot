@@ -252,7 +252,7 @@ The public extension API — implemented via Go interfaces + registration, not g
 - ✅ **`scale.Binned`** — discretize continuous axes into range-labeled bins; auto (Sturges) or explicit bin count via `scale.WithBins(n)`; explicit edges via `scale.WithBinBreaks([]float64)`; `Format()` shows `[lo, hi)` range labels
 - ✅ **Out-of-bounds (oob) policies** — `scale.WithOOB(OOBKeep | OOBSquish | OOBCensor)` per ggplot2 Ch.14.4; composable with `WithClipBounds`
 - 🔲 **Secondary axes** — `SecAxis()` / `DupAxis()` for dual Y. Requires dual-axis layout (right margin, second tick column) — straightforward once `Built.Layout` exists
-- 🔲 **`guide_axis(n.dodge)`** — rotated/dodged labels for dense categorical axes (consumes ElementText.Angle and inheritance)
+- ✅ **`AxisLabelRows(n)`** — auto-detect overlapping X-axis labels and stagger across n rows; rotated label support via `ElementText.Angle`; overlap skipping within dodge rows
 
 ---
 
@@ -324,7 +324,7 @@ The public extension API — implemented via Go interfaces + registration, not g
 - 🔲 `geom.Jitter` (full) — random displacement; deterministic via injectable `rand.Source` *(see also Phase 13: `position.Jitter`)*
 
 **Remaining — Pixel grid:**
-- 🔲 `geom.Raster` — dense pixel-aligned image grid (distinct from Tile: raster takes a matrix, tile takes row-per-cell)
+- ✅ `geom.Raster` — dense pixel-aligned image grid; native canvas transform compositing (`Save/Translate/ScaleXY/DrawImage/Restore`) for GPU-accelerated upscaling; bilinear interpolation via `WithInterpolate(true)`; half-cell padding for correct grid alignment
 
 ---
 

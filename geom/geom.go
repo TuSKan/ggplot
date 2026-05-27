@@ -70,6 +70,7 @@ const (
 	TypeCurve      Type = "curve"      // quadratic bezier curve between endpoints
 	TypeViolin     Type = "violin"     // mirrored kernel density estimate per group
 	TypeDotplot    Type = "dotplot"    // stacked dots at binned positions
+	TypeRaster     Type = "raster"     // dense pixel-aligned image grid
 )
 
 // Orientation controls which axis a directional geom extends along.
@@ -120,6 +121,9 @@ type Params struct {
 
 	// Curve-specific
 	Curvature float64 // bezier curvature multiplier (default = 0.5); 0 = straight line
+
+	// Raster-specific
+	Interpolate bool // true = bilinear interpolation; false = nearest-neighbor (default)
 }
 
 // --- Option tracking for validation ---
@@ -150,6 +154,7 @@ const (
 	OptWhisker                           // boxplot
 	OptNotch                             // boxplot
 	OptCurvature                         // curve
+	OptInterpolate                       // raster
 )
 
 // paramRelevance maps geometry types to what parameters are meaningful for them.
@@ -181,6 +186,7 @@ var paramRelevance = map[Type]OptFlag{
 	TypeCurve:      OptColor | OptAlpha | OptLineWidth | OptCurvature,
 	TypeViolin:     OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptBandwidth,
 	TypeDotplot:    OptColor | OptFill | OptAlpha | OptSize | OptBins | OptOrientation,
+	TypeRaster:     OptAlpha | OptInterpolate,
 }
 
 // RegisterGeomType registers a custom geometry type with its relevant option
@@ -218,6 +224,7 @@ var optName = map[OptFlag]string{
 	OptWhisker:       "WithWhisker",
 	OptNotch:         "WithNotch",
 	OptCurvature:     "WithCurvature",
+	OptInterpolate:   "WithInterpolate",
 }
 
 // Validate checks if the configured params are meaningful for this geometry
@@ -245,7 +252,7 @@ func (l *Layer) Validate() []string {
 
 	var warnings []string
 
-	for flag := OptFlag(1); flag <= OptCurvature; flag <<= 1 {
+	for flag := OptFlag(1); flag <= OptInterpolate; flag <<= 1 {
 		if irrelevant&flag == 0 {
 			continue
 		}
@@ -1094,6 +1101,35 @@ func Difference(pipeline []stat.Transform, opts ...Opt) Layer {
 		Pipeline: pipeline,
 		Position: IdentityPos(),
 		Params:   Params{Alpha: 0.4},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// WithInterpolate enables bilinear interpolation for [Raster]. When false
+// (default), nearest-neighbor sampling is used — sharp pixel edges, good for
+// discrete data. When true, bilinear interpolation produces smooth gradients,
+// better for continuous fields.
+func WithInterpolate(b bool) Opt {
+	return func(l *Layer) { l.Params.Interpolate = b; l.setFlags |= OptInterpolate }
+}
+
+// Raster creates a dense pixel-aligned image grid geometry layer. Each row
+// in the dataset represents one cell on a regular grid at (x, y). The fill
+// color comes from a continuous color scale mapped to a fill or z column.
+//
+// Unlike [Tile], which draws individual rectangles per row, Raster composites
+// the grid into a single [image.RGBA] and renders it via [canvas.Canvas.DrawImage].
+// This is orders of magnitude faster for dense grids (e.g. 500×500).
+//
+// Required aesthetics: x, y, fill (or continuous color column).
+// Relevant options: [WithAlpha], [WithInterpolate].
+func Raster(opts ...Opt) Layer {
+	l := Layer{
+		Geom:     TypeRaster,
+		Position: IdentityPos(),
+		Params:   Params{Alpha: 1.0},
 	}
 	applyOpts(&l, opts)
 

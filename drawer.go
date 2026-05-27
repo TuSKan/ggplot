@@ -9,6 +9,8 @@ package ggplot
 
 import (
 	"fmt"
+	"image"
+	"image/color"
 	"math"
 	"sort"
 	"strconv"
@@ -99,6 +101,7 @@ func init() {
 	RegisterDrawer(geom.TypeCurve, DrawerFunc(drawCurveFn))
 	RegisterDrawer(geom.TypeViolin, DrawerFunc(drawViolinFn))
 	RegisterDrawer(geom.TypeDotplot, DrawerFunc(drawDotplotFn))
+	RegisterDrawer(geom.TypeRaster, DrawerFunc(drawRasterFn))
 }
 
 // drawLayer dispatches rendering to the registered Drawer for the layer's geom type.
@@ -2010,4 +2013,159 @@ func drawDotplotFn(dc DrawContext) {
 		dc.Canvas.DrawCircle(px, py, sz)
 		dc.Canvas.Stroke()
 	}
+}
+
+// drawRasterFn renders a dense pixel-aligned image grid. Each row in the
+// dataset is a cell at (x, y) with a fill value mapped through the continuous
+// color scale. The grid is composited as a single image.RGBA rather than
+// drawing individual rectangles (much faster for dense grids like 500×500).
+func drawRasterFn(dc DrawContext) {
+	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
+	xVals, errX := dc.Data.Float64(xCol)
+	yVals, errY := dc.Data.Float64(yCol)
+
+	if errX != nil || errY != nil || len(xVals) == 0 {
+		return
+	}
+
+	n := min(len(xVals), len(yVals))
+	if n == 0 {
+		return
+	}
+
+	// Read continuous color column.
+	var zVals []float64
+	if dc.ContColorCol != "" {
+		zVals, _ = dc.Data.Float64(dc.ContColorCol)
+	}
+
+	if len(zVals) == 0 || dc.ContScale == nil {
+		return // raster requires continuous fill values and a color scale
+	}
+
+	alpha := dc.Params.Alpha
+	if alpha <= 0 {
+		alpha = 1.0
+	}
+
+	alphaU8 := uint8(alpha * 255) //nolint:mnd // Alpha is clamped [0,1]; 255 is max uint8.
+
+	// Detect grid: find unique sorted x and y values.
+	xSet := make(map[float64]struct{}, n)
+	ySet := make(map[float64]struct{}, n)
+
+	for i := range n {
+		xSet[xVals[i]] = struct{}{}
+		ySet[yVals[i]] = struct{}{}
+	}
+
+	sortedX := make([]float64, 0, len(xSet))
+	for v := range xSet {
+		sortedX = append(sortedX, v)
+	}
+
+	sort.Float64s(sortedX)
+
+	sortedY := make([]float64, 0, len(ySet))
+	for v := range ySet {
+		sortedY = append(sortedY, v)
+	}
+
+	sort.Float64s(sortedY)
+
+	nx := len(sortedX)
+	ny := len(sortedY)
+
+	if nx == 0 || ny == 0 {
+		return
+	}
+
+	// Build reverse lookup: value → index.
+	xIdx := make(map[float64]int, nx)
+	for i, v := range sortedX {
+		xIdx[v] = i
+	}
+
+	yIdx := make(map[float64]int, ny)
+	for i, v := range sortedY {
+		yIdx[v] = i
+	}
+
+	// Build the raster image — (nx, ny), Y=0 is top (highest data y).
+	img := image.NewRGBA(image.Rect(0, 0, nx, ny))
+
+	// Fill with transparent initially.
+	for i := range img.Pix {
+		img.Pix[i] = 0
+	}
+
+	cm := dc.ContScale
+
+	for i := range n {
+		ix, okX := xIdx[xVals[i]]
+		iy, okY := yIdx[yVals[i]]
+
+		if !okX || !okY || i >= len(zVals) {
+			continue
+		}
+
+		gc := cm.At(zVals[i])
+		r := uint8(gc.R * 255) //nolint:mnd // Normalized [0,1] → [0,255].
+		g := uint8(gc.G * 255) //nolint:mnd // Normalized [0,1] → [0,255].
+		b := uint8(gc.B * 255) //nolint:mnd // Normalized [0,1] → [0,255].
+
+		// Invert Y: highest data y → row 0 (top of image).
+		imgY := ny - 1 - iy
+		img.SetRGBA(ix, imgY, color.RGBA{R: r, G: g, B: b, A: alphaU8})
+	}
+
+	// Compute screen rectangle covering the data extent.
+	nxMin := normalize(sortedX[0], dc.XMin, dc.XMax)
+	nxMax := normalize(sortedX[nx-1], dc.XMin, dc.XMax)
+	nyMin := normalize(sortedY[0], dc.YMin, dc.YMax)
+	nyMax := normalize(sortedY[ny-1], dc.YMin, dc.YMax)
+
+	// Add half-cell padding so pixels are centered on data points.
+	if nx > 1 {
+		halfCellX := (nxMax - nxMin) / float64(nx-1) / 2
+		nxMin -= halfCellX
+		nxMax += halfCellX
+	} else {
+		// Single column: expand to a visible width.
+		nxMin = 0
+		nxMax = 1
+	}
+
+	if ny > 1 {
+		halfCellY := (nyMax - nyMin) / float64(ny-1) / 2
+		nyMin -= halfCellY
+		nyMax += halfCellY
+	} else {
+		nyMin = 0
+		nyMax = 1
+	}
+
+	// Transform to pixel coordinates.
+	px0, py0 := dc.Coord.Transform(nxMin, nyMax, dc.W, dc.H)
+	px1, py1 := dc.Coord.Transform(nxMax, nyMin, dc.W, dc.H)
+
+	destW := math.Abs(px1 - px0)
+	destH := math.Abs(py1 - py0)
+	destX := math.Min(px0, px1)
+	destY := math.Min(py0, py1)
+
+	if destW < 1 || destH < 1 {
+		return
+	}
+
+	// Composite via native canvas transforms: the gg backend's DrawImage
+	// respects the current transform matrix, so ScaleXY lets the GPU
+	// texture sampler (or gg's internal rasterizer) handle upscaling.
+	// This avoids a Go-side pixel loop and enables GPU acceleration
+	// on the window surface.
+	dc.Canvas.Save()
+	dc.Canvas.Translate(destX, destY)
+	dc.Canvas.ScaleXY(destW/float64(nx), destH/float64(ny))
+	dc.Canvas.DrawImage(img, 0, 0)
+	dc.Canvas.Restore()
 }

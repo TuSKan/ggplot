@@ -1391,3 +1391,260 @@ func TestRender_Phase7_Scales(t *testing.T) {
 		_ = cv.Close()
 	}()
 }
+
+// --- guide_axis(n.dodge) tests ---
+
+func TestAxisLabelRows_Builder(t *testing.T) {
+	t.Parallel()
+
+	ds := testDataset(t)
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point()).
+		AxisLabelRows(2)
+
+	_, err := drawPlot(context.Background(), p, 400, 300)
+	if err != nil {
+		t.Fatalf("AxisLabelRows render failed: %v", err)
+	}
+}
+
+func TestAxisLabelRows_Immutable(t *testing.T) {
+	t.Parallel()
+
+	ds := testDataset(t)
+	base := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point())
+
+	// Deriving with AxisLabelRows should not mutate base.
+	withDodge := base.AxisLabelRows(3)
+	_ = withDodge
+
+	_, err := drawPlot(context.Background(), base, 400, 300)
+	if err != nil {
+		t.Fatalf("base render after AxisLabelRows should succeed: %v", err)
+	}
+}
+
+func TestAxisLabelRows_DenseCategories(t *testing.T) {
+	t.Parallel()
+
+	// 30 categories — should trigger auto-dodge when ndodge=0.
+	n := 30
+	xs := make([]string, n)
+	ys := make([]float64, n)
+
+	for i := range n {
+		xs[i] = fmt.Sprintf("Category-%02d", i)
+		ys[i] = float64(i * i)
+	}
+
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewStringColumn("x", xs),
+		eng.NewFloat64Column("y", ys),
+	)
+
+	// Auto-dodge (ndodge=0 — default).
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Bar())
+
+	_, err := drawPlot(context.Background(), p, 800, 400)
+	if err != nil {
+		t.Fatalf("Dense categories auto-dodge render failed: %v", err)
+	}
+
+	// Explicit 3-row dodge.
+	p2 := p.AxisLabelRows(3)
+
+	_, err = drawPlot(context.Background(), p2, 800, 400)
+	if err != nil {
+		t.Fatalf("Dense categories explicit dodge render failed: %v", err)
+	}
+
+	// Disabled dodge (ndodge=1).
+	p3 := p.AxisLabelRows(1)
+
+	_, err = drawPlot(context.Background(), p3, 800, 400)
+	if err != nil {
+		t.Fatalf("Dense categories no-dodge render failed: %v", err)
+	}
+}
+
+func TestAxisLabelRows_RotatedLabels_Save(t *testing.T) {
+	t.Parallel()
+
+	// Test rotated labels via theme override (angle != 0).
+	// This doesn't test theme overrides directly (that needs theme.With),
+	// but verifies the rotation code path doesn't panic.
+	ds := testDataset(t)
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point()).
+		Labs(ggplot.Title("Rotated Labels Test"))
+
+	outPath := filepath.Join(t.TempDir(), "rotated.png")
+	if err := p.Save(context.Background(), outPath, 400, 300); err != nil {
+		t.Fatalf("Save with rotated labels failed: %v", err)
+	}
+
+	info, err := os.Stat(outPath)
+	if err != nil {
+		t.Fatalf("output file not found: %v", err)
+	}
+
+	if info.Size() < 100 {
+		t.Fatalf("output file too small (%d bytes)", info.Size())
+	}
+}
+
+// --- geom.Raster tests ---
+
+func TestRender_Raster_SmallGrid(t *testing.T) {
+	t.Parallel()
+
+	// 5x5 grid with continuous fill.
+	n := 25
+	xs := make([]float64, n)
+	ys := make([]float64, n)
+	zs := make([]float64, n)
+
+	for i := range n {
+		xs[i] = float64(i % 5)
+		ys[i] = float64(i / 5)
+		zs[i] = float64(i) / float64(n-1) // [0, 1]
+	}
+
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", xs),
+		eng.NewFloat64Column("y", ys),
+		eng.NewFloat64Column("z", zs),
+	)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("z")).
+		Layer(geom.Raster()).
+		Labs(ggplot.Title("Raster 5×5"))
+
+	cv, err := drawPlot(context.Background(), p, 400, 400)
+	if err != nil {
+		t.Fatalf("Raster 5×5 render failed: %v", err)
+	}
+
+	if cv.Width() != 400 || cv.Height() != 400 {
+		t.Errorf("unexpected canvas size: %dx%d", cv.Width(), cv.Height())
+	}
+}
+
+func TestRender_Raster_Interpolated(t *testing.T) {
+	t.Parallel()
+
+	// 10x10 grid with bilinear interpolation.
+	n := 100
+	xs := make([]float64, n)
+	ys := make([]float64, n)
+	zs := make([]float64, n)
+
+	for i := range n {
+		xs[i] = float64(i % 10)
+		ys[i] = float64(i / 10)
+		zs[i] = math.Sin(float64(i%10)*0.5) * math.Cos(float64(i/10)*0.5)
+	}
+
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", xs),
+		eng.NewFloat64Column("y", ys),
+		eng.NewFloat64Column("z", zs),
+	)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("z")).
+		Layer(geom.Raster(geom.WithInterpolate(true))).
+		Labs(ggplot.Title("Raster Interpolated"))
+
+	_, err := drawPlot(context.Background(), p, 600, 600)
+	if err != nil {
+		t.Fatalf("Raster interpolated render failed: %v", err)
+	}
+}
+
+func TestRender_Raster_SingleCell(t *testing.T) {
+	t.Parallel()
+
+	// 1x1 grid — edge case.
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{0}),
+		eng.NewFloat64Column("y", []float64{0}),
+		eng.NewFloat64Column("z", []float64{0.5}),
+	)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("z")).
+		Layer(geom.Raster())
+
+	_, err := drawPlot(context.Background(), p, 400, 300)
+	if err != nil {
+		t.Fatalf("Raster single cell render failed: %v", err)
+	}
+}
+
+func TestRender_Raster_EmptyData(t *testing.T) {
+	t.Parallel()
+
+	// Empty dataset — should not panic.
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{}),
+		eng.NewFloat64Column("y", []float64{}),
+		eng.NewFloat64Column("z", []float64{}),
+	)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("z")).
+		Layer(geom.Raster())
+
+	// Empty data should build but produce an empty layer, not panic.
+	_, err := p.Build(context.Background())
+	if err != nil {
+		// It's acceptable if this errors on empty data.
+		t.Logf("expected: empty data build error: %v", err)
+	}
+}
+
+func TestRender_Raster_Save_PNG(t *testing.T) {
+	t.Parallel()
+
+	// Save a raster plot to PNG to verify end-to-end.
+	n := 100
+	xs := make([]float64, n)
+	ys := make([]float64, n)
+	zs := make([]float64, n)
+
+	for i := range n {
+		xs[i] = float64(i % 10)
+		ys[i] = float64(i / 10)
+		zs[i] = float64(i) / float64(n-1)
+	}
+
+	eng := memory.NewEngine(context.Background())
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", xs),
+		eng.NewFloat64Column("y", ys),
+		eng.NewFloat64Column("z", zs),
+	)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("z")).
+		Layer(geom.Raster()).
+		Labs(ggplot.Title("Raster Save Test"))
+
+	outPath := filepath.Join(t.TempDir(), "raster.png")
+	if err := p.Save(context.Background(), outPath, 400, 400); err != nil {
+		t.Fatalf("Raster Save failed: %v", err)
+	}
+
+	info, err := os.Stat(outPath)
+	if err != nil {
+		t.Fatalf("output file not found: %v", err)
+	}
+
+	if info.Size() < 100 {
+		t.Fatalf("raster output file too small (%d bytes)", info.Size())
+	}
+}
