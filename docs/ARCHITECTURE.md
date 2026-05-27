@@ -37,7 +37,8 @@ github.com/TuSKan/ggplot
 │
 ├── ggplot.go            # Plot builder API, Build/Draw pipeline orchestrator
 ├── errors.go            # Typed error envelope: *Error{Phase, Layer, Stage, Cause}
-├── drawer.go            # Geometry drawing: drawPoint, drawLine, drawBar, drawBoxplot, drawRaster, …
+├── drawer.go            # Geometry drawing: drawPoint, drawLine, drawBar, drawBoxplot, drawRaster, drawAnnotation*, …
+├── annotate.go          # Annotation API: AnnotateText, AnnotateRect, AnnotateSegment, AnnotateArrow, AnnotateLabel
 ├── spec.go              # PlotSpec, Labels, AxisGuide, RenderOpt, WithCPU()
 ├── util.go              # Shared helpers (normalize, resolveColor, …)
 │
@@ -47,8 +48,8 @@ github.com/TuSKan/ggplot
 │   ├── geom.go          #   Point, Line, Step, Bar, Col, Histogram, Area, Density, Rug,
 │   │                    #   HLine, VLine, Text, BoxPlot, Smooth, Tile, Segment, ErrorBar,
 │   │                    #   Polygon, Ribbon, Difference, Crossbar, Linerange, Pointrange,
-│   │                    #   Curve, Violin, Dotplot, Raster + functional options
-│   ├── position.go      #   Pos interface: Identity, Dodge, Stack, Jitter, Nudge
+│   │                    #   Curve, Violin, Dotplot, Raster, JitterPoint + functional options
+│   ├── position.go      #   Pos interface: Identity, Dodge, Stack, Fill, Jitter (with WithSeed), Nudge
 │   └── shim_test.go     #   Sugar ≡ pipeline equivalence tests
 │
 ├── stat/                # Statistical transformations (stat.Transform interface)

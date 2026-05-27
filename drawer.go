@@ -2169,3 +2169,296 @@ func drawRasterFn(dc DrawContext) {
 	dc.Canvas.DrawImage(img, 0, 0)
 	dc.Canvas.Restore()
 }
+
+// ---------------------------------------------------------------------------
+// Annotations — fixed-coordinate visual elements drawn after data layers
+// ---------------------------------------------------------------------------
+
+// drawAnnotation dispatches rendering for a single [Annotation] in data space.
+// Annotations bypass the data pipeline; their coordinates are normalized
+// against the panel's trained scale bounds and transformed through the
+// active coordinate system.
+func drawAnnotation(
+	cv canvas.Canvas,
+	c coord.Coord,
+	ann *Annotation,
+	w, h, xMin, xMax, yMin, yMax float64,
+	th theme.Theme,
+) {
+	switch ann.Type {
+	case AnnotationText:
+		drawAnnotationText(cv, c, ann, w, h, xMin, xMax, yMin, yMax, th)
+	case AnnotationRect:
+		drawAnnotationRect(cv, c, ann, w, h, xMin, xMax, yMin, yMax)
+	case AnnotationSegment:
+		drawAnnotationSegment(cv, c, ann, w, h, xMin, xMax, yMin, yMax)
+	case AnnotationArrow:
+		drawAnnotationArrow(cv, c, ann, w, h, xMin, xMax, yMin, yMax)
+	case AnnotationLabel:
+		drawAnnotationLabel(cv, c, ann, w, h, xMin, xMax, yMin, yMax, th)
+	}
+}
+
+// drawAnnotationText renders a text annotation at fixed data coordinates.
+func drawAnnotationText(
+	cv canvas.Canvas,
+	c coord.Coord,
+	ann *Annotation,
+	w, h, xMin, xMax, yMin, yMax float64,
+	th theme.Theme,
+) {
+	nx := normalize(ann.X, xMin, xMax)
+	ny := normalize(ann.Y, yMin, yMax)
+	px, py := c.Transform(nx, ny, w, h)
+
+	fontSize := ann.Params.FontSize
+	if fontSize <= 0 {
+		annText := th.AnnotationText()
+		fontSize = annText.Size
+
+		if fontSize <= 0 {
+			fontSize = 10 //nolint:mnd // Default annotation font size.
+		}
+	}
+
+	alpha := ann.Params.Alpha
+	if alpha <= 0 {
+		alpha = 1
+	}
+
+	cr, cg, cb := colormap.ParseRGB(ann.Params.Color, 0.1, 0.1, 0.1)
+
+	cv.SetFontSize(fontSize)
+	cv.SetRGBA(cr, cg, cb, alpha)
+	cv.DrawStringAnchored(ann.Label, px, py-fontSize*0.3, 0.5, 0.5) //nolint:mnd // Centre anchor with slight upward offset.
+}
+
+// drawAnnotationRect renders a filled rectangle annotation spanning
+// (xmin, ymin) to (xmax, ymax) in data coordinates.
+func drawAnnotationRect(
+	cv canvas.Canvas,
+	c coord.Coord,
+	ann *Annotation,
+	w, h, xMin, xMax, yMin, yMax float64,
+) {
+	nx1 := normalize(ann.X, xMin, xMax)
+	ny1 := normalize(ann.Y, yMin, yMax)
+	nx2 := normalize(ann.XEnd, xMin, xMax)
+	ny2 := normalize(ann.YEnd, yMin, yMax)
+
+	px1, py1 := c.Transform(nx1, ny1, w, h)
+	px2, py2 := c.Transform(nx2, ny2, w, h)
+
+	// Ensure correct rectangle orientation (top-left, bottom-right).
+	if px1 > px2 {
+		px1, px2 = px2, px1
+	}
+
+	if py1 > py2 {
+		py1, py2 = py2, py1
+	}
+
+	alpha := ann.Params.Alpha
+	if alpha <= 0 {
+		alpha = 0.3 //nolint:mnd // Default rect annotation alpha.
+	}
+
+	// Fill.
+	if ann.Params.Fill != "" {
+		fr, fg, fb := colormap.ParseRGB(ann.Params.Fill, 0.9, 0.85, 0.85)
+		cv.SetRGBA(fr, fg, fb, alpha)
+		cv.DrawRectangle(px1, py1, px2-px1, py2-py1)
+		cv.Fill()
+	}
+
+	// Stroke.
+	if ann.Params.Color != "" {
+		lw := ann.Params.LineWidth
+		if lw <= 0 {
+			lw = 1
+		}
+
+		cr, cg, cb := colormap.ParseRGB(ann.Params.Color, 0.5, 0.5, 0.5)
+		cv.SetRGBA(cr, cg, cb, alpha)
+		cv.SetLineWidth(lw)
+		cv.DrawRectangle(px1, py1, px2-px1, py2-py1)
+		cv.Stroke()
+	}
+
+	// If neither fill nor color, draw a default semi-transparent rect.
+	if ann.Params.Fill == "" && ann.Params.Color == "" {
+		cv.SetRGBA(0.9, 0.85, 0.85, alpha) //nolint:mnd // Default rect color.
+		cv.DrawRectangle(px1, py1, px2-px1, py2-py1)
+		cv.Fill()
+	}
+}
+
+// drawAnnotationSegment renders a line segment from (X, Y) to (XEnd, YEnd).
+func drawAnnotationSegment(
+	cv canvas.Canvas,
+	c coord.Coord,
+	ann *Annotation,
+	w, h, xMin, xMax, yMin, yMax float64,
+) {
+	nx1 := normalize(ann.X, xMin, xMax)
+	ny1 := normalize(ann.Y, yMin, yMax)
+	nx2 := normalize(ann.XEnd, xMin, xMax)
+	ny2 := normalize(ann.YEnd, yMin, yMax)
+
+	px1, py1 := c.Transform(nx1, ny1, w, h)
+	px2, py2 := c.Transform(nx2, ny2, w, h)
+
+	lw := ann.Params.LineWidth
+	if lw <= 0 {
+		lw = 1.5 //nolint:mnd // Default annotation segment line width.
+	}
+
+	alpha := ann.Params.Alpha
+	if alpha <= 0 {
+		alpha = 0.8 //nolint:mnd // Default annotation segment alpha.
+	}
+
+	cr, cg, cb := colormap.ParseRGB(ann.Params.Color, 0.2, 0.2, 0.2)
+
+	cv.SetRGBA(cr, cg, cb, alpha)
+	cv.SetLineWidth(lw)
+	cv.MoveTo(px1, py1)
+	cv.LineTo(px2, py2)
+	cv.Stroke()
+}
+
+// drawAnnotationArrow renders a segment with an arrowhead at (XEnd, YEnd).
+func drawAnnotationArrow(
+	cv canvas.Canvas,
+	c coord.Coord,
+	ann *Annotation,
+	w, h, xMin, xMax, yMin, yMax float64,
+) {
+	nx1 := normalize(ann.X, xMin, xMax)
+	ny1 := normalize(ann.Y, yMin, yMax)
+	nx2 := normalize(ann.XEnd, xMin, xMax)
+	ny2 := normalize(ann.YEnd, yMin, yMax)
+
+	px1, py1 := c.Transform(nx1, ny1, w, h)
+	px2, py2 := c.Transform(nx2, ny2, w, h)
+
+	lw := ann.Params.LineWidth
+	if lw <= 0 {
+		lw = 1.5 //nolint:mnd // Default arrow line width.
+	}
+
+	alpha := ann.Params.Alpha
+	if alpha <= 0 {
+		alpha = 0.8 //nolint:mnd // Default arrow alpha.
+	}
+
+	cr, cg, cb := colormap.ParseRGB(ann.Params.Color, 0.2, 0.2, 0.2)
+
+	// Draw shaft.
+	cv.SetRGBA(cr, cg, cb, alpha)
+	cv.SetLineWidth(lw)
+	cv.MoveTo(px1, py1)
+	cv.LineTo(px2, py2)
+	cv.Stroke()
+
+	// Draw arrowhead — a filled triangle at (px2, py2) pointing along the shaft.
+	arrowSize := max(lw*4, 8) //nolint:mnd // Arrowhead size proportional to line width, minimum 8px.
+	dx := px2 - px1
+	dy := py2 - py1
+	length := math.Sqrt(dx*dx + dy*dy)
+
+	if length < 1 {
+		return // degenerate: start == end
+	}
+
+	// Unit vector along shaft.
+	ux := dx / length
+	uy := dy / length
+
+	// Perpendicular unit vector.
+	perpX := -uy
+	perpY := ux
+
+	// Arrowhead vertices.
+	halfW := arrowSize * 0.4 //nolint:mnd // Arrowhead half-width = 40% of size.
+	tipX, tipY := px2, py2
+	baseX := px2 - ux*arrowSize
+	baseY := py2 - uy*arrowSize
+
+	cv.SetRGBA(cr, cg, cb, alpha)
+	cv.MoveTo(tipX, tipY)
+	cv.LineTo(baseX+perpX*halfW, baseY+perpY*halfW)
+	cv.LineTo(baseX-perpX*halfW, baseY-perpY*halfW)
+	cv.ClosePath()
+	cv.Fill()
+}
+
+// drawAnnotationLabel renders text with a filled background box at (X, Y).
+func drawAnnotationLabel(
+	cv canvas.Canvas,
+	c coord.Coord,
+	ann *Annotation,
+	w, h, xMin, xMax, yMin, yMax float64,
+	th theme.Theme,
+) {
+	nx := normalize(ann.X, xMin, xMax)
+	ny := normalize(ann.Y, yMin, yMax)
+	px, py := c.Transform(nx, ny, w, h)
+
+	fontSize := ann.Params.FontSize
+	if fontSize <= 0 {
+		annText := th.AnnotationText()
+		fontSize = annText.Size
+
+		if fontSize <= 0 {
+			fontSize = 10 //nolint:mnd // Default annotation font size.
+		}
+	}
+
+	padding := ann.Params.Padding
+	if padding <= 0 {
+		padding = 4 //nolint:mnd // Default label padding.
+	}
+
+	alpha := ann.Params.Alpha
+	if alpha <= 0 {
+		alpha = 0.75 //nolint:mnd // Default label alpha — semi-transparent so data shows through.
+	}
+
+	// Measure text.
+	cv.SetFontSize(fontSize)
+
+	tw, th2 := cv.MeasureString(ann.Label)
+	if th2 <= 0 {
+		th2 = fontSize * 1.2 //nolint:mnd // Fallback text height.
+	}
+
+	// Background box dimensions (centred on anchor).
+	boxW := tw + padding*2  //nolint:mnd // 2 sides.
+	boxH := th2 + padding*2 //nolint:mnd // 2 sides.
+	boxX := px - boxW/2     //nolint:mnd // Centre horizontally.
+	boxY := py - boxH/2     //nolint:mnd // Centre vertically.
+
+	// Draw background.
+	fr, fg, fb := colormap.ParseRGB(ann.Params.Fill, 1, 1, 1) // default white
+	cv.SetRGBA(fr, fg, fb, alpha)
+	cv.DrawRectangle(boxX, boxY, boxW, boxH)
+	cv.Fill()
+
+	// Draw border.
+	cr, cg, cb := colormap.ParseRGB(ann.Params.Color, 0.3, 0.3, 0.3) // default dark grey
+
+	lw := ann.Params.LineWidth
+	if lw <= 0 {
+		lw = 0.5 //nolint:mnd // Thin border for label box.
+	}
+
+	cv.SetRGBA(cr, cg, cb, alpha)
+	cv.SetLineWidth(lw)
+	cv.DrawRectangle(boxX, boxY, boxW, boxH)
+	cv.Stroke()
+
+	// Draw text (centred in box).
+	cv.SetRGBA(cr, cg, cb, 1) // text always fully opaque
+	cv.DrawStringAnchored(ann.Label, px, py, 0.5, 0.5)
+}

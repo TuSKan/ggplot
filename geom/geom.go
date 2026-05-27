@@ -71,6 +71,7 @@ const (
 	TypeViolin     Type = "violin"     // mirrored kernel density estimate per group
 	TypeDotplot    Type = "dotplot"    // stacked dots at binned positions
 	TypeRaster     Type = "raster"     // dense pixel-aligned image grid
+	TypeLabel      Type = "label"      // text with background box (annotation)
 )
 
 // Orientation controls which axis a directional geom extends along.
@@ -124,6 +125,9 @@ type Params struct {
 
 	// Raster-specific
 	Interpolate bool // true = bilinear interpolation; false = nearest-neighbor (default)
+
+	// Label-specific
+	Padding float64 // padding in pixels around label text for background box (default = 4)
 }
 
 // --- Option tracking for validation ---
@@ -155,6 +159,7 @@ const (
 	OptNotch                             // boxplot
 	OptCurvature                         // curve
 	OptInterpolate                       // raster
+	OptPadding                           // label
 )
 
 // paramRelevance maps geometry types to what parameters are meaningful for them.
@@ -187,6 +192,7 @@ var paramRelevance = map[Type]OptFlag{
 	TypeViolin:     OptColor | OptFill | OptAlpha | OptWidth | OptLineWidth | OptOrientation | OptBandwidth,
 	TypeDotplot:    OptColor | OptFill | OptAlpha | OptSize | OptBins | OptOrientation,
 	TypeRaster:     OptAlpha | OptInterpolate,
+	TypeLabel:      OptColor | OptFill | OptAlpha | OptFontSize | OptFontFamily | OptPadding,
 }
 
 // RegisterGeomType registers a custom geometry type with its relevant option
@@ -534,6 +540,27 @@ func Point(opts ...Opt) Layer {
 	l := Layer{
 		Geom:     TypePoint,
 		Position: IdentityPos(),
+		Params:   Params{Size: 3, Alpha: 1.0, Shape: "circle"},
+	}
+	applyOpts(&l, opts)
+
+	return l
+}
+
+// JitterPoint creates a jittered point geometry layer — equivalent to ggplot2's
+// geom_jitter(). This is a [Point] with [Jitter] position.
+//
+// Default jitter width and height are both 0.4 data units.
+// Default seed is 42 (deterministic). Change via [WithJitterWidth],
+// [WithJitterHeight], and [WithJitterSeed].
+//
+// Relevant options: all [Point] options plus [WithJitterWidth],
+// [WithJitterHeight], [WithJitterSeed].
+func JitterPoint(opts ...Opt) Layer {
+	l := Layer{
+		Geom: TypePoint,
+		// Defaults match ggplot2's geom_jitter: width=0.4, height=0.4, seed=42.
+		Position: Jitter(0.4, 0.4),
 		Params:   Params{Size: 3, Alpha: 1.0, Shape: "circle"},
 	}
 	applyOpts(&l, opts)
@@ -1113,6 +1140,44 @@ func Difference(pipeline []stat.Transform, opts ...Opt) Layer {
 // better for continuous fields.
 func WithInterpolate(b bool) Opt {
 	return func(l *Layer) { l.Params.Interpolate = b; l.setFlags |= OptInterpolate }
+}
+
+// WithPadding sets the padding in pixels around label text for its background
+// box. Default is 4. Used by [TypeLabel] annotations.
+func WithPadding(px float64) Opt {
+	return func(l *Layer) { l.Params.Padding = px; l.setFlags |= OptPadding }
+}
+
+// WithJitterWidth sets the horizontal jitter amount in data units for
+// [JitterPoint]. Default is 0.4. The actual displacement is uniform
+// in [−width, +width], matching ggplot2's position_jitter semantics.
+func WithJitterWidth(w float64) Opt {
+	return func(l *Layer) {
+		if j, ok := l.Position.(jitter); ok {
+			l.Position = Jitter(w, j.yAmt, WithSeed(j.seed))
+		}
+	}
+}
+
+// WithJitterHeight sets the vertical jitter amount in data units for
+// [JitterPoint]. Default is 0.4. The actual displacement is uniform
+// in [−height, +height], matching ggplot2's position_jitter semantics.
+func WithJitterHeight(h float64) Opt {
+	return func(l *Layer) {
+		if j, ok := l.Position.(jitter); ok {
+			l.Position = Jitter(j.xAmt, h, WithSeed(j.seed))
+		}
+	}
+}
+
+// WithJitterSeed sets the PRNG seed for [JitterPoint]. Same seed + same
+// data length = same displacement. Default is 42.
+func WithJitterSeed(seed uint64) Opt {
+	return func(l *Layer) {
+		if j, ok := l.Position.(jitter); ok {
+			l.Position = Jitter(j.xAmt, j.yAmt, WithSeed(seed))
+		}
+	}
 }
 
 // Raster creates a dense pixel-aligned image grid geometry layer. Each row

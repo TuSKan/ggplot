@@ -81,6 +81,10 @@ type PlotSpec struct {
 	AlphaScale    scale.Scale
 	ShapeScale    scale.Scale
 	LinetypeScale scale.Scale
+
+	// Annotations holds fixed-coordinate visual elements that bypass the
+	// data/stat/position pipeline. They are drawn after all data layers.
+	Annotations []Annotation
 }
 
 // AesMap maps aesthetic channel names to column names.

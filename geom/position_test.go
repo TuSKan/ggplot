@@ -174,7 +174,8 @@ func TestJitter_Distribution(t *testing.T) {
 
 	rx, ry := Jitter(0.5, 0.3).Adjust(xs, ys, 1, 0, 1)
 
-	// Check that values are spread around the original
+	// Check that values are spread around the original.
+	// Formula: uniform(-amount, +amount), so max displacement = amount.
 	var sumDX, sumDY float64
 
 	for i := range rx {
@@ -183,17 +184,17 @@ func TestJitter_Distribution(t *testing.T) {
 		sumDX += dx
 		sumDY += dy
 
-		if math.Abs(dx) > 0.25 {
+		if math.Abs(dx) > 0.5 {
 			t.Errorf("Jitter x[%d] out of range: dx=%f", i, dx)
 		}
 
-		if math.Abs(dy) > 0.15 {
+		if math.Abs(dy) > 0.3 {
 			t.Errorf("Jitter y[%d] out of range: dy=%f", i, dy)
 		}
 	}
 	// Mean displacement should be approximately 0 (unbiased)
 	meanDX := sumDX / float64(len(xs))
-	if math.Abs(meanDX) > 0.05 {
+	if math.Abs(meanDX) > 0.1 {
 		t.Errorf("Jitter mean X displacement = %f, want ~0", meanDX)
 	}
 
@@ -231,5 +232,89 @@ func TestNudge(t *testing.T) {
 		if ry[i] != ys[i]-1 {
 			t.Errorf("Nudge y[%d] = %f, want %f", i, ry[i], ys[i]-1)
 		}
+	}
+}
+
+func TestJitter_WithSeed(t *testing.T) {
+	t.Parallel()
+
+	xs := []float64{1, 2, 3, 4, 5}
+	ys := []float64{5, 4, 3, 2, 1}
+
+	j1 := Jitter(0.4, 0.4, WithSeed(42))
+	j2 := Jitter(0.4, 0.4, WithSeed(99))
+
+	rx1, _ := j1.Adjust(xs, ys, 1, 0, 1)
+	rx2, _ := j2.Adjust(xs, ys, 1, 0, 1)
+
+	// Different seeds should produce different displacements.
+	allSame := true
+
+	for i := range rx1 {
+		if rx1[i] != rx2[i] {
+			allSame = false
+
+			break
+		}
+	}
+
+	if allSame {
+		t.Error("Jitter with different seeds produced identical output")
+	}
+}
+
+func TestJitterPoint_Constructor(t *testing.T) {
+	t.Parallel()
+
+	l := JitterPoint()
+	if l.Geom != TypePoint {
+		t.Errorf("JitterPoint().Geom = %q, want %q", l.Geom, TypePoint)
+	}
+
+	if l.Position.String() != string(PosJitter) {
+		t.Errorf("JitterPoint().Position = %q, want %q", l.Position.String(), PosJitter)
+	}
+}
+
+func TestJitterPoint_WithOptions(t *testing.T) {
+	t.Parallel()
+
+	l := JitterPoint(
+		WithJitterWidth(1.0),
+		WithJitterHeight(0.0),
+		WithJitterSeed(123),
+		WithColor("#FF0000"),
+	)
+
+	if l.Geom != TypePoint {
+		t.Errorf("JitterPoint().Geom = %q, want %q", l.Geom, TypePoint)
+	}
+
+	// Verify jitter params were applied by testing deterministic output.
+	xs := []float64{1, 2, 3}
+	ys := []float64{4, 5, 6}
+
+	rx, ry := l.Position.Adjust(xs, ys, 1, 0, 1)
+
+	// With jitterHeight=0, Y values should be unchanged.
+	for i := range ry {
+		if ry[i] != ys[i] {
+			t.Errorf("JitterPoint(height=0) y[%d] = %f, want %f", i, ry[i], ys[i])
+		}
+	}
+
+	// With jitterWidth=1.0, X values should be displaced.
+	anyMoved := false
+
+	for i := range rx {
+		if rx[i] != xs[i] {
+			anyMoved = true
+
+			break
+		}
+	}
+
+	if !anyMoved {
+		t.Error("JitterPoint(width=1.0) produced no X displacement")
 	}
 }

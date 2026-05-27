@@ -141,6 +141,7 @@ func (p *Plot) clone() *Plot {
 			YLim:           p.spec.YLim,
 			LegendPosition: p.spec.LegendPosition,
 			AxisGuideX:     p.spec.AxisGuideX,
+			Annotations:    slices.Clone(p.spec.Annotations),
 		},
 	}
 }
@@ -826,13 +827,14 @@ func allLayersHorizontal(layers []LayerSpec) bool {
 //
 // This is the Go equivalent of ggplot2's ggplot_build(plot) → built.
 type Built struct {
-	panels    []BuiltPanel
-	layout    Layout
-	coord     coord.Coord
-	theme     theme.Theme
-	labels    Labels
-	legendPos string
-	ndodgeX   int // X-axis label dodge rows (0 = auto, 1 = no dodge, ≥ 2 = forced)
+	panels      []BuiltPanel
+	layout      Layout
+	coord       coord.Coord
+	theme       theme.Theme
+	labels      Labels
+	legendPos   string
+	ndodgeX     int // X-axis label dodge rows (0 = auto, 1 = no dodge, ≥ 2 = forced)
+	annotations []Annotation
 }
 
 // BuiltLayer holds one resolved layer's data after stat transform and grouping.
@@ -1033,11 +1035,12 @@ func (p *Plot) Build(ctx context.Context) (*Built, error) {
 			Cols:   cols,
 			Panels: panelLayouts,
 		},
-		coord:     p.spec.Coord,
-		theme:     th,
-		labels:    p.spec.Labels,
-		legendPos: p.spec.LegendPosition,
-		ndodgeX:   p.spec.AxisGuideX.NDodge,
+		coord:       p.spec.Coord,
+		theme:       th,
+		labels:      p.spec.Labels,
+		legendPos:   p.spec.LegendPosition,
+		ndodgeX:     p.spec.AxisGuideX.NDodge,
+		annotations: p.spec.Annotations,
 	}, nil
 }
 
@@ -1493,8 +1496,20 @@ func applyPositionAdjust(ctx context.Context, layers []BuiltLayer, layerPos geom
 	// Compute bin width from minimum X spacing across all groups.
 	binWidth := computeBinWidth(allXs)
 
-	// Create a fresh position instance to avoid shared state.
-	pos := geom.NewPos(posName)
+	// Create a fresh position instance for stateful positions (Stack, Fill)
+	// to avoid shared state across panels. For stateless positions (Dodge,
+	// Jitter, Nudge), reuse the layer's instance so that user-configured
+	// parameters (jitter width/height/seed, nudge offsets) are preserved.
+	var pos geom.Pos
+
+	switch posName {
+	case geom.PosStack, geom.PosFill:
+		pos = geom.NewPos(posName) // fresh instance avoids cross-panel contamination
+	case geom.PosIdentity:
+		return nil // identity is a no-op (already handled above, but satisfies exhaustive)
+	case geom.PosDodge, geom.PosJitter, geom.PosNudge:
+		pos = layerPos // reuse configured instance (stateless: Dodge, Jitter, Nudge)
+	}
 
 	// If Fill, run the setup phase.
 	if fs, ok := pos.(geom.FillSetup); ok {
@@ -2391,9 +2406,25 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		xMin, xMax := pri.xScale.Bounds()
 		yMin, yMax := pri.yScale.Bounds()
 
+		// Draw background annotations (rect) behind data layers.
+		for i := range b.annotations {
+			if b.annotations[i].Type == AnnotationRect {
+				drawAnnotation(cv, b.coord, &b.annotations[i],
+					pri.cellW, pri.cellH, xMin, xMax, yMin, yMax, th)
+			}
+		}
+
 		for _, rl := range pri.bp.Layers {
 			drawLayer(cv, b.coord, rl,
 				pri.cellW, pri.cellH, xMin, xMax, yMin, yMax, th)
+		}
+
+		// Draw foreground annotations (text, label, segment, arrow) on top.
+		for i := range b.annotations {
+			if b.annotations[i].Type != AnnotationRect {
+				drawAnnotation(cv, b.coord, &b.annotations[i],
+					pri.cellW, pri.cellH, xMin, xMax, yMin, yMax, th)
+			}
 		}
 
 		cv.Restore()
@@ -2432,9 +2463,25 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 				xMin, xMax := pri.xScale.Bounds()
 				yMin, yMax := pri.yScale.Bounds()
 
+				// Draw background annotations (rect) behind data layers.
+				for j := range b.annotations {
+					if b.annotations[j].Type == AnnotationRect {
+						drawAnnotation(sub, b.coord, &b.annotations[j],
+							pri.cellW, pri.cellH, xMin, xMax, yMin, yMax, th)
+					}
+				}
+
 				for _, rl := range pri.bp.Layers {
 					drawLayer(sub, b.coord, rl,
 						pri.cellW, pri.cellH, xMin, xMax, yMin, yMax, th)
+				}
+
+				// Draw foreground annotations (text, label, segment, arrow) on top.
+				for j := range b.annotations {
+					if b.annotations[j].Type != AnnotationRect {
+						drawAnnotation(sub, b.coord, &b.annotations[j],
+							pri.cellW, pri.cellH, xMin, xMax, yMin, yMax, th)
+					}
 				}
 
 				results[i] = subResult{

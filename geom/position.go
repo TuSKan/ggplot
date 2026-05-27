@@ -189,25 +189,46 @@ func (f *fill) AdjustStack(xs, ys []float64, _ float64, _, _ int) (adjXs, yMin, 
 }
 func (f *fill) String() string { return string(PosFill) }
 
+// JitterOpt is a functional option for configuring the Jitter position.
+type JitterOpt func(*jitter)
+
+// WithSeed sets the PRNG seed for the jitter position. Same seed + same data
+// length = same displacement. Default seed is 42.
+func WithSeed(seed uint64) JitterOpt {
+	return func(j *jitter) { j.seed = seed }
+}
+
 // Jitter returns a position that adds random noise to (x, y) to reduce overplotting.
-// The jitter is reproducible: same data length produces same offsets.
-func Jitter(xAmount, yAmount float64) Pos {
-	return jitter{xAmt: xAmount, yAmt: yAmount}
+// The jitter is reproducible: same seed + same data length = same offsets.
+//
+// xAmount and yAmount set the maximum one-sided displacement in data units.
+// Actual displacement is uniform in [−amount, +amount], matching ggplot2's
+// position_jitter(width, height) semantics.
+//
+// Options: [WithSeed] to set the PRNG seed (default: 42).
+func Jitter(xAmount, yAmount float64, opts ...JitterOpt) Pos {
+	j := jitter{xAmt: xAmount, yAmt: yAmount, seed: 42} //nolint:mnd // Default seed for reproducible jitter.
+	for _, o := range opts {
+		o(&j)
+	}
+
+	return j
 }
 
 type jitter struct {
 	xAmt, yAmt float64
+	seed       uint64
 }
 
 func (j jitter) Adjust(xs, ys []float64, _ float64, _, _ int) ([]float64, []float64) {
 	adjX := make([]float64, len(xs))
 	adjY := make([]float64, len(ys))
 
-	// Reproducible PRNG seeded by data length for deterministic-per-dataset behavior.
-	rng := rand.New(rand.NewPCG(42, uint64(len(xs)))) //nolint:gosec // G404: reproducible jitter uses math/rand intentionally; crypto not needed.
+	// Reproducible PRNG seeded by (user seed, data length) for deterministic-per-dataset behavior.
+	rng := rand.New(rand.NewPCG(j.seed, uint64(len(xs)))) //nolint:gosec // G404: reproducible jitter uses math/rand intentionally; crypto not needed.
 	for i := range xs {
-		adjX[i] = xs[i] + (rng.Float64()-0.5)*j.xAmt
-		adjY[i] = ys[i] + (rng.Float64()-0.5)*j.yAmt
+		adjX[i] = xs[i] + (rng.Float64()*2-1)*j.xAmt //nolint:mnd // uniform(-amount, +amount); matches ggplot2's jitter semantics.
+		adjY[i] = ys[i] + (rng.Float64()*2-1)*j.yAmt //nolint:mnd // uniform(-amount, +amount); matches ggplot2's jitter semantics.
 	}
 
 	return adjX, adjY

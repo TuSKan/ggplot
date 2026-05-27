@@ -95,12 +95,14 @@ func textLabels(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Label("label")).
 		Layer(geom.Point(geom.WithColor("#1F77B4"), geom.WithSize(5))).
 		Layer(geom.Text(geom.WithColor("#E74C3C"), geom.WithFontSize(11))).
+		YLim(-1.3, 1.3).
 		Labs(
 			ggplot.Title("Text Annotations"),
 			ggplot.Subtitle("Labels at peaks and troughs"),
 			ggplot.XLab("x"),
 			ggplot.YLab("f(x)"),
-		)
+		).
+		Theme("minimal")
 
 	out := filepath.Join(dir, "text_labels.png")
 	if err := p.Save(context.Background(), out, 900, 500); err != nil {

@@ -320,21 +320,21 @@ The public extension API — implemented via Go interfaces + registration, not g
 **Remaining — Binning/Aggregation:**
 - 🔲 `geom.Hex` — hexagonal binning (server-side aggregation hook for >1M points)
 
-**Remaining — Position:**
-- 🔲 `geom.Jitter` (full) — random displacement; deterministic via injectable `rand.Source` *(see also Phase 13: `position.Jitter`)*
+**Shipped — Position:**
+- ✅ `geom.JitterPoint` — convenience constructor (`TypePoint` + `position.Jitter`); injectable seed via `WithJitterSeed(uint64)`; configurable displacement via `WithJitterWidth`/`WithJitterHeight`; deterministic via `math/rand/v2.PCG` seeded by `(seed, dataLen)`
 
 **Remaining — Pixel grid:**
 - ✅ `geom.Raster` — dense pixel-aligned image grid; native canvas transform compositing (`Save/Translate/ScaleXY/DrawImage/Restore`) for GPU-accelerated upscaling; bilinear interpolation via `WithInterpolate(true)`; half-cell padding for correct grid alignment
 
 ---
 
-### Phase 9 — Annotations 🔲
+### Phase 9 — Annotations 🟡
 
 > Book Ch.8 (Annotations)
 
 - ✅ Reference lines: `geom.HLine(WithIntercept)`, `geom.VLine(WithIntercept)`, `geom.ABLine(WithSlope, WithIntercept)`
-- 🔲 `annotate()` — layer-less annotations: rect, text, segment, arrow, curve, pointrange
-- 🔲 `geom.Label` — text with background box and connector lines
+- ✅ `annotate()` — layer-less annotations: `AnnotateText`, `AnnotateRect`, `AnnotateSegment`, `AnnotateArrow`, `AnnotateLabel`
+- ✅ `geom.Label` — text with background box (`AnnotateLabel` with `geom.WithPadding`)
 - 🔲 **Direct labelling / anti-collision** — `ggrepel`-style force-directed text placement
 - 🔲 **Marginal annotations** — custom axis marks, distribution overlays
 

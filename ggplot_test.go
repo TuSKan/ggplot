@@ -1648,3 +1648,259 @@ func TestRender_Raster_Save_PNG(t *testing.T) {
 		t.Fatalf("raster output file too small (%d bytes)", info.Size())
 	}
 }
+
+func TestRender_JitterPoint(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	xs := []float64{1, 1, 1, 2, 2, 2, 3, 3, 3}
+	ys := []float64{1, 2, 3, 1, 2, 3, 1, 2, 3}
+
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", xs),
+		eng.NewFloat64Column("y", ys),
+	)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.JitterPoint(
+			geom.WithJitterWidth(0.3),
+			geom.WithJitterHeight(0.3),
+			geom.WithJitterSeed(99),
+		)).
+		Labs(ggplot.Title("Jitter Point"))
+
+	cv, err := drawPlot(context.Background(), p, 400, 400)
+	if err != nil {
+		t.Fatalf("JitterPoint render failed: %v", err)
+	}
+
+	if cv.Width() != 400 || cv.Height() != 400 {
+		t.Errorf("unexpected canvas size: %dx%d", cv.Width(), cv.Height())
+	}
+}
+
+func TestRender_JitterPoint_Deterministic(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	xs := []float64{1, 1, 2, 2}
+	ys := []float64{1, 2, 1, 2}
+
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", xs),
+		eng.NewFloat64Column("y", ys),
+	)
+
+	// Two identical plots with the same seed should produce identical output.
+	mkPlot := func() *ggplot.Plot {
+		return ggplot.New(ds, aes.X("x"), aes.Y("y")).
+			Layer(geom.JitterPoint(geom.WithJitterSeed(42)))
+	}
+
+	p1 := mkPlot()
+	p2 := mkPlot()
+
+	var buf1, buf2 bytes.Buffer
+
+	_, err1 := p1.WriteTo(context.Background(), &buf1, "png", 200, 200)
+	_, err2 := p2.WriteTo(context.Background(), &buf2, "png", 200, 200)
+
+	if err1 != nil || err2 != nil {
+		t.Fatalf("render failed: %v / %v", err1, err2)
+	}
+
+	if !bytes.Equal(buf1.Bytes(), buf2.Bytes()) {
+		t.Error("JitterPoint with same seed produced different output")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Annotation tests
+// ---------------------------------------------------------------------------
+
+func TestAnnotation_Text(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		Annotate(ggplot.AnnotateText(2, 4, "hello",
+			geom.WithColor("#E74C3C"),
+			geom.WithFontSize(12)))
+
+	var buf bytes.Buffer
+
+	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	if err != nil {
+		t.Fatalf("render with text annotation failed: %v", err)
+	}
+
+	if buf.Len() < 100 {
+		t.Error("rendered output too small")
+	}
+}
+
+func TestAnnotation_Rect(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		Annotate(ggplot.AnnotateRect(1, 0, 3, 5,
+			geom.WithFill("#FFCCCC"),
+			geom.WithAlpha(0.3)))
+
+	var buf bytes.Buffer
+
+	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	if err != nil {
+		t.Fatalf("render with rect annotation failed: %v", err)
+	}
+
+	if buf.Len() < 100 {
+		t.Error("rendered output too small")
+	}
+}
+
+func TestAnnotation_Segment(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		Annotate(ggplot.AnnotateSegment(1, 1, 4, 8,
+			geom.WithColor("#333333"),
+			geom.WithLineWidth(1.5)))
+
+	var buf bytes.Buffer
+
+	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	if err != nil {
+		t.Fatalf("render with segment annotation failed: %v", err)
+	}
+
+	if buf.Len() < 100 {
+		t.Error("rendered output too small")
+	}
+}
+
+func TestAnnotation_Arrow(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		Annotate(ggplot.AnnotateArrow(1, 1, 4, 8,
+			geom.WithColor("#2C3E50"),
+			geom.WithLineWidth(2)))
+
+	var buf bytes.Buffer
+
+	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	if err != nil {
+		t.Fatalf("render with arrow annotation failed: %v", err)
+	}
+
+	if buf.Len() < 100 {
+		t.Error("rendered output too small")
+	}
+}
+
+func TestAnnotation_Label(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		Annotate(ggplot.AnnotateLabel(3, 5, "outlier",
+			geom.WithFill("#FFFFFF"),
+			geom.WithColor("#333333"),
+			geom.WithPadding(6)))
+
+	var buf bytes.Buffer
+
+	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	if err != nil {
+		t.Fatalf("render with label annotation failed: %v", err)
+	}
+
+	if buf.Len() < 100 {
+		t.Error("rendered output too small")
+	}
+}
+
+func TestAnnotation_Combined(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	// All annotation types combined.
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		Annotate(ggplot.AnnotateText(2, 4, "text")).
+		Annotate(ggplot.AnnotateRect(1, 0, 3, 5, geom.WithFill("#FFCCCC"))).
+		Annotate(ggplot.AnnotateSegment(0, 0, 5, 10)).
+		Annotate(ggplot.AnnotateArrow(1, 1, 4, 8)).
+		Annotate(ggplot.AnnotateLabel(3, 5, "label"))
+
+	var buf bytes.Buffer
+
+	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	if err != nil {
+		t.Fatalf("render with combined annotations failed: %v", err)
+	}
+
+	if buf.Len() < 100 {
+		t.Error("rendered output too small")
+	}
+}
+
+func TestAnnotation_Save_PNG(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		Annotate(ggplot.AnnotateText(2, 4, "peak")).
+		Annotate(ggplot.AnnotateArrow(1, 1, 3, 6))
+
+	out := filepath.Join(t.TempDir(), "annotated.png")
+	if err := p.Save(context.Background(), out, 400, 300); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	fi, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("Stat failed: %v", err)
+	}
+
+	if fi.Size() < 100 {
+		t.Error("saved file too small")
+	}
+}
+
+// testLineDataset creates a simple 5-point line dataset for annotation tests.
+func testLineDataset(eng *memory.Engine) dataset.Dataset {
+	xs := []float64{0, 1, 2, 3, 4}
+	ys := []float64{0, 2, 4, 6, 8}
+
+	ds, _ := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", xs),
+		eng.NewFloat64Column("y", ys),
+	)
+
+	return ds
+}

@@ -24,14 +24,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `geom.OptCurvature` flag and `paramRelevance` entries for all new geom types.
 - Six new geometry examples: `examples/geometries/{crossbar,linerange,pointrange,curve,violin,dotplot}/`.
 
+#### Advanced Geometries (Phase 8 — Batch B)
+- **`geom.Raster()`** — dense pixel-aligned image grid. Composites the entire grid as a single `image.RGBA` via native canvas transforms (`Save/Translate/ScaleXY/DrawImage/Restore`) for GPU-accelerated upscaling. Options: `WithInterpolate(bool)`, `WithAlpha`.
+- **`geom.JitterPoint()`** — convenience constructor for jittered scatter plots (`TypePoint` + `position.Jitter`). Configurable via `WithJitterWidth`, `WithJitterHeight`, `WithJitterSeed`. Deterministic output via `math/rand/v2.PCG` seeded by `(seed, dataLen)`.
+- **`position.Jitter`** enhanced with `WithSeed(uint64)` functional option for injectable PRNG seed. `WithJitterWidth`/`Height`/`Seed` options modify the position via internal type assertion — no construction state on `Layer`.
+- New geometry examples: `examples/geometries/{raster,jitter_point}/`.
+
+#### Annotations (Phase 9)
+- **`Plot.Annotate()`** — layer-less annotation API. Annotations are fixed-coordinate visual elements that bypass the data/stat/position pipeline entirely. They are drawn in data space after all data layers.
+- **`AnnotateText(x, y, label, ...opts)`** — text at data coordinates.
+- **`AnnotateRect(xmin, ymin, xmax, ymax, ...opts)`** — filled rectangle spanning a region.
+- **`AnnotateSegment(x, y, xend, yend, ...opts)`** — line segment between two points.
+- **`AnnotateArrow(x, y, xend, yend, ...opts)`** — segment with arrowhead at endpoint.
+- **`AnnotateLabel(x, y, label, ...opts)`** — text with filled background box. Padding configurable via `geom.WithPadding(px)`.
+- **`geom.TypeLabel`** — new geometry type constant for label-with-background.
+- **`geom.WithPadding(px)`** — new functional option for label background box padding (default 4px).
+- New `AnnotationType` enum: `AnnotationText`, `AnnotationRect`, `AnnotationSegment`, `AnnotationArrow`, `AnnotationLabel`.
+- `PlotSpec.Annotations` field for carrying annotations through the build pipeline.
+- New annotation example: `examples/annotations/annotate/`.
+- Seven new tests: `TestAnnotation_{Text,Rect,Segment,Arrow,Label,Combined,Save_PNG}`.
+
+#### Axis Guide (Phase 5b)
+- **`AxisLabelRows(n)`** — X-axis label staggering for dense categorical axes. Auto-dodge (n=0) measures label widths and staggers to 2 rows when overlap detected. Explicit n≥2 distributes labels across n rows. Overlap skipping hides colliding labels within each row (tick marks remain).
+- Bottom margin now accounts for dodge rows: `(nRows−1) × (fontSize+4)` extra pixels.
+- New example: `examples/axis_label_rows/`.
+
 ### Fixed
 - **Auto-expand for width-based geoms** — Crossbar, Violin, and Dotplot now automatically get X-axis padding (like Bar and BoxPlot), so elements at domain edges are not clipped.
 - **Distinct-X padding calculation** — X-axis padding for width-based geoms now counts distinct X positions instead of raw row count. This fixes near-zero padding for stat-transformed data (e.g., ViolinY outputs 128 grid points per group, making row-based padding negligible).
 - **Dotplot Y-axis rendering** — Dotplot now uses coordinate-based Y positioning through the normalize/transform pipeline. Dot radius is computed from Y domain spacing so adjacent dots touch visually. Previously dots were pixel-stacked at the baseline and ignored the Y scale entirely.
 - **Dotplot Y-domain floor** — Dotplot Y axis now anchors at zero (like Bar, Histogram, Area) so the baseline aligns with the stacking origin.
+- **Bottom margin clipping with dodged labels** — X-axis title (e.g. "Category") was clipped when `AxisLabelRows(n)` staggered labels across multiple rows. Margin now grows by `(n−1) × rowHeight`.
+- **Auto-dodge margin prediction** — When `AxisLabelRows(0)` (auto), the margin computation now pre-measures label widths against available plot width to predict whether 2-row staggering will trigger.
 
 ### Changed
-- `docs/ROADMAP.md` Phase 8 marked as 🔶 (partially complete): 13 of 17 items shipped; remaining items: Contour, Hex, Jitter, Raster.
+- `docs/ROADMAP.md` Phase 8 updated: 15 of 17 items shipped; remaining items: Contour, Hex.
 
 #### Axis Label Dodge (Phase 5b)
 - **`Plot.AxisLabelRows(n)`** — auto-detect overlapping X-axis labels and stagger across `n` rows. When `n=0` (default), overlap is measured and labels are auto-staggered to 2 rows when collisions are detected. `n=1` disables staggering; `n≥2` forces that many rows.
