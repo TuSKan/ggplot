@@ -340,15 +340,23 @@ The public extension API — implemented via Go interfaces + registration, not g
 
 ---
 
-### Phase 10 — Coordinate Systems 🔲
+### Phase 10 — Coordinate Systems 🟡
 
 > Book Ch.15 (Coordinate systems)
 
-- 🔲 `coord.Cartesian(xlim, ylim)` — zoom without data clipping (vs. `XLim`/`YLim` which filter via oob)
-- 🔲 `coord.Fixed(ratio)` — fixed aspect ratio (1:1 for maps and correlation plots)
+**Shipped — Viewport zoom:**
+- ✅ `coord.CartesianZoom(xlim, ylim)` / `Plot.CoordCartesian(xmin, xmax, ymin, ymax)` — viewport zoom without data clipping; overrides scale bounds after training so all data participates in stat computations; implements `coord.Zoomer` interface
+
+**Shipped — Fixed aspect ratio:**
+- ✅ `coord.Fixed(ratio)` / `Plot.CoordFixed(ratio)` — fixed aspect ratio; `ratio=1` gives equal scaling (1 unit x = 1 unit y in pixels); panel dimension shrunk and centred to enforce ratio; implements `coord.Fixer` interface
+
+**Shipped — Polar:**
 - ✅ `coord.Polar(theta, start, direction)` — already shipped; verify pie/rose/radar interactions with `position.Stack`
+
+**Remaining:**
 - 🔲 `coord.Trans(xtrans, ytrans)` — separate transformations per axis (post-stat, vs. scale transforms which are pre-stat)
 - 🔲 `coord.Map(projection)` — map projections (Mercator, Lambert, equal-area)
+
 
 ---
 

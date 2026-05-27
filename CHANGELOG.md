@@ -44,6 +44,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - New annotation example: `examples/annotations/annotate/`.
 - Seven new tests: `TestAnnotation_{Text,Rect,Segment,Arrow,Label,Combined,Save_PNG}`.
 
+#### Coordinate Systems (Phase 10)
+- **`Plot.CoordCartesian(xmin, xmax, ymin, ymax)`** — viewport zoom without data clipping. Unlike `XLim`/`YLim` which set scale bounds early, `CoordCartesian` overrides bounds after scale training — all data participates in stat computations, only the visible window changes. Pass `math.NaN()` for any endpoint to auto-detect.
+- **`Plot.CoordFixed(ratio)`** — fixed aspect ratio. `ratio = 1` gives equal scaling — one unit of x occupies the same pixel length as one unit of y. The panel dimension is shrunk and centered to enforce the ratio without distorting data.
+- **`coord.CartesianZoom(xlim, ylim)`** — low-level constructor. Implements `coord.Zoomer` interface.
+- **`coord.Fixed(ratio)`** — low-level constructor. Implements `coord.Fixer` interface.
+- **`coord.Zoomer`** interface — optional interface for coordinate systems with viewport zoom bounds.
+- **`coord.Fixer`** interface — optional interface for coordinate systems with fixed aspect ratio.
+- Annotation rendering split into background pass (rect before data layers) and foreground pass (text/label/segment/arrow after data layers) so filled rectangles don't cover data lines.
+- Default label annotation alpha lowered from 0.9 to 0.75 for better transparency.
+- New examples: `examples/coord_cartesian_zoom/`, `examples/coord_fixed/`.
+- Ten new tests: `TestCoordCartesianZoom_{Build,ScaleBoundsOverridden,Save_PNG,PartialZoom,CoordInterface}`, `TestCoordFixed_{Build,Save_PNG,Render,CustomRatio,CoordInterface}`.
+
 #### Axis Guide (Phase 5b)
 - **`AxisLabelRows(n)`** — X-axis label staggering for dense categorical axes. Auto-dodge (n=0) measures label widths and staggers to 2 rows when overlap detected. Explicit n≥2 distributes labels across n rows. Overlap skipping hides colliding labels within each row (tick marks remain).
 - Bottom margin now accounts for dodge rows: `(nRows−1) × (fontSize+4)` extra pixels.

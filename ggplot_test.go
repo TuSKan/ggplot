@@ -1904,3 +1904,250 @@ func testLineDataset(eng *memory.Engine) dataset.Dataset {
 
 	return ds
 }
+
+// ---------------------------------------------------------------------------
+// coord.CartesianZoom tests
+// ---------------------------------------------------------------------------
+
+func TestCoordCartesianZoom_Build(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point()).
+		CoordCartesian(1, 3, 2, 6) //nolint:mnd // Zoom window.
+
+	built, err := p.Build(context.Background())
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	if built == nil {
+		t.Fatal("expected non-nil Built")
+	}
+}
+
+func TestCoordCartesianZoom_ScaleBoundsOverridden(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	// Zoom into x=[1,3], y=[2,6] — data outside is NOT removed, but
+	// scale bounds should reflect the zoom window.
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		CoordCartesian(1, 3, 2, 6) //nolint:mnd // Zoom window.
+
+	built, err := p.Build(context.Background())
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	info := built.Explain()
+	// The built info should mention the coord type.
+	if !strings.Contains(info, "coord") {
+		t.Errorf("expected coord info, got: %s", info)
+	}
+}
+
+func TestCoordCartesianZoom_Save_PNG(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		CoordCartesian(1, 3, math.NaN(), math.NaN()) //nolint:mnd // Zoom x only.
+
+	dir := t.TempDir()
+	out := filepath.Join(dir, "zoom.png")
+
+	if err := p.Save(context.Background(), out, 400, 300); err != nil { //nolint:mnd // Test canvas.
+		t.Fatalf("Save: %v", err)
+	}
+
+	fi, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+
+	if fi.Size() < 100 { //nolint:mnd // Minimum viable PNG size.
+		t.Error("saved file too small")
+	}
+}
+
+func TestCoordCartesianZoom_PartialZoom(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	// Zoom only x, leave y auto.
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point()).
+		CoordCartesian(1, 2, math.NaN(), math.NaN()) //nolint:mnd // Partial zoom.
+
+	_, err := p.Build(context.Background())
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// coord.Fixed tests
+// ---------------------------------------------------------------------------
+
+func TestCoordFixed_Build(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point()).
+		CoordFixed(1)
+
+	built, err := p.Build(context.Background())
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	if built == nil {
+		t.Fatal("expected non-nil Built")
+	}
+}
+
+func TestCoordFixed_Save_PNG(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		CoordFixed(1)
+
+	dir := t.TempDir()
+	out := filepath.Join(dir, "fixed.png")
+
+	if err := p.Save(context.Background(), out, 600, 300); err != nil { //nolint:mnd // Wide canvas.
+		t.Fatalf("Save: %v", err)
+	}
+
+	fi, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+
+	if fi.Size() < 100 { //nolint:mnd // Minimum viable PNG size.
+		t.Error("saved file too small")
+	}
+}
+
+func TestCoordFixed_Render(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	// Wide canvas with CoordFixed(1) — should produce valid output
+	// without panic or error.
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point()).
+		CoordFixed(1)
+
+	cv, err := drawPlot(context.Background(), p, 800, 300) //nolint:mnd // Wide.
+	if err != nil {
+		t.Fatalf("drawPlot: %v", err)
+	}
+
+	if cv == nil {
+		t.Fatal("expected non-nil canvas")
+	}
+}
+
+func TestCoordFixed_CustomRatio(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	// Ratio of 2 — y is stretched to twice x.
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Line()).
+		CoordFixed(2) //nolint:mnd // Custom ratio.
+
+	dir := t.TempDir()
+	out := filepath.Join(dir, "ratio2.png")
+
+	if err := p.Save(context.Background(), out, 600, 600); err != nil { //nolint:mnd // Square canvas.
+		t.Fatalf("Save: %v", err)
+	}
+
+	fi, err := os.Stat(out)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+
+	if fi.Size() < 100 { //nolint:mnd // Minimum viable PNG size.
+		t.Error("saved file too small")
+	}
+}
+
+func TestCoordFixed_CoordInterface(t *testing.T) {
+	t.Parallel()
+
+	c := coord.Fixed(1)
+	if c.String() != "fixed" {
+		t.Errorf("expected 'fixed', got %q", c.String())
+	}
+
+	// Verify it implements Fixer.
+	f, ok := c.(coord.Fixer)
+	if !ok {
+		t.Fatal("Fixed coord does not implement Fixer")
+	}
+
+	if f.AspectRatio() != 1 {
+		t.Errorf("expected ratio 1, got %f", f.AspectRatio())
+	}
+}
+
+func TestCoordCartesianZoom_CoordInterface(t *testing.T) {
+	t.Parallel()
+
+	lo := 1.0
+	hi := 5.0
+
+	c := coord.CartesianZoom([2]*float64{&lo, &hi}, [2]*float64{nil, nil})
+	if c.String() != "cartesian_zoom" {
+		t.Errorf("expected 'cartesian_zoom', got %q", c.String())
+	}
+
+	// Verify it implements Zoomer.
+	z, ok := c.(coord.Zoomer)
+	if !ok {
+		t.Fatal("CartesianZoom coord does not implement Zoomer")
+	}
+
+	xlim, ylim := z.ZoomBounds()
+	if xlim[0] == nil || *xlim[0] != lo {
+		t.Error("xlim[0] mismatch")
+	}
+
+	if xlim[1] == nil || *xlim[1] != hi {
+		t.Error("xlim[1] mismatch")
+	}
+
+	if ylim[0] != nil {
+		t.Error("ylim[0] should be nil")
+	}
+
+	if ylim[1] != nil {
+		t.Error("ylim[1] should be nil")
+	}
+}

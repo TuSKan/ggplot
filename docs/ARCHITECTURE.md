@@ -73,7 +73,7 @@ github.com/TuSKan/ggplot
 │   └── scale.go         #   Linear, Log10, Sqrt, Reverse, Discrete + NiceSequence, FormatNumber
 │
 ├── coord/               # Coordinate systems
-│   └── coord.go         #   Cartesian, Polar
+│   └── coord.go         #   Cartesian, CartesianZoom (Zoomer interface), Fixed (Fixer interface), Polar
 │
 ├── facet/               # Faceting strategies
 │   └── facet.go         #   None, Wrap (NCols/NRows), Grid (row ~ col)

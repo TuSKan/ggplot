@@ -310,6 +310,43 @@ func (p *Plot) CoordFlip() *Plot {
 	return cloned
 }
 
+// CoordCartesian sets a Cartesian viewport zoom. Unlike [Plot.XLim]/[Plot.YLim]
+// which set scale bounds early (potentially affecting stat computations),
+// CoordCartesian overrides bounds after scale training — all data participates
+// in stat computations, only the visible window changes.
+//
+// Pass math.NaN() for any endpoint to auto-detect from training.
+func (p *Plot) CoordCartesian(xmin, xmax, ymin, ymax float64) *Plot {
+	cloned := p.clone()
+
+	xlim := [2]*float64{ptrFloat(xmin), ptrFloat(xmax)}
+	ylim := [2]*float64{ptrFloat(ymin), ptrFloat(ymax)}
+
+	cloned.spec.Coord = coord.CartesianZoom(xlim, ylim)
+
+	return cloned
+}
+
+// CoordFixed sets a Cartesian coordinate system with a fixed aspect ratio.
+// ratio is defined as (pixels per data-unit-y) / (pixels per data-unit-x).
+// ratio = 1 gives equal scaling — one unit of x occupies the same pixel
+// length as one unit of y.
+func (p *Plot) CoordFixed(ratio float64) *Plot {
+	cloned := p.clone()
+	cloned.spec.Coord = coord.Fixed(ratio)
+
+	return cloned
+}
+
+// ptrFloat returns a pointer to v, or nil if v is NaN.
+func ptrFloat(v float64) *float64 {
+	if math.IsNaN(v) {
+		return nil
+	}
+
+	return &v
+}
+
 // LegendPosition sets the legend placement.
 func (p *Plot) LegendPosition(pos LegendPos) *Plot {
 	cloned := p.clone()
@@ -1914,6 +1951,44 @@ func (p *Plot) trainPanelScales(ctx context.Context, resolved []BuiltLayer, span
 		}
 	}
 
+	// Apply coord viewport zoom (if the coord implements Zoomer).
+	// This runs after XLim/YLim so zoom bounds take final precedence.
+	if z, ok := p.spec.Coord.(coord.Zoomer); ok {
+		xlim, ylim := z.ZoomBounds()
+
+		if xlim[0] != nil || xlim[1] != nil {
+			curXMin, curXMax := xScale.Bounds()
+
+			if xlim[0] != nil {
+				curXMin = *xlim[0]
+			}
+
+			if xlim[1] != nil {
+				curXMax = *xlim[1]
+			}
+
+			if bs, ok := xScale.(scale.BoundsSetter); ok {
+				bs.SetBounds(curXMin, curXMax)
+			}
+		}
+
+		if ylim[0] != nil || ylim[1] != nil {
+			curYMin, curYMax := yScale.Bounds()
+
+			if ylim[0] != nil {
+				curYMin = *ylim[0]
+			}
+
+			if ylim[1] != nil {
+				curYMax = *ylim[1]
+			}
+
+			if bs, ok := yScale.(scale.BoundsSetter); ok {
+				bs.SetBounds(curYMin, curYMax)
+			}
+		}
+	}
+
 	return xScale, yScale, xIsDiscrete, nil
 }
 
@@ -2338,6 +2413,37 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 
 		dataY += stripH
 		cellH -= stripH
+
+		// Apply fixed aspect ratio if coord implements Fixer.
+		if f, ok := b.coord.(coord.Fixer); ok {
+			ratio := f.AspectRatio()
+			xMin, xMax := xScale.Bounds()
+			yMin, yMax := yScale.Bounds()
+			dataRangeX := xMax - xMin
+			dataRangeY := yMax - yMin
+
+			if dataRangeX > 0 && dataRangeY > 0 && ratio > 0 {
+				// Current pixels-per-unit for each axis.
+				ppuX := cellW / dataRangeX
+				ppuY := cellH / dataRangeY
+
+				// Desired: ppuY / ppuX = ratio → ppuY = ratio * ppuX.
+				// Adjust the axis with excess pixel space.
+				desiredPPUY := ratio * ppuX
+				if desiredPPUY <= cellH {
+					// Shrink height to match ratio; centre vertically.
+					newH := desiredPPUY * dataRangeY
+					dataY += (cellH - newH) / 2 //nolint:mnd // Centre offset.
+					cellH = newH
+				} else {
+					// Shrink width to match ratio; centre horizontally.
+					desiredPPUX := ppuY / ratio
+					newW := desiredPPUX * dataRangeX
+					dataX += (cellW - newW) / 2 //nolint:mnd // Centre offset.
+					cellW = newW
+				}
+			}
+		}
 
 		// When all layers are horizontal, swap scales and labels.
 		renderXScale := xScale
