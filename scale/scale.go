@@ -544,3 +544,103 @@ var (
 	_ BoundsSetter = (*sqrtScale)(nil)
 	_ BoundsSetter = (*reverseScale)(nil)
 )
+
+// ---------------------------------------------------------------------------
+// Secondary Axis
+// ---------------------------------------------------------------------------
+
+// SecAxisSpec describes a secondary axis derived from a primary axis via a
+// monotonic transform. The secondary axis shows ticks in a different unit
+// system (e.g. °C → °F) while sharing the same data.
+type SecAxisSpec struct {
+	// Trans maps primary-axis values to secondary-axis values.
+	Trans func(float64) float64
+	// Inverse maps secondary-axis values back to primary-axis values.
+	// Required for computing secondary tick positions from primary bounds.
+	Inverse func(float64) float64
+	// Name is the axis label for the secondary axis. Empty string omits it.
+	Name string
+	// Breaks are optional manual tick positions in secondary-axis space.
+	// When nil, ticks are derived by transforming the primary axis's nice ticks.
+	Breaks []float64
+	// Labels are optional manual tick labels corresponding to Breaks.
+	// When nil, labels are generated via FormatNumber.
+	Labels []string
+}
+
+// SecAxis creates a secondary axis specification with a forward/inverse
+// transform pair. For example, to show a Fahrenheit axis alongside a
+// Celsius primary: SecAxis(func(c) { return c*9/5 + 32 }, func(f) { return (f-32)*5/9 }, "°F")
+func SecAxis(trans, inverse func(float64) float64, name string) SecAxisSpec {
+	return SecAxisSpec{Trans: trans, Inverse: inverse, Name: name}
+}
+
+// DupAxis creates a secondary axis that duplicates the primary axis.
+// The secondary axis shows the same ticks and labels as the primary.
+func DupAxis(name string) SecAxisSpec {
+	id := func(v float64) float64 { return v }
+
+	return SecAxisSpec{Trans: id, Inverse: id, Name: name}
+}
+
+// DerivedScale wraps a primary scale through a transform, producing a
+// secondary-axis scale that generates ticks and formats in the secondary
+// space while mapping through the primary domain.
+type DerivedScale struct {
+	Primary Scale
+	Spec    SecAxisSpec
+}
+
+// Ticks returns tick positions in secondary space. If Breaks are specified,
+// those are used directly. Otherwise, the primary ticks are transformed.
+func (d *DerivedScale) Ticks(n int) []float64 {
+	if len(d.Spec.Breaks) > 0 {
+		return d.Spec.Breaks
+	}
+
+	primary := d.Primary.Ticks(n)
+	sec := make([]float64, len(primary))
+
+	for i, v := range primary {
+		sec[i] = d.Spec.Trans(v)
+	}
+
+	return sec
+}
+
+// Format returns the display string for a secondary-axis value.
+func (d *DerivedScale) Format(v float64) string {
+	return FormatNumber(v)
+}
+
+// Bounds returns the secondary-axis bounds by transforming the primary bounds.
+func (d *DerivedScale) Bounds() (float64, float64) {
+	mn, mx := d.Primary.Bounds()
+
+	sMn := d.Spec.Trans(mn)
+	sMx := d.Spec.Trans(mx)
+
+	if sMn > sMx {
+		sMn, sMx = sMx, sMn
+	}
+
+	return sMn, sMx
+}
+
+// Map normalizes a secondary-axis value to [0,1] by inverting to primary space.
+func (d *DerivedScale) Map(v float64) float64 {
+	return d.Primary.Map(d.Spec.Inverse(v))
+}
+
+// Inverse maps a [0,1] value to secondary-axis space.
+func (d *DerivedScale) Inverse(v float64) float64 {
+	return d.Spec.Trans(d.Primary.Inverse(v))
+}
+
+// Train is a no-op — the derived scale trains through its primary.
+func (d *DerivedScale) Train(_ dataset.AnyColumn) error { return nil }
+
+// String returns a description.
+func (d *DerivedScale) String() string { return "sec(" + d.Primary.String() + ")" }
+
+var _ Scale = (*DerivedScale)(nil)

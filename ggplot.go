@@ -141,7 +141,16 @@ func (p *Plot) clone() *Plot {
 			YLim:           p.spec.YLim,
 			LegendPosition: p.spec.LegendPosition,
 			AxisGuideX:     p.spec.AxisGuideX,
+			ColorBarWidth:  p.spec.ColorBarWidth,
+			ColorBarNBin:   p.spec.ColorBarNBin,
+			LegendNCols:    p.spec.LegendNCols,
+			SizeScale:      p.spec.SizeScale,
+			AlphaScale:     p.spec.AlphaScale,
+			ShapeScale:     p.spec.ShapeScale,
+			LinetypeScale:  p.spec.LinetypeScale,
 			Annotations:    slices.Clone(p.spec.Annotations),
+			SecondAxis:     p.spec.SecondAxis,
+			ThemeOverrides: slices.Clone(p.spec.ThemeOverrides),
 		},
 	}
 }
@@ -277,6 +286,20 @@ func (p *Plot) FacetGrid(rowCol, colCol string, opts ...facet.GridOpt) *Plot {
 func (p *Plot) Theme(name theme.Name) *Plot {
 	cloned := p.clone()
 	cloned.spec.ThemeName = name
+
+	return cloned
+}
+
+// ThemeOverride applies per-plot theme element overrides.
+// These are applied after the base theme is resolved, allowing fine-grained
+// control over individual elements without creating a custom theme.
+//
+// Example — bold X-axis title:
+//
+//	p.ThemeOverride(theme.AxisTitleXOverride(theme.ElementText{Bold: true}))
+func (p *Plot) ThemeOverride(overrides ...theme.Override) *Plot {
+	cloned := p.clone()
+	cloned.spec.ThemeOverrides = append(cloned.spec.ThemeOverrides, overrides...)
 
 	return cloned
 }
@@ -551,6 +574,24 @@ func WithScale(s float64) RenderOpt {
 // renders in a single process and is useful for golden/snapshot tests.
 func WithCPU() RenderOpt {
 	return func(c *renderConfig) { c.cpu = true }
+}
+
+// SecondAxis adds a secondary Y-axis derived from the primary Y-axis via a
+// transform pair. The secondary axis is rendered on the right side of the
+// plot with its own tick labels and optional axis title.
+//
+// Example — show Fahrenheit alongside Celsius:
+//
+//	p.SecondAxis(scale.SecAxis(
+//	    func(c float64) float64 { return c*9/5 + 32 },
+//	    func(f float64) float64 { return (f - 32) * 5 / 9 },
+//	    "Temperature (°F)",
+//	))
+func (p *Plot) SecondAxis(spec scale.SecAxisSpec) *Plot {
+	cloned := p.clone()
+	cloned.spec.SecondAxis = &spec
+
+	return cloned
 }
 
 // Save renders the plot to a file at the given dimensions.
@@ -883,6 +924,7 @@ type Built struct {
 	legendPos   string
 	ndodgeX     int // X-axis label dodge rows (0 = auto, 1 = no dodge, ≥ 2 = forced)
 	annotations []Annotation
+	secAxis     *scale.SecAxisSpec // secondary Y-axis specification (nil = none)
 }
 
 // BuiltLayer holds one resolved layer's data after stat transform and grouping.
@@ -922,6 +964,8 @@ type Layout struct {
 	Rows   int
 	Cols   int
 	Panels []PanelLayout
+	FreeX  bool // per-panel independent X scales
+	FreeY  bool // per-panel independent Y scales
 }
 
 // PanelLayout holds per-panel geometry and trained scale state.
@@ -956,6 +1000,74 @@ func panelGridCol(fp facet.Panel, idx map[string]int, pi, cols int) int {
 	}
 
 	return pi % cols
+}
+
+// unifyPanelScales applies shared scale bounds across all panels based on
+// the facet's FreeScales() configuration. Panels with shared scales get
+// their bounds unified to the union of all panels.
+func unifyPanelScales(f facet.Facet, panels []BuiltPanel, layouts []PanelLayout) {
+	if len(panels) <= 1 {
+		return
+	}
+
+	freeX, freeY := f.FreeScales()
+	if !freeX {
+		unifyScaleBounds(panels, layouts, true)
+	}
+
+	if !freeY {
+		unifyScaleBounds(panels, layouts, false)
+	}
+}
+
+// unifyScaleBounds computes the union [min, max] across all panels for either
+// X (isX=true) or Y (isX=false) and overrides each panel's scale bounds.
+func unifyScaleBounds(panels []BuiltPanel, layouts []PanelLayout, isX bool) {
+	unionMin, unionMax := math.Inf(1), math.Inf(-1)
+
+	for i := range panels {
+		var sc scale.Scale
+		if isX {
+			sc = panels[i].XScale
+		} else {
+			sc = panels[i].YScale
+		}
+
+		mn, mx := sc.Bounds()
+		if mn < unionMin {
+			unionMin = mn
+		}
+
+		if mx > unionMax {
+			unionMax = mx
+		}
+	}
+
+	if math.IsInf(unionMin, 1) {
+		return // no valid bounds
+	}
+
+	for i := range panels {
+		var sc scale.Scale
+		if isX {
+			sc = panels[i].XScale
+		} else {
+			sc = panels[i].YScale
+		}
+
+		if bs, ok := sc.(scale.BoundsSetter); ok {
+			bs.SetBounds(unionMin, unionMax)
+		}
+
+		// Update PanelLayout references too.
+		if i < len(layouts) {
+			if isX {
+				layouts[i].XScale = sc
+			} else {
+				layouts[i].YScale = sc
+			}
+		}
+	}
 }
 
 // LayerData returns the resolved dataset for the given layer in the given panel.
@@ -1025,6 +1137,11 @@ func (p *Plot) Build(ctx context.Context) (*Built, error) {
 	th, err := theme.Resolve(p.spec.ThemeName)
 	if err != nil {
 		return nil, Errorf(PhaseBuild, -1, "theme", err, "resolve theme")
+	}
+
+	// Apply per-plot theme overrides.
+	if len(p.spec.ThemeOverrides) > 0 {
+		th = theme.WithOverrides(th, p.spec.ThemeOverrides...)
 	}
 
 	// 1. Facet.
@@ -1144,12 +1261,19 @@ func (p *Plot) Build(ctx context.Context) (*Built, error) {
 		}
 	}
 
+	// Unify scales when not free — shared bounds across all panels.
+	unifyPanelScales(p.spec.Facet, builtPanels, panelLayouts)
+
+	freeX, freeY := p.spec.Facet.FreeScales()
+
 	return &Built{
 		panels: builtPanels,
 		layout: Layout{
 			Rows:   rows,
 			Cols:   cols,
 			Panels: panelLayouts,
+			FreeX:  freeX,
+			FreeY:  freeY,
 		},
 		coord:       p.spec.Coord,
 		theme:       th,
@@ -1157,6 +1281,7 @@ func (p *Plot) Build(ctx context.Context) (*Built, error) {
 		legendPos:   p.spec.LegendPosition,
 		ndodgeX:     p.spec.AxisGuideX.NDodge,
 		annotations: p.spec.Annotations,
+		secAxis:     p.spec.SecondAxis,
 	}, nil
 }
 
@@ -2517,6 +2642,33 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 				mBottom += th.AxisTextElem().Size + 4
 			}
 
+			// Secondary Y-axis right margin.
+			if b.secAxis != nil {
+				// Measure secondary ticks to compute right margin.
+				secScale := &scale.DerivedScale{Primary: leftAxisScale, Spec: *b.secAxis}
+				secTicks := secScale.Ticks(5) //nolint:mnd // Match Y-axis tick count.
+				maxSecTickW := 0.0
+
+				cv.SetFontSize(th.AxisTextElem().Size)
+				cv.SetTabularNums(true)
+
+				for _, sv := range secTicks {
+					tw, _ := cv.MeasureString(secScale.Format(sv))
+					if tw > maxSecTickW {
+						maxSecTickW = tw
+					}
+				}
+
+				cv.SetTabularNums(false)
+
+				secAxisW := th.Spacing.TickLength + 5 + maxSecTickW //nolint:mnd // tick + gap + labels.
+				if b.secAxis.Name != "" {
+					secAxisW += th.AxisTitle().Size + 8 //nolint:mnd // Title padding.
+				}
+
+				mRight += secAxisW
+			}
+
 			legendPos = b.legendPos
 			if legendPos == "" {
 				legendPos = "right"
@@ -2747,12 +2899,23 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		isBottomRow := pl.Row == rows-1
 		isLeftCol := pl.Col == 0
 
-		if !isMultiPanel || isBottomRow {
+		// With free X scales, every row needs its own X-axis; otherwise only the bottom row.
+		drawXOnThisPanel := !isMultiPanel || isBottomRow || b.layout.FreeX
+		if drawXOnThisPanel {
 			drawXAxis(cv, renderXScale, renderXLabel, dataX, dataY+cellH, cellW, th, b.ndodgeX)
 		}
 
-		if !isMultiPanel || isLeftCol {
+		// With free Y scales, every column needs its own Y-axis; otherwise only the left column.
+		drawYOnThisPanel := !isMultiPanel || isLeftCol || b.layout.FreeY
+		if drawYOnThisPanel {
 			drawYAxis(cv, renderYScale, renderYLabel, dataX, dataY, cellH, th)
+		}
+
+		// Secondary Y-axis (right side).
+		isRightCol := pl.Col == cols-1
+		if b.secAxis != nil && (!isMultiPanel || isRightCol) {
+			secScale := &scale.DerivedScale{Primary: renderYScale, Spec: *b.secAxis}
+			drawYAxisRight(cv, secScale, b.secAxis.Name, dataX+cellW, dataY, cellH, th)
 		}
 
 		// Legend.
@@ -3212,6 +3375,80 @@ func drawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 
 		cv.Translate(x-tickLen-titleOffset, y+h/2)
 		cv.Rotate(-math.Pi / 2)
+		cv.DrawStringAnchored(label, 0, 0, 0.5, 0.5)
+		cv.Restore()
+	}
+}
+
+// drawYAxisRight renders a vertical axis at the right of the data area.
+// Used for secondary Y-axes. Mirrors drawYAxis with ticks/labels on the right.
+func drawYAxisRight(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, th theme.Theme) {
+	ticks := sc.Ticks(5)
+	tickLen := th.Spacing.TickLength
+	r, g, b, _ := rgbaOf(th.AxisTicks().Color)
+	tr, tg, tb, _ := rgbaOf(th.AxisTextElem().Color)
+
+	// Baseline.
+	cv.SetRGBA(r, g, b, 1)
+	cv.SetLineWidth(th.AxisTicks().Size)
+	cv.DrawLine(x, y, x, y+h)
+	cv.Stroke()
+
+	yMin, yMax := sc.Bounds()
+	minSpacing := th.AxisTextElem().Size + 4 // minimum px between labels
+	lastPy := -1000.0                        // track last drawn label position
+	maxLabelW := 0.0                         // track widest drawn label
+
+	// Measure + draw tick labels.
+	cv.SetFontSize(th.AxisTextElem().Size)
+
+	for _, v := range ticks {
+		frac := (v - yMin) / (yMax - yMin)
+		if frac < 0 || frac > 1 {
+			continue
+		}
+
+		py := y + h - frac*h // invert y
+
+		// Tick mark (always drawn) — extends right.
+		cv.SetRGBA(r, g, b, 1)
+		cv.DrawLine(x, py, x+tickLen, py)
+		cv.Stroke()
+
+		// Label — anchored on the left, skip if too close to previous label.
+		if math.Abs(py-lastPy) >= minSpacing {
+			lbl := sc.Format(v)
+
+			cv.SetTabularNums(true)
+
+			tw, _ := cv.MeasureString(lbl)
+			if tw > maxLabelW {
+				maxLabelW = tw
+			}
+
+			cv.SetRGBA(tr, tg, tb, 1)
+			cv.SetFontSize(th.AxisTextElem().Size)
+			cv.DrawStringAnchored(lbl, x+tickLen+5, py, 0.0, 0.5) //nolint:mnd // Label gap.
+			cv.SetTabularNums(false)
+
+			lastPy = py
+		}
+	}
+
+	// Axis title (rotated), positioned to the right of the widest tick label.
+	if label != "" {
+		lr, lg, lb, _ := rgbaOf(th.AxisTitle().Color)
+		cv.SetRGBA(lr, lg, lb, 1)
+		cv.SetFontSize(th.AxisTitle().Size)
+		cv.Save()
+
+		titleOffset := 5 + maxLabelW + th.AxisTitle().Size/2 + 8 //nolint:mnd // Same spacing as left axis.
+		if titleOffset < 30 {                                    //nolint:mnd // Minimum offset.
+			titleOffset = 30 //nolint:mnd // Minimum offset for short labels.
+		}
+
+		cv.Translate(x+tickLen+titleOffset, y+h/2)
+		cv.Rotate(math.Pi / 2)
 		cv.DrawStringAnchored(label, 0, 0, 0.5, 0.5)
 		cv.Restore()
 	}

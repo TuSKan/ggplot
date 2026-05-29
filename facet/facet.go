@@ -71,6 +71,22 @@ type Facet interface {
 	// For Wrap, this is computed from the number of panels and nCols.
 	GridDims(nPanels int) (rows, cols int)
 
+	// FreeScales returns whether X and Y scales are independent per panel.
+	// When false (default), all panels share unified scale bounds.
+	FreeScales() (freeX, freeY bool)
+
+	// SpaceMode returns the space allocation mode for panels:
+	//   "fixed"  — all panels have equal size (default)
+	//   "free"   — panel sizes proportional to data range (both axes)
+	//   "free_x" — column widths proportional to X range
+	//   "free_y" — row heights proportional to Y range
+	SpaceMode() string
+
+	// StripPositions returns the strip label placement for column and row strips.
+	// col: "top" (default) or "bottom"
+	// row: "right" (default) or "left"
+	StripPositions() (col, row string)
+
 	// String returns a human-readable description.
 	String() string
 }
@@ -98,8 +114,11 @@ type none struct{}
 func (none) Split(_ context.Context, ds dataset.Dataset) ([]Panel, error) {
 	return []Panel{{Label: "", Dataset: ds, NumRows: int(ds.NumRows())}}, nil
 }
-func (none) GridDims(int) (int, int) { return 1, 1 }
-func (none) String() string          { return "none" }
+func (none) GridDims(int) (int, int)          { return 1, 1 }
+func (none) FreeScales() (bool, bool)         { return false, false }
+func (none) SpaceMode() string                { return "fixed" }
+func (none) StripPositions() (string, string) { return "top", "right" }
+func (none) String() string                   { return "none" }
 
 // --- Wrap faceting ---
 
@@ -123,6 +142,23 @@ func WithDrop(drop bool) WrapOpt {
 	return func(f *wrapFacet) { f.drop = drop }
 }
 
+// FreeX makes each panel's X scale independent.
+func FreeX() WrapOpt { return func(f *wrapFacet) { f.freeX = true } }
+
+// FreeY makes each panel's Y scale independent.
+func FreeY() WrapOpt { return func(f *wrapFacet) { f.freeY = true } }
+
+// FreeXY makes both X and Y scales independent per panel.
+func FreeXY() WrapOpt {
+	return func(f *wrapFacet) {
+		f.freeX = true
+		f.freeY = true
+	}
+}
+
+// StripBottom places wrap strip labels at the bottom of each panel.
+func StripBottom() WrapOpt { return func(f *wrapFacet) { f.stripPos = "bottom" } }
+
 // Wrap creates a facet that wraps panels across a grid layout, splitting
 // the data by the given column's distinct values.
 func Wrap(col string, opts ...WrapOpt) Facet {
@@ -140,6 +176,9 @@ type wrapFacet struct {
 	nRows    int
 	labeller Labeller
 	drop     bool
+	freeX    bool
+	freeY    bool
+	stripPos string
 }
 
 func (f *wrapFacet) Split(_ context.Context, ds dataset.Dataset) ([]Panel, error) {
@@ -210,6 +249,18 @@ func (f *wrapFacet) GridDims(nPanels int) (int, int) {
 	return rows, cols
 }
 
+func (f *wrapFacet) FreeScales() (bool, bool) { return f.freeX, f.freeY }
+func (f *wrapFacet) SpaceMode() string        { return "fixed" }
+
+func (f *wrapFacet) StripPositions() (string, string) {
+	pos := f.stripPos
+	if pos == "" {
+		pos = "top"
+	}
+
+	return pos, "right"
+}
+
 func (f *wrapFacet) String() string { return "wrap(" + f.col + ")" }
 
 // --- Grid faceting ---
@@ -233,6 +284,24 @@ func GridMargins(margins bool) GridOpt {
 	return func(g *gridFacet) { g.margins = margins }
 }
 
+// GridFreeX makes each column's X scale independent.
+func GridFreeX() GridOpt { return func(g *gridFacet) { g.freeX = true } }
+
+// GridFreeY makes each row's Y scale independent.
+func GridFreeY() GridOpt { return func(g *gridFacet) { g.freeY = true } }
+
+// GridSpace sets the space allocation mode for grid panels.
+// Valid modes: "fixed" (default), "free", "free_x", "free_y".
+// "free" modes make panel sizes proportional to their data range.
+// Requires the corresponding free scale to be meaningful.
+func GridSpace(mode string) GridOpt { return func(g *gridFacet) { g.space = mode } }
+
+// GridStripBottom places column strip labels at the bottom of the grid.
+func GridStripBottom() GridOpt { return func(g *gridFacet) { g.colStripPos = "bottom" } }
+
+// GridStripLeft places row strip labels at the left of the grid.
+func GridStripLeft() GridOpt { return func(g *gridFacet) { g.rowStripPos = "left" } }
+
 // Grid creates a facet that arranges panels in a row × col matrix,
 // splitting by one variable for rows and another for columns.
 func Grid(rowCol, colCol string, opts ...GridOpt) Facet {
@@ -245,13 +314,18 @@ func Grid(rowCol, colCol string, opts ...GridOpt) Facet {
 }
 
 type gridFacet struct {
-	rowCol   string
-	colCol   string
-	nRowVals int // set by Split, used by GridDims
-	nColVals int // set by Split, used by GridDims
-	labeller Labeller
-	drop     bool
-	margins  bool
+	rowCol      string
+	colCol      string
+	nRowVals    int // set by Split, used by GridDims
+	nColVals    int // set by Split, used by GridDims
+	labeller    Labeller
+	drop        bool
+	margins     bool
+	freeX       bool
+	freeY       bool
+	space       string
+	colStripPos string
+	rowStripPos string
 }
 
 func (g *gridFacet) Split(_ context.Context, ds dataset.Dataset) ([]Panel, error) {
@@ -405,6 +479,30 @@ func (g *gridFacet) GridDims(nPanels int) (int, int) {
 
 	return rows, cols
 }
+func (g *gridFacet) FreeScales() (bool, bool) { return g.freeX, g.freeY }
+
+func (g *gridFacet) SpaceMode() string {
+	if g.space == "" {
+		return "fixed"
+	}
+
+	return g.space
+}
+
+func (g *gridFacet) StripPositions() (string, string) {
+	col := g.colStripPos
+	if col == "" {
+		col = "top"
+	}
+
+	row := g.rowStripPos
+	if row == "" {
+		row = "right"
+	}
+
+	return col, row
+}
+
 func (g *gridFacet) String() string { return "grid(" + g.rowCol + " ~ " + g.colCol + ")" }
 
 // --- Helpers ---

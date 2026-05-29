@@ -462,3 +462,139 @@ func TestFormatNumber(t *testing.T) {
 		})
 	}
 }
+
+// --- DerivedScale (secondary axis) ---
+
+func TestDerivedScale_Bounds(t *testing.T) {
+	t.Parallel()
+
+	primary := trainLinear(0, 100) // °C
+	// °C → °F: f = c*9/5 + 32
+	spec := scale.SecAxis(
+		func(c float64) float64 { return c*9/5 + 32 },
+		func(f float64) float64 { return (f - 32) * 5 / 9 },
+		"°F",
+	)
+	ds := &scale.DerivedScale{Primary: primary, Spec: spec}
+
+	mn, mx := ds.Bounds()
+	if math.Abs(mn-32) > 1e-10 {
+		t.Errorf("Bounds min = %v, want 32 (0°C = 32°F)", mn)
+	}
+
+	if math.Abs(mx-212) > 1e-10 {
+		t.Errorf("Bounds max = %v, want 212 (100°C = 212°F)", mx)
+	}
+}
+
+func TestDerivedScale_Ticks(t *testing.T) {
+	t.Parallel()
+
+	primary := trainLinear(0, 100)
+	spec := scale.SecAxis(
+		func(c float64) float64 { return c * 2 }, //nolint:mnd // Simple 2x transform.
+		func(f float64) float64 { return f / 2 },
+		"",
+	)
+	ds := &scale.DerivedScale{Primary: primary, Spec: spec}
+
+	ticks := ds.Ticks(5) //nolint:mnd // Request 5 ticks.
+	// Primary ticks for [0, 100] with n=5 are [0, 20, 40, 60, 80, 100].
+	// Transformed: [0, 40, 80, 120, 160, 200].
+	for i, v := range ticks {
+		primaryV := primary.Ticks(5)[i]
+		expected := primaryV * 2 //nolint:mnd // 2x transform.
+
+		if math.Abs(v-expected) > 1e-10 {
+			t.Errorf("Ticks[%d] = %v, want %v", i, v, expected)
+		}
+	}
+}
+
+func TestDerivedScale_ManualBreaks(t *testing.T) {
+	t.Parallel()
+
+	primary := trainLinear(0, 100)
+	spec := scale.SecAxisSpec{
+		Trans:   func(c float64) float64 { return c * 2 }, //nolint:mnd // Simple 2x transform.
+		Inverse: func(f float64) float64 { return f / 2 },
+		Breaks:  []float64{10, 50, 90, 150},
+	}
+	ds := &scale.DerivedScale{Primary: primary, Spec: spec}
+
+	ticks := ds.Ticks(5) //nolint:mnd // Ignored when breaks are specified.
+	if len(ticks) != 4 {
+		t.Fatalf("Ticks: got %d, want 4 (manual breaks)", len(ticks))
+	}
+
+	if ticks[0] != 10 || ticks[3] != 150 {
+		t.Errorf("Ticks = %v, want [10, 50, 90, 150]", ticks)
+	}
+}
+
+func TestDerivedScale_MapInverse_Roundtrip(t *testing.T) {
+	t.Parallel()
+
+	primary := trainLinear(0, 100)
+	spec := scale.SecAxis(
+		func(c float64) float64 { return c*9/5 + 32 },
+		func(f float64) float64 { return (f - 32) * 5 / 9 },
+		"°F",
+	)
+	ds := &scale.DerivedScale{Primary: primary, Spec: spec}
+
+	// Test roundtrip: secondary value → normalize → back to secondary.
+	for _, sv := range []float64{32, 68, 100, 150, 212} {
+		norm := ds.Map(sv)
+		back := ds.Inverse(norm)
+
+		if math.Abs(back-sv) > 1e-8 {
+			t.Errorf("roundtrip failed: %v → %.6f → %v", sv, norm, back)
+		}
+	}
+}
+
+func TestDerivedScale_Format(t *testing.T) {
+	t.Parallel()
+
+	primary := trainLinear(0, 100)
+	spec := scale.DupAxis("dup")
+	ds := &scale.DerivedScale{Primary: primary, Spec: spec}
+
+	got := ds.Format(42)
+	if got != "42" {
+		t.Errorf("Format(42) = %q, want \"42\"", got)
+	}
+}
+
+func TestDerivedScale_String(t *testing.T) {
+	t.Parallel()
+
+	primary := trainLinear(0, 100)
+	ds := &scale.DerivedScale{Primary: primary, Spec: scale.DupAxis("dup")}
+
+	got := ds.String()
+	if got != "sec(linear)" {
+		t.Errorf("String() = %q, want \"sec(linear)\"", got)
+	}
+}
+
+func TestDupAxis_Identity(t *testing.T) {
+	t.Parallel()
+
+	spec := scale.DupAxis("Mirror")
+	if spec.Name != "Mirror" {
+		t.Errorf("Name = %q, want \"Mirror\"", spec.Name)
+	}
+
+	// Trans/Inverse should be identity.
+	for _, v := range []float64{-1, 0, 42, 100} {
+		if spec.Trans(v) != v {
+			t.Errorf("Trans(%v) = %v, want %v", v, spec.Trans(v), v)
+		}
+
+		if spec.Inverse(v) != v {
+			t.Errorf("Inverse(%v) = %v, want %v", v, spec.Inverse(v), v)
+		}
+	}
+}

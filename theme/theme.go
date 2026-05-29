@@ -321,32 +321,36 @@ type Spacing struct {
 // parentOf maps each element path to its parent in the inheritance chain.
 // Root elements ("text", "line", "rect") have no parent.
 var parentOf = map[string]string{
-	"plot.title":        "text",
-	"plot.subtitle":     "text",
-	"axis.title":        "text",
-	"axis.title.x":      "axis.title",
-	"axis.title.y":      "axis.title",
-	"axis.text":         "text",
-	"axis.text.x":       "axis.text",
-	"axis.text.y":       "axis.text",
-	"legend.title":      "text",
-	"legend.text":       "text",
-	"strip.text":        "text",
-	"annotation.text":   "text",
-	"axis.line":         "line",
-	"axis.line.x":       "axis.line",
-	"axis.line.y":       "axis.line",
-	"axis.ticks":        "line",
-	"axis.ticks.x":      "axis.ticks",
-	"axis.ticks.y":      "axis.ticks",
-	"panel.grid.major":  "line",
-	"panel.grid.minor":  "line",
-	"plot.background":   "rect",
-	"panel.background":  "rect",
-	"panel.border":      "rect",
-	"legend.background": "rect",
-	"legend.key":        "rect",
-	"strip.background":  "rect",
+	"plot.title":         "text",
+	"plot.subtitle":      "text",
+	"axis.title":         "text",
+	"axis.title.x":       "axis.title",
+	"axis.title.y":       "axis.title",
+	"axis.text":          "text",
+	"axis.text.x":        "axis.text",
+	"axis.text.y":        "axis.text",
+	"legend.title":       "text",
+	"legend.text":        "text",
+	"strip.text":         "text",
+	"strip.text.x":       "strip.text",
+	"strip.text.y":       "strip.text",
+	"annotation.text":    "text",
+	"axis.line":          "line",
+	"axis.line.x":        "axis.line",
+	"axis.line.y":        "axis.line",
+	"axis.ticks":         "line",
+	"axis.ticks.x":       "axis.ticks",
+	"axis.ticks.y":       "axis.ticks",
+	"panel.grid.major":   "line",
+	"panel.grid.minor":   "line",
+	"plot.background":    "rect",
+	"panel.background":   "rect",
+	"panel.border":       "rect",
+	"legend.background":  "rect",
+	"legend.key":         "rect",
+	"strip.background":   "rect",
+	"strip.background.x": "strip.background",
+	"strip.background.y": "strip.background",
 }
 
 // --- Typed resolvers ---
@@ -459,6 +463,12 @@ func (t Theme) LegendTextElem() ElementText { return t.resolveText("legend.text"
 // StripText returns the resolved facet strip text element.
 func (t Theme) StripText() ElementText { return t.resolveText("strip.text") }
 
+// StripTextX returns the resolved column-strip text element.
+func (t Theme) StripTextX() ElementText { return t.resolveText("strip.text.x") }
+
+// StripTextY returns the resolved row-strip text element.
+func (t Theme) StripTextY() ElementText { return t.resolveText("strip.text.y") }
+
 // AnnotationText returns the resolved annotation text element.
 func (t Theme) AnnotationText() ElementText { return t.resolveText("annotation.text") }
 
@@ -491,6 +501,73 @@ func (t Theme) LegendKey() ElementRect { return t.resolveRect("legend.key") }
 
 // StripBackground returns the resolved facet strip background rect.
 func (t Theme) StripBackground() ElementRect { return t.resolveRect("strip.background") }
+
+// StripBackgroundX returns the resolved column-strip background rect.
+func (t Theme) StripBackgroundX() ElementRect { return t.resolveRect("strip.background.x") }
+
+// StripBackgroundY returns the resolved row-strip background rect.
+func (t Theme) StripBackgroundY() ElementRect { return t.resolveRect("strip.background.y") }
+
+// ---------------------------------------------------------------------------
+// Theme Overrides
+// ---------------------------------------------------------------------------
+
+// Override represents a single element override for a theme.
+// Path is the dotted element key (e.g. "axis.title.x", "strip.text").
+// Elem is the Element value to install at that path.
+type Override struct {
+	Path string
+	Elem Element
+}
+
+// WithOverrides returns a shallow copy of the theme with the given overrides
+// applied. Each override inserts (or replaces) an element in the Elements map.
+func WithOverrides(th Theme, overrides ...Override) Theme {
+	if len(overrides) == 0 {
+		return th
+	}
+
+	// Copy the Elements map so we don't mutate the original.
+	elems := make(map[string]Element, len(th.Elements)+len(overrides))
+	maps.Copy(elems, th.Elements)
+
+	for _, o := range overrides {
+		elems[o.Path] = o.Elem
+	}
+
+	th.Elements = elems
+
+	return th
+}
+
+// --- Convenience Override constructors ---
+
+// AxisTitleXOverride creates an override for "axis.title.x".
+func AxisTitleXOverride(e ElementText) Override { return Override{"axis.title.x", e} }
+
+// AxisTitleYOverride creates an override for "axis.title.y".
+func AxisTitleYOverride(e ElementText) Override { return Override{"axis.title.y", e} }
+
+// StripTextOverride creates an override for "strip.text".
+func StripTextOverride(e ElementText) Override { return Override{"strip.text", e} }
+
+// StripTextXOverride creates an override for "strip.text.x".
+func StripTextXOverride(e ElementText) Override { return Override{"strip.text.x", e} }
+
+// StripTextYOverride creates an override for "strip.text.y".
+func StripTextYOverride(e ElementText) Override { return Override{"strip.text.y", e} }
+
+// StripBackgroundOverride creates an override for "strip.background".
+func StripBackgroundOverride(e ElementRect) Override { return Override{"strip.background", e} }
+
+// PanelBackgroundOverride creates an override for "panel.background".
+func PanelBackgroundOverride(e ElementRect) Override { return Override{"panel.background", e} }
+
+// PlotTitleOverride creates an override for "plot.title".
+func PlotTitleOverride(e ElementText) Override { return Override{"plot.title", e} }
+
+// PanelBorderOverride creates an override for "panel.border".
+func PanelBorderOverride(e ElementRect) Override { return Override{"panel.border", e} }
 
 // --- Registry ---
 

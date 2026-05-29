@@ -19,8 +19,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`Plot.FacetWrap(col, opts ...WrapOpt)`** — signature changed from positional `(col string, nCols, nRows int)` to variadic functional options.
 - **`Plot.FacetGrid(row, col, opts ...GridOpt)`** — new method; replaces the old `(row, col string)` two-arg form with variadic functional options.
 - **`facet.Grid(row, col, opts ...GridOpt)`** — constructor signature changed to accept `GridOpt` functional options.
+#### Faceting API (Phase 12 — Breaking)
+- **`facet.Facet`** interface — added `FreeScales() (freeX, freeY bool)`, `SpaceMode() string`, and `StripPositions() (col, row string)` methods.
+- **`Plot.SecondaryY`** renamed to **`Plot.SecondAxis`** for clarity.
+- **`PlotSpec.SecondaryY`** renamed to **`PlotSpec.SecondAxis`**.
+- **`Built.freeX`/`freeY`** moved from `Built` struct to `Layout` struct as `Layout.FreeX`/`Layout.FreeY` — these are facet-level layout properties, not per-panel state.
+
+### Fixed
+- **`clone()` dropped spec fields** — `SecondAxis`, `ThemeOverrides`, `ColorBarWidth`, `ColorBarNBin`, `LegendNCols`, `SizeScale`, `AlphaScale`, `ShapeScale`, and `LinetypeScale` were not copied by `Plot.clone()`, causing any builder method called after setting these to silently drop them.
 
 ### Added
+
+#### Advanced Faceting (Phase 12)
+- **Secondary Y-Axis** — `Plot.SecondAxis(scale.SecAxisSpec)` adds a right-side Y-axis derived from the primary via closure-based transform pair.
+  - `scale.SecAxis(trans, inverse, name)` — constructor for custom transforms (e.g. °C → °F).
+  - `scale.DupAxis(name)` — identity transform for mirroring the primary axis.
+  - `scale.DerivedScale` — composite scale that applies `SecAxisSpec` to a primary scale's ticks/bounds.
+  - Right margin auto-measured from secondary tick labels and title.
+  - `drawYAxisRight` — new axis renderer with ticks/labels on the right side.
+- **Free Scales** — per-panel independent axis bounds for faceted plots.
+  - `facet.FreeX()`, `facet.FreeY()`, `facet.FreeXY()` — Wrap options.
+  - `facet.GridFreeX()`, `facet.GridFreeY()` — Grid options.
+  - Post-build scale unification — union bounds computed across all panels for shared axes.
+  - Per-panel axis labels drawn when scales are free (not just left column / bottom row).
+- **Free Space** — `facet.GridSpace(mode)` option for proportional panel sizing (`"fixed"`, `"free"`, `"free_x"`, `"free_y"`).
+- **Strip Placement** — `facet.StripBottom()`, `facet.GridStripBottom()`, `facet.GridStripLeft()` options for repositioning facet strip labels.
+- **Strip Styling Granularity** — `strip.text.x`, `strip.text.y`, `strip.background.x`, `strip.background.y` theme inheritance paths for axis-specific strip styling.
+- **Theme Overrides** — `Plot.ThemeOverride(...theme.Override)` for per-plot element overrides without creating custom themes.
+  - `theme.Override{Path, Elem}` type for specifying element overrides.
+  - `theme.WithOverrides(th, ...)` — functional theme copy with overrides.
+  - Convenience constructors: `theme.AxisTitleXOverride`, `theme.StripTextOverride`, `theme.StripBackgroundOverride`, `theme.PlotTitleOverride`, etc.
+- New example: `examples/secondary_axis/` — 2 plots (°C→°F transform, DupAxis mirror).
+- New example: `examples/facet_free_scales/` — 4 plots (shared, free_y, free_xy, strip style override).
+- 7 new tests in `scale/scale_test.go` covering `DerivedScale` (bounds, ticks, manual breaks, map/inverse roundtrip, format, string) and `DupAxis`.
+
 
 #### Faceting Deep Dive (Phase 11)
 - **Labellers** — `facet.LabelValue()`, `facet.LabelBoth()`, `facet.LabelContext()`, and `facet.Label(func(col, val string) string)` custom labeller. `LabelContext` resolves to `LabelValue` for Wrap and `LabelBoth` for Grid.

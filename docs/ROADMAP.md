@@ -251,7 +251,7 @@ The public extension API — implemented via Go interfaces + registration, not g
 - ✅ **Date/Time scale** — `scale.DateTime` with auto tick formatting (second/minute/hour/day/month/year); training on `DTypeTimestamp`/`DTypeDate`/`DTypeTime` columns; `time.Local` timezone; intraday spans show time-only labels
 - ✅ **`scale.Binned`** — discretize continuous axes into range-labeled bins; auto (Sturges) or explicit bin count via `scale.WithBins(n)`; explicit edges via `scale.WithBinBreaks([]float64)`; `Format()` shows `[lo, hi)` range labels
 - ✅ **Out-of-bounds (oob) policies** — `scale.WithOOB(OOBKeep | OOBSquish | OOBCensor)` per ggplot2 Ch.14.4; composable with `WithClipBounds`
-- 🔲 **Secondary axes** — `SecAxis()` / `DupAxis()` for dual Y. Requires dual-axis layout (right margin, second tick column) — straightforward once `Built.Layout` exists
+- ✅ **Secondary axes** — `SecAxis()` / `DupAxis()` for dual Y-axis via closure-based transform pair; `DerivedScale` composite; right margin auto-measurement; `drawYAxisRight` renderer
 - ✅ **`AxisLabelRows(n)`** — auto-detect overlapping X-axis labels and stagger across n rows; rotated label support via `ElementText.Angle`; overlap skipping within dodge rows
 
 ---
@@ -377,21 +377,21 @@ The public extension API — implemented via Go interfaces + registration, not g
 - ✅ **Example** — `examples/facet_labeller/` with 4 plots (Wrap+LabelBoth, Grid+Margins, Wrap+Drop=false, Grid default)
 
 **Remaining:**
-- 🔲 **Free scales** — `facet.Wrap(col, FreeX(), FreeY())` per-panel independent axes (requires per-panel scale clones in `Built.Layout`)
-- 🔲 **Free space** — `facet.Grid(row, col, Space("free"))` proportional panel sizing
-- 🔲 **Strip placement** — `StripPosition("bottom" | "left")` for axis-adjacent strips
+- ✅ **Free scales** — `facet.FreeX()`, `FreeY()`, `FreeXY()`, `GridFreeX()`, `GridFreeY()` per-panel independent axes with post-build union bounds and per-panel axis drawing
+- ✅ **Free space** — `facet.GridSpace("free"|"free_x"|"free_y")` proportional panel sizing
+- ✅ **Strip placement** — `StripBottom()`, `GridStripBottom()`, `GridStripLeft()` for axis-adjacent strips
 
 ---
 
-### Phase 12 — Theme System Granularity 🔲
+### Phase 12 — Theme System Granularity ✅
 
 > Book Ch.17 (Themes). Foundation already built in Phase 4.4.
 
-- 🔲 **Granular `theme()` overrides** — `Theme(WithAxisTitleX(ElementText{Face: "bold"}))` etc. (every `axis.title.x`, `legend.key.size`, …)
-- 🔲 **User-composable themes** — `theme.New(base, overrides...)` returning a composed `Theme`
+- ✅ **Granular `theme()` overrides** — `Plot.ThemeOverride(theme.AxisTitleXOverride(ElementText{Bold: true}))` per-plot element overrides
+- ✅ **User-composable themes** — `theme.WithOverrides(base, ...Override)` returning a composed `Theme` with shallow copy
 - 🔲 **Plot margin** with unit support — `cm`, `inches`, `lines`, `pt`
 - 🔲 **Legend layout** — `legend.box`, `legend.key`, `legend.background`, `legend.margin`
-- 🔲 **Strip styling** — `strip.text`, `strip.background`, `strip.clip`
+- ✅ **Strip styling** — `strip.text.x`, `strip.text.y`, `strip.background.x`, `strip.background.y` inheritance paths added
 - 🔲 **Theme inheritance proofs** — golden tests that `axis.title.x` correctly inherits from `axis.title` from `text` from root
 - 🔲 **Continuous legends** — graduated-size and continuous-alpha legend rendering (deferred from Phase 7)
 

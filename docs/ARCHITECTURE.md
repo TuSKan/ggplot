@@ -71,17 +71,23 @@ github.com/TuSKan/ggplot
 │
 ├── scale/               # Scale types + Resolve factory
 │   └── scale.go         #   Linear, Log10, Sqrt, Reverse, Discrete + NiceSequence, FormatNumber
+│                        #   SecAxisSpec, DerivedScale — secondary Y-axis via closure transforms
+│                        #   BoundsSetter interface for post-build scale unification
 │
 ├── coord/               # Coordinate systems (pure specification — zero math)
 │   └── coord.go         #   Cartesian, CartesianZoom (Zoomer), Fixed (Fixer), Polar, Trans
 │                        #   TransFunc is name-only; pipeline dispatches to MathKernel
 │
 ├── facet/               # Faceting strategies
-│   └── facet.go         #   None, Wrap (NCols, Labeller, Drop), Grid (row ~ col, Labeller, Drop, Margins)
+│   └── facet.go         #   None, Wrap (NCols, Labeller, Drop, FreeX/Y/XY, StripBottom),
+│                        #   Grid (row ~ col, Labeller, Drop, Margins, FreeX/Y, Space, StripBottom/Left)
+│                        #   Facet interface: Split, Labels, GridDims, FreeScales, SpaceMode, StripPositions
 │                        #   Panel carries RowVal/ColVal/NumRows/IsMargin; mask-based lazy splitting
 │
 ├── theme/               # Theme definitions (60+ built-in themes)
 │   ├── theme.go         #   Name, Theme struct, Element types, inheritance resolver, registry
+│                        #   Override type, WithOverrides — per-plot element overrides
+│                        #   strip.text.x/y, strip.background.x/y inheritance paths
 │   ├── elements.go      #   ElementText, ElementLine, ElementRect, ElementBlank, Merge functions
 │   ├── color_defaults.go#   Per-theme colormap defaults (discrete, sequential, diverging, cyclic)
 │   ├── ggplot.go        #   Ggplot (matplotlib) + Default alias → Dashboard

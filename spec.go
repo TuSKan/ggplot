@@ -85,6 +85,15 @@ type PlotSpec struct {
 	// Annotations holds fixed-coordinate visual elements that bypass the
 	// data/stat/position pipeline. They are drawn after all data layers.
 	Annotations []Annotation
+
+	// SecondAxis holds a secondary Y-axis specification. When non-nil,
+	// a right-side Y-axis is drawn with ticks derived from the primary Y
+	// through the transform function pair.
+	SecondAxis *scale.SecAxisSpec
+
+	// ThemeOverrides holds per-plot theme element overrides.
+	// Applied after the base theme is resolved, before rendering.
+	ThemeOverrides []theme.Override
 }
 
 // AesMap maps aesthetic channel names to column names.
