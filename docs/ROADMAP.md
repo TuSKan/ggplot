@@ -84,6 +84,13 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 
 ---
 
+### Release Status
+
+- **v0.0.9 (2026-05-28) — current release.** Ships every ✅ item below through Phase 12: advanced faceting (free scales, grid margins, labellers, strip placement), secondary axes (`SecAxis`/`DupAxis`), theme overrides (`ThemeOverride`/`WithOverrides`), the Phase 8 geometry batch (Violin, Dotplot, Raster, Curve, Crossbar, Linerange, Pointrange, JitterPoint), coordinate systems (CartesianZoom, Fixed, Flip, Polar), and engine-native coordinate transforms. Breaking: `FacetWrap`/`FacetGrid` variadic options, `SecondaryY` → `SecondAxis`, `coord.TransFunc` reduced to a name-only spec.
+- **Next big change — the Output Layer.** The `output` package + `canvas.GGCanvas` → `RasterCanvas` rename specified in [OUTPUT-SPEC.md](OUTPUT-SPEC.md) and flagged as "target architecture, not yet implemented" in [ARCHITECTURE.md](ARCHITECTURE.md). v0.0.9 is the deliberate cut-point **before** the rendering pipe gains a pluggable `Surface` back-end (file / in-memory image / desktop window / browser canvas). See Phase 18.
+
+---
+
 ### Phase 1 — Core Grammar & Data Plane 🔶
 
 > Book Ch.1–2 (Introduction, First Steps), Ch.13 (Layers), Ch.19 (Internals)

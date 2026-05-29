@@ -34,7 +34,70 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 
 ---
 
-## What's New in v0.0.8
+## What's New in v0.0.9
+
+### Advanced Faceting
+
+Free scales, grid margins, custom labellers, and strip placement:
+
+```go
+ggplot.New(ds, aes.X("x"), aes.Y("y")).
+    Layer(geom.Point()).
+    FacetWrap("species", facet.FreeY()).   // independent Y range per panel
+    Save(ctx, "facets.png", 900, 300)
+
+ggplot.New(ds, aes.X("x"), aes.Y("y")).
+    Layer(geom.Point()).
+    FacetGrid("year", "site", facet.GridMargins(true)).  // row/col/corner "All" panels
+    Save(ctx, "grid.png", 900, 600)
+```
+
+Labellers (`facet.LabelValue`, `LabelBoth`, `LabelContext`, `Label(fn)`), `facet.Drop(false)` to keep empty panels, `facet.GridSpace("free_y")` for proportional sizing, and `facet.StripBottom()` / `GridStripLeft()` for strip repositioning.
+
+### Secondary Axes
+
+Dual Y-axis derived from the primary via a transform pair, or a mirrored duplicate:
+
+```go
+ggplot.New(ds, aes.X("hour"), aes.Y("temp_c")).
+    Layer(geom.Point(geom.WithColor("steelblue"))).
+    SecondAxis(scale.SecAxis(
+        func(c float64) float64 { return c*9/5 + 32 },       // °C → °F
+        func(f float64) float64 { return (f - 32) * 5 / 9 }, // °F → °C
+        "Temperature (°F)",
+    )).
+    Save(ctx, "dual_axis.png", 800, 500)
+
+// scale.DupAxis("°C") mirrors the primary axis on the right.
+```
+
+### Theme Overrides
+
+Per-plot element overrides without authoring a custom theme:
+
+```go
+ggplot.New(ds, aes.X("x"), aes.Y("y")).
+    Layer(geom.Point()).
+    Theme("default").
+    ThemeOverride(
+        theme.StripTextOverride(theme.ElementText{Bold: true, Size: 13}),
+    ).
+    Save(ctx, "styled.png", 800, 500)
+```
+
+### New Geometries & Coordinate Systems
+
+`geom.Violin`, `geom.Dotplot`, `geom.Raster`, `geom.Curve`, `geom.Crossbar`, `geom.Linerange`, `geom.Pointrange`, and `geom.JitterPoint`. Coordinate systems: `CoordCartesian` (viewport zoom), `CoordFixed` (aspect ratio), `CoordFlip`, and `Coord(coord.Polar(...))`. Coordinate transforms now dispatch to engine-native math kernels (Arrow compute / SQL functions) instead of scalar fallbacks.
+
+### ⚠️ Breaking Changes
+
+- `Plot.FacetWrap(col string, opts ...WrapOpt)` — was `(col, nCols, nRows)`. Use `facet.NCols(n)`.
+- `Plot.FacetGrid(row, col string, opts ...GridOpt)` — replaces the old two-arg form.
+- `Plot.SecondaryY` → **`Plot.SecondAxis`**.
+- `coord.TransFunc` is now a name-only spec type (math moved to engine `MathKernel`).
+
+<details>
+<summary><strong>What was new in v0.0.8</strong></summary>
 
 ### Aesthetics Mapping
 
@@ -68,6 +131,8 @@ ggplot.New(ds, aes.X("date"), aes.Y("value"), aes.Linetype("model")).
 ### Shape Constants
 
 All shape names are now exported constants (`canvas.ShapeCircle`, `canvas.ShapeStar`, etc.) — no more magic strings.
+
+</details>
 
 <details>
 <summary><strong>What was new in v0.0.7</strong></summary>
