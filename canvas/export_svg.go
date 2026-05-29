@@ -20,16 +20,19 @@ import (
 
 // svgBackend implements [recording.Backend] for SVG 1.1 output.
 type svgBackend struct {
-	w, h int
-	buf  strings.Builder
+	w, h  int
+	buf   strings.Builder
+	ctm   recording.Matrix   // tracked transform; used only to orient text
+	stack []recording.Matrix // Save/Restore stack for ctm
 }
 
 func newSVGBackend() *svgBackend {
-	return &svgBackend{}
+	return &svgBackend{ctm: recording.Identity()}
 }
 
 func (b *svgBackend) Begin(width, height int) error {
 	b.w, b.h = width, height
+	b.ctm = recording.Identity()
 	fmt.Fprintf(&b.buf, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"+
 		"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\">\n",
 		width, height, width, height)
@@ -42,14 +45,26 @@ func (b *svgBackend) End() error {
 	return nil
 }
 
-func (b *svgBackend) Save()    { b.buf.WriteString("<g>\n") }
-func (b *svgBackend) Restore() { b.buf.WriteString("</g>\n") }
+// The recorder bakes the current transform into every coordinate it emits (see
+// recording.Recorder.TransformPoint), so the transform must NOT be re-applied to
+// path geometry — doing so double-transforms it (e.g. shifts the panel's data
+// layer off the axes). Paths/rects therefore use the baked world coordinates
+// verbatim and never consult the matrix.
+//
+// Text is the exception: the recorder bakes only the anchor *position*, not the
+// glyph *orientation*, so rotated text (axis titles, facet strips, slanted tick
+// labels) would otherwise render upright. We track the CTM here purely to
+// recover the rotation in [svgBackend.DrawText]; it is not applied to geometry.
+func (b *svgBackend) Save() { b.stack = append(b.stack, b.ctm) }
 
-func (b *svgBackend) SetTransform(m recording.Matrix) {
-	fmt.Fprintf(&b.buf, "<g transform=\"matrix(%.4f,%.4f,%.4f,%.4f,%.4f,%.4f)\">\n",
-		m.A, m.D, m.B, m.E, m.C, m.F)
+func (b *svgBackend) Restore() {
+	if n := len(b.stack); n > 0 {
+		b.ctm = b.stack[n-1]
+		b.stack = b.stack[:n-1]
+	}
 }
 
+func (b *svgBackend) SetTransform(m recording.Matrix)          { b.ctm = m }
 func (b *svgBackend) SetClip(_ *gg.Path, _ recording.FillRule) {}
 func (b *svgBackend) ClearClip()                               {}
 
@@ -144,9 +159,30 @@ func (b *svgBackend) DrawText(s string, x, y float64, face text.Face, brush reco
 		}
 	}
 
+	// The anchor position (x,y) is already baked into world space; recover only
+	// the glyph orientation from the tracked CTM and rotate about that point.
+	transformAttr := ""
+	if deg := textRotationDeg(b.ctm); deg != 0 {
+		transformAttr = fmt.Sprintf(` transform="rotate(%.4f %.2f %.2f)"`, deg, x, y)
+	}
+
 	fmt.Fprintf(&b.buf,
-		"<text x=\"%.2f\" y=\"%.2f\" fill=\"%s\" font-family=\"sans-serif\" font-size=\"%.1f\"%s>%s</text>\n",
-		x, y, fill, fontSize, variantAttr, escaped)
+		"<text x=\"%.2f\" y=\"%.2f\" fill=\"%s\" font-family=\"sans-serif\" font-size=\"%.1f\"%s%s>%s</text>\n",
+		x, y, fill, fontSize, variantAttr, transformAttr, escaped)
+}
+
+// textRotationDeg returns the rotation of m in degrees, using the same y-down
+// convention as the recorder's gg.Rotate (which SVG's rotate() also uses), or 0
+// if the rotation is negligible. Uniform scale does not affect the result.
+func textRotationDeg(m recording.Matrix) float64 {
+	const eps = 1e-4
+
+	deg := math.Atan2(m.D, m.A) * 180 / math.Pi
+	if math.Abs(deg) < eps {
+		return 0
+	}
+
+	return deg
 }
 
 // WriteTo writes the SVG document to w.

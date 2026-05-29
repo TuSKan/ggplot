@@ -369,9 +369,18 @@ compositing. `RasterCanvas` was previously named `GGCanvas` (and its file `gg.go
 
 ### Output Layer
 
-> **Status:** target architecture. The `output` package and the `RasterCanvas` rename are
-> specified but not yet implemented — see [OUTPUT-SPEC.md](OUTPUT-SPEC.md) §11 for phasing.
-> Today the code still has `canvas.GGCanvas` and a stub `output` package.
+> **Status:** Phases 1–5 of [OUTPUT-SPEC.md](OUTPUT-SPEC.md) §11 are implemented.
+> Done: the `GGCanvas → RasterCanvas` rename (Phase 1); the `output` core —
+> `Figure`, `Source`, `Sizer`, `Surface`, `LiveSurface`, `Imager`, `Event`, `Render`, and the
+> blank-import registry (Phase 2); the `output/file` and `output/image` surfaces with
+> `Plot.Save`/`Encode`/`Image` and `Built.RenderTo` as façades over `Render` (Phase 3); the
+> `Session`/`Controller` interaction loop with fast-path viewport redraw and slow-path rebuild,
+> tested headless with a scripted `LiveSurface` (Phase 4); `output/window` (`//go:build !js`) —
+> `window.Show` opening a `gogpu` window with zero-copy `ggcanvas` presentation, reusing the
+> Phase-4 `Controller`/`State` (Phase 5, compile-verified — runtime needs a GPU/display).
+> `Plot.Build` now returns `output.Figure` (concretely `*Built`). Still pending: `output/web`
+> (Phase 6, wasm); async/debounced rebuild. Note `window.Show` drives gogpu's callback loop
+> directly (gogpu owns the run loop) rather than calling `Session.Run`.
 
 The `output` package is the **back of the rendering pipe** — it carries a `Figure` to a
 destination. One `Surface` abstraction serves four destinations:

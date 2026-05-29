@@ -21,15 +21,18 @@ import (
 	"github.com/TuSKan/ggplot/geom"
 )
 
-// drawPlot is a test helper: Build() + DrawCanvas().
-func drawPlot(ctx context.Context, p *ggplot.Plot, width, height int) (*canvas.GGCanvas, error) {
-	built, err := p.Build(ctx)
+// drawPlot is a test helper: Build() then draw onto a fresh RasterCanvas via
+// the output.Figure interface.
+func drawPlot(ctx context.Context, p *ggplot.Plot, width, height int) (*canvas.RasterCanvas, error) {
+	fig, err := p.Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("drawPlot build: %w", err)
 	}
 
-	cv, err := built.DrawCanvas(ctx, width, height)
-	if err != nil {
+	cv := canvas.NewRasterCanvas(width, height)
+	if err := fig.Draw(ctx, cv, width, height); err != nil {
+		_ = cv.Close()
+
 		return nil, fmt.Errorf("drawPlot draw: %w", err)
 	}
 
@@ -1378,9 +1381,14 @@ func TestRender_Phase7_Scales(t *testing.T) {
 		ScaleShapeManual(map[string]string{"A": "square", "B": "triangle"}).
 		ScaleLinetype()
 
-	built, err := p.Build(context.Background())
+	fig, err := p.Build(context.Background())
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
+	}
+
+	built, ok := fig.(*ggplot.Built)
+	if !ok {
+		t.Fatalf("Build returned %T, want *ggplot.Built", fig)
 	}
 
 	cv, err := built.DrawCanvas(context.Background(), 400, 300)
@@ -1941,9 +1949,14 @@ func TestCoordCartesianZoom_ScaleBoundsOverridden(t *testing.T) {
 		Layer(geom.Line()).
 		CoordCartesian(1, 3, 2, 6) //nolint:mnd // Zoom window.
 
-	built, err := p.Build(context.Background())
+	fig, err := p.Build(context.Background())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
+	}
+
+	built, ok := fig.(*ggplot.Built)
+	if !ok {
+		t.Fatalf("Build returned %T, want *ggplot.Built", fig)
 	}
 
 	info := built.Explain()
@@ -2149,5 +2162,72 @@ func TestCoordCartesianZoom_CoordInterface(t *testing.T) {
 
 	if ylim[1] != nil {
 		t.Error("ylim[1] should be nil")
+	}
+}
+
+// --- Output façades (Image / Encode over the output layer) ---
+
+func TestPlotImage(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	img, err := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point()).
+		Image(context.Background(), 200, 150)
+	if err != nil {
+		t.Fatalf("Image: %v", err)
+	}
+
+	if img == nil {
+		t.Fatal("nil image")
+	}
+
+	if b := img.Bounds(); b.Dx() != 200 || b.Dy() != 150 {
+		t.Errorf("bounds=%v, want 200x150", b)
+	}
+}
+
+func TestPlotImageAutoHeight(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	// height <= 0 -> inferred from width via the figure's Sizer.
+	img, err := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point()).
+		Image(context.Background(), 300, 0)
+	if err != nil {
+		t.Fatalf("Image: %v", err)
+	}
+
+	if b := img.Bounds(); b.Dx() != 300 || b.Dy() <= 0 || b.Dy() >= 300 {
+		t.Errorf("bounds=%v, want width 300 and inferred height in (0,300)", b)
+	}
+}
+
+func TestPlotEncodePNG(t *testing.T) {
+	t.Parallel()
+
+	eng := memory.NewEngine(context.Background())
+	ds := testLineDataset(eng)
+
+	var buf bytes.Buffer
+
+	n, err := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point()).
+		Encode(context.Background(), &buf, "png", 200, 150)
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	if n == 0 || buf.Len() == 0 {
+		t.Errorf("no bytes written: n=%d, buf=%d", n, buf.Len())
+	}
+
+	if int64(buf.Len()) != n {
+		t.Errorf("byte count mismatch: returned %d, buffer holds %d", n, buf.Len())
 	}
 }

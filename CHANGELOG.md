@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Output Layer (Phases 1–5 of OUTPUT-SPEC.md)
+
+#### Changed (Breaking)
+- **`canvas.GGCanvas` renamed to `canvas.RasterCanvas`** (Phase 1). Constructors renamed: `NewGGCanvas` → `NewRasterCanvas`, `NewGGCanvasCPU` → `NewRasterCanvasCPU`, `FromGGContext` → `RasterFromContext`. The file `canvas/gg.go` is now `canvas/raster.go`. No behavioral change.
+- **`Plot.Build` now returns `output.Figure`** (concretely a `*Built`) instead of `*Built` directly. Introspection is via a type assertion: `fig, _ := p.Build(ctx); b := fig.(*ggplot.Built)`. `*Built` stays exported with its full method set.
+
+#### Added
+- **`output` package — the unified destination layer** (Phase 2). One `Surface` model for file, in-memory image, desktop window, and browser canvas:
+  - `Figure` (`Draw`), `Source` (`Build`), `Sizer` (`PreferredSize`) interfaces; `*Built` implements `Figure`+`Sizer`, `*Plot` implements `Source`.
+  - `Surface` (`Acquire`/`Commit`/`Bounds`/`Close`) and `LiveSurface` (`+Events()`); `Imager` for image-producing surfaces.
+  - `Render(ctx, Figure, Surface)` — the one-frame primitive.
+  - `Event`/`EventKind` platform-neutral input events.
+  - Blank-import surface registry: `Register`, `NewSurface`, `NewLiveSurface`, `SurfaceOptions`, options (`WithSize`, `WithPath`, `WithWriter`, `WithFormat`, `WithScale`, `WithCPU`).
+  - Sentinels: `ErrUnknownSurface`, `ErrSurfaceConsumed`, `ErrNotLive`, `ErrUnsupportedFormat`, `ErrNoImage`.
+- **`output/file` and `output/image` surfaces** (Phase 3) — single-shot surfaces registered via blank import. File encodes PNG/SVG/PDF to a path or `io.Writer`; image publishes an in-memory `image.Image` (CPU-rasterized).
+- **`Plot.Image(ctx, w, h, opts...)`** — render to an in-memory `image.Image` (new).
+- **`Plot.Encode(ctx, dst, format, w, h, opts...)`** — write encoded bytes to an `io.Writer` (replaces `WriteTo`).
+- **`Built.RenderTo(ctx, output.Surface)`** — escape hatch to render onto any custom surface.
+- `Plot.Save`, `Encode`, and `Image` are now façades over `output.Render` + the built-in surfaces (auto-registered, so callers need no blank import).
+- **`output.Session` / `Controller` interaction loop** (Phase 4) — drives a `Source` onto a `LiveSurface`: build once, draw, then re-render on `Event`s. `Action` (`Ignore`/`Redraw`/`Rebuild`/`Export`/`Close`) is the per-event decision; `State` carries the viewport (offset/scale) shared with the controller. Fast path (`ActionRedraw`) re-renders the current figure under a viewport affine transform; slow path (`ActionRebuild`) calls `Source.Build` again. `ControllerFunc` adapter and a default pan/wheel-zoom controller; `NewSession`, `WithController`, `WithExportSurface`, `Session.Run(ctx)`, plus exported `output.DefaultController()` and `output.DrawViewport()` for backend reuse. *(Rebuild is currently synchronous; an async, debounced rebuild is a planned refinement.)*
+- **`output/window` — native desktop GPU window** (Phase 5, `//go:build !js`). `window.Show(ctx, src, opts...)` opens a `gogpu` window and presents the figure zero-copy through `gg/integration/ggcanvas` (`Render` onto the swapchain surface). Reuses the Phase-4 `Controller`/`State` policy (pan/wheel-zoom) driven from gogpu's frame and input callbacks rather than `Session.Run` (gogpu owns the run loop). Options: `WithTitle`, `WithSize`, `WithController`. *(`output/web` (Phase 6) is still pending.)*
+
+#### Dependencies
+- Added `github.com/gogpu/gogpu` (desktop window/GPU app, used by `output/window`). Bumped `github.com/gogpu/wgpu` 0.28.7 → 0.29.1 and `go-webgpu/goffi`; added `go-webgpu/webgpu`. Rendering goldens are unaffected.
+
+#### Fixed
+- **SVG/PDF vector export was double-transforming geometry.** The recording recorder bakes the active transform into every coordinate, but the SVG/PDF backends *also* re-emitted it (`<g transform>` / `cm`), so the panel's data layer (points, lines) rendered shifted off the axes. The backends now use the baked world coordinates for paths/rects verbatim and never re-apply the matrix to geometry (`SetClip`/`ClearClip` stay no-ops). PNG/raster output was unaffected.
+- **Vector text ignored its anchor.** `RecordingCanvas.DrawStringAnchored` now pre-applies the anchor with the same metrics the raster path uses (the recording playback drops the anchor and font face), so tick labels, the title, and axis labels are aligned in SVG/PDF instead of left-/baseline-anchored.
+- **Rotated text rendered upright in SVG/PDF** (axis titles, facet strips, slanted tick labels). The recorder bakes only the anchor *position*, not the glyph *orientation* — but it does record the active transform. The backends now track the CTM (without applying it to baked geometry) and recover the rotation for text only: SVG emits `transform="rotate(deg x y)"`, PDF bakes the rotation into the text matrix `Tm`. New regression tests in `canvas/export_test.go`.
+- Added example `examples/output/` exercising `Save`/`Image`/`Encode`, `output.NewSurface`+`Render`, and `Built.RenderTo`.
+
+> Known limitation: vector text renders at a single default size because the recording playback hands the backend a nil font face and drops the recorded font size; fixable in the gg recording layer (forward `FontSize`/face through `Backend.DrawText`).
+
+#### Deprecated
+- **`Plot.WriteTo`** — use `Plot.Encode` (identical signature).
+
 ## [0.0.9] — 2026-05-28
 
 ### Changed

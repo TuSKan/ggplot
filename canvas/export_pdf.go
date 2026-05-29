@@ -22,42 +22,43 @@ import (
 // Generates a single-page document from recorded drawing operations.
 type pdfBackend struct {
 	w, h    int
-	streams []string // content stream fragments
+	streams []string           // content stream fragments
+	ctm     recording.Matrix   // tracked transform; used only to orient text
+	stack   []recording.Matrix // Save/Restore stack for ctm
 }
 
 func newPDFBackend() *pdfBackend {
-	return &pdfBackend{}
+	return &pdfBackend{ctm: recording.Identity()}
 }
 
 func (b *pdfBackend) Begin(width, height int) error {
 	b.w, b.h = width, height
+	b.ctm = recording.Identity()
+
 	return nil
 }
 
 func (b *pdfBackend) End() error { return nil }
-func (b *pdfBackend) Save()      { b.streams = append(b.streams, "q\n") }
-func (b *pdfBackend) Restore()   { b.streams = append(b.streams, "Q\n") }
 
-func (b *pdfBackend) SetTransform(m recording.Matrix) {
-	b.streams = append(b.streams, fmt.Sprintf("%.4f %.4f %.4f %.4f %.4f %.4f cm\n",
-		m.A, m.D, m.B, m.E, m.C, m.F))
-}
+// The recorder bakes the current transform into every coordinate it emits, so
+// the matrix must NOT be re-applied to path geometry — coordinates arrive fully
+// resolved in world space, and emitting a `cm` matrix would double-transform it.
+// Paths/rects therefore use the baked coordinates verbatim. We track the CTM
+// only to recover glyph orientation for rotated text (see DrawText), since
+// baking carries the anchor position but not the orientation. Clips are dropped
+// (as in SVG); data stays within bounds.
+func (b *pdfBackend) Save() { b.stack = append(b.stack, b.ctm) }
 
-func (b *pdfBackend) SetClip(path *gg.Path, rule recording.FillRule) {
-	d := pathToPDFOps(path, float64(b.h))
-	if d == "" {
-		return
-	}
-
-	b.streams = append(b.streams, d)
-	if rule == recording.FillRuleEvenOdd {
-		b.streams = append(b.streams, "W* n\n")
-	} else {
-		b.streams = append(b.streams, "W n\n")
+func (b *pdfBackend) Restore() {
+	if n := len(b.stack); n > 0 {
+		b.ctm = b.stack[n-1]
+		b.stack = b.stack[:n-1]
 	}
 }
 
-func (b *pdfBackend) ClearClip() {}
+func (b *pdfBackend) SetTransform(m recording.Matrix)          { b.ctm = m }
+func (b *pdfBackend) SetClip(_ *gg.Path, _ recording.FillRule) {}
+func (b *pdfBackend) ClearClip()                               {}
 
 func (b *pdfBackend) FillPath(path *gg.Path, brush recording.Brush, rule recording.FillRule) {
 	d := pathToPDFOps(path, float64(b.h))
@@ -113,9 +114,28 @@ func (b *pdfBackend) DrawText(s string, x, y float64, _ text.Face, brush recordi
 	b.streams = append(b.streams, pdfSetFillColor(brush))
 	b.streams = append(b.streams, "BT\n")
 	b.streams = append(b.streams, "/F1 12 Tf\n")
-	b.streams = append(b.streams, fmt.Sprintf("%.2f %.2f Td\n", x, py))
+
+	// The position (x, py) is already baked into world space. For rotated text
+	// (axis titles, facet strips, slanted ticks) recover the orientation from
+	// the tracked CTM and bake it into the text matrix Tm. PDF is Y-up while the
+	// recorder is Y-down, so the rotation sign flips: Tm = [A, -D, D, A, x, py].
+	if m := b.ctm; isRotated(m) {
+		b.streams = append(b.streams, fmt.Sprintf("%.4f %.4f %.4f %.4f %.2f %.2f Tm\n",
+			m.A, -m.D, m.D, m.A, x, py))
+	} else {
+		b.streams = append(b.streams, fmt.Sprintf("%.2f %.2f Td\n", x, py))
+	}
+
 	b.streams = append(b.streams, fmt.Sprintf("(%s) Tj\n", escaped))
 	b.streams = append(b.streams, "ET\n")
+}
+
+// isRotated reports whether m has a non-negligible rotation/shear component
+// (the off-diagonal terms), distinguishing rotated text from plain translation.
+func isRotated(m recording.Matrix) bool {
+	const eps = 1e-9
+
+	return math.Abs(m.B) > eps || math.Abs(m.D) > eps
 }
 
 // WriteTo writes the complete PDF document to w.

@@ -87,7 +87,7 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 ### Release Status
 
 - **v0.0.9 (2026-05-28) — current release.** Ships every ✅ item below through Phase 12: advanced faceting (free scales, grid margins, labellers, strip placement), secondary axes (`SecAxis`/`DupAxis`), theme overrides (`ThemeOverride`/`WithOverrides`), the Phase 8 geometry batch (Violin, Dotplot, Raster, Curve, Crossbar, Linerange, Pointrange, JitterPoint), coordinate systems (CartesianZoom, Fixed, Flip, Polar), and engine-native coordinate transforms. Breaking: `FacetWrap`/`FacetGrid` variadic options, `SecondaryY` → `SecondAxis`, `coord.TransFunc` reduced to a name-only spec.
-- **Next big change — the Output Layer.** The `output` package + `canvas.GGCanvas` → `RasterCanvas` rename specified in [OUTPUT-SPEC.md](OUTPUT-SPEC.md) and flagged as "target architecture, not yet implemented" in [ARCHITECTURE.md](ARCHITECTURE.md). v0.0.9 is the deliberate cut-point **before** the rendering pipe gains a pluggable `Surface` back-end (file / in-memory image / desktop window / browser canvas). See Phase 18.
+- **In progress (post-v0.0.9) — the Output Layer.** [OUTPUT-SPEC.md](OUTPUT-SPEC.md) §11 phasing. **Landed (unreleased):** Phase 1 `GGCanvas → RasterCanvas` rename; Phase 2 `output` core (`Figure`/`Source`/`Sizer`/`Surface`/`LiveSurface`/`Imager`/`Event`/`Render` + blank-import registry, `Plot.Build` returns `output.Figure`); Phase 3 `output/file` + `output/image` surfaces with `Plot.Save`/`Encode`/`Image` and `Built.RenderTo` as façades over `Render`; Phase 4 `Session`/`Controller` interaction loop (fast-path viewport redraw, slow-path rebuild), tested headless; Phase 5 `output/window` (`window.Show` via `gogpu` + zero-copy `ggcanvas`, reusing the Phase-4 controller), compile-verified (runtime needs a GPU/display). **Pending:** Phase 6 `output/web` (wasm); async/debounced rebuild. See Phase 18.
 
 ---
 
@@ -467,8 +467,12 @@ The public extension API — implemented via Go interfaces + registration, not g
 
 - ✅ SVG export via `RecordingCanvas`
 - ✅ PDF export via `RecordingCanvas`
-- ✅ HiDPI / scaled output (`Save(... WithScale(2.0))`, `WriteTo` with `RenderOpt`)
-- 🔲 **`io.Writer` outputs** — `WriteTo(w io.Writer, opt RenderOpt) error` for streaming to HTTP, gzip, blob stores
+- ✅ HiDPI / scaled output (`Save(... WithScale(2.0))`, `Encode` with `RenderOpt`)
+- ✅ **Output layer — unified `Surface` model** (OUTPUT-SPEC.md Phases 1–3): `output` core (`Figure`/`Source`/`Sizer`/`Surface`/`LiveSurface`/`Imager`/`Render` + blank-import registry), `output/file` (PNG/SVG/PDF) and `output/image` (in-memory) surfaces; `Plot.Save`/`Encode`/`Image` and `Built.RenderTo` are façades over `output.Render`. `Plot.Build` returns `output.Figure`.
+- ✅ **`io.Writer` outputs** — `Plot.Encode(w io.Writer, format, …)` (replaces `WriteTo`) for streaming to HTTP, gzip, blob stores; backed by the file surface's `WithWriter`
+- ✅ **Interaction loop** — `output.Session`/`Controller`/`State`/`Action` with fast-path viewport redraw and slow-path rebuild (OUTPUT-SPEC Phase 4); default pan/wheel-zoom controller; tested headless with a scripted `LiveSurface`
+- ✅ **Desktop window** — `output/window` `window.Show` opens a `gogpu` GPU window and presents the figure zero-copy via `ggcanvas`, reusing the `Controller`/`State` policy (OUTPUT-SPEC Phase 5; `//go:build !js`, compile-verified — runtime needs a GPU/display)
+- 🔲 **Browser surface** — `output/web` (wasm, OUTPUT-SPEC Phase 6); async/debounced rebuild for the slow path
 - 🔲 **HTML output** — interactive plots with hover tooltips via embedded SVG + minimal JS (no React/heavyweight runtime)
 - 🔲 **Animated GIF / APNG** — frame-by-frame rendering for time-series; `Plot.Animate(frames, fn)` builds a sequence of `Built`s
 - 🔲 **Live preview** — `p.Show()` opens a native window with hot-reload on data changes (development tool)

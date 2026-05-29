@@ -42,8 +42,8 @@ func IsStrokeShape(shape string) bool {
 
 // DrawShapePath constructs a shape path using the Canvas path API.
 // This is the fallback implementation used by [RecordingCanvas] and other
-// backends that do not have native polygon primitives. [GGCanvas] uses
-// gg.Context.DrawRegularPolygon directly instead — see [GGCanvas.DrawShape].
+// backends that do not have native polygon primitives. [RasterCanvas] uses
+// gg.Context.DrawRegularPolygon directly instead — see [RasterCanvas.DrawShape].
 func DrawShapePath(c Canvas, shape string, cx, cy, r float64) {
 	switch shape {
 	case ShapeCircle:

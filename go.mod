@@ -8,6 +8,8 @@ require (
 	github.com/apache/arrow-go/v18 v18.6.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/gogpu/gg v0.48.3
+	github.com/gogpu/gogpu v0.40.0
+	github.com/gogpu/gpucontext v0.19.0
 	github.com/parquet-go/parquet-go v0.30.1
 	github.com/rickb777/date/v2 v2.3.11
 	golang.org/x/image v0.41.0
@@ -30,12 +32,12 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-text/typesetting v0.3.4 // indirect
-	github.com/go-webgpu/goffi v0.5.1 // indirect
+	github.com/go-webgpu/goffi v0.5.2 // indirect
+	github.com/go-webgpu/webgpu v0.5.2 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
-	github.com/gogpu/gpucontext v0.19.0 // indirect
 	github.com/gogpu/gputypes v0.5.0 // indirect
 	github.com/gogpu/naga v0.17.13 // indirect
-	github.com/gogpu/wgpu v0.28.7 // indirect
+	github.com/gogpu/wgpu v0.29.1 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect

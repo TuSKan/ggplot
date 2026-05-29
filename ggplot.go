@@ -55,9 +55,15 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output"
 	"github.com/TuSKan/ggplot/scale"
 	"github.com/TuSKan/ggplot/stat"
 	"github.com/TuSKan/ggplot/theme"
+
+	// Register the built-in output surfaces so Save/Encode/Image work without
+	// the caller needing a blank import.
+	_ "github.com/TuSKan/ggplot/output/file"
+	_ "github.com/TuSKan/ggplot/output/image"
 )
 
 // Plot is the immutable, declarative plot builder. Every method returns a new
@@ -594,47 +600,150 @@ func (p *Plot) SecondAxis(spec scale.SecAxisSpec) *Plot {
 	return cloned
 }
 
-// Save renders the plot to a file at the given dimensions.
-// If height ≤ 0, it is inferred from width (see [Built.Save] for rules).
-// The output format is inferred from the file extension:
+// Save renders the plot to a file at the given dimensions, routed through
+// [output.Render] and the "file" surface. If height ≤ 0, it is inferred from
+// width via [Built.PreferredSize]. The output format is inferred from the file
+// extension:
 //
 //	.png — raster PNG (default)
 //	.svg — SVG 1.1 vector
 //	.pdf — PDF 1.4 vector
 //
-// Options: [WithScale] for HiDPI output.
+// Options: [WithScale] for HiDPI output, [WithCPU] to force the CPU rasterizer.
 func (p *Plot) Save(ctx context.Context, filename string, width, height int, opts ...RenderOpt) error {
-	built, err := p.Build(ctx)
+	fig, h, cfg, err := p.figureForOutput(ctx, width, height, opts)
 	if err != nil {
-		return Errorf(PhaseRender, -1, "build", err, "build failed")
+		return err
 	}
 
-	return built.Save(ctx, filename, width, height, opts...)
+	surf, err := output.NewSurface(ctx, "file",
+		output.WithPath(filename),
+		output.WithSize(width, h),
+		output.WithScale(cfg.scale),
+		output.WithCPU(cfg.cpu),
+	)
+	if err != nil {
+		return Errorf(PhaseRender, -1, "surface", err, "create file surface")
+	}
+	defer func() { _ = surf.Close() }()
+
+	if err := output.Render(ctx, fig, surf); err != nil {
+		return Errorf(PhaseRender, -1, "render", err, "render to %s", filename)
+	}
+
+	return nil
+}
+
+// Encode renders the plot and writes the encoded bytes to dst in the given
+// format ("png" (default), "svg", "pdf"), routed through [output.Render] and
+// the "file" surface. If height ≤ 0, it is inferred from width. Returns the
+// number of bytes written.
+func (p *Plot) Encode(ctx context.Context, dst io.Writer, format string, width, height int, opts ...RenderOpt) (int64, error) {
+	fig, h, cfg, err := p.figureForOutput(ctx, width, height, opts)
+	if err != nil {
+		return 0, err
+	}
+
+	surf, err := output.NewSurface(ctx, "file",
+		output.WithWriter(dst),
+		output.WithFormat(format),
+		output.WithSize(width, h),
+		output.WithScale(cfg.scale),
+		output.WithCPU(cfg.cpu),
+	)
+	if err != nil {
+		return 0, Errorf(PhaseRender, -1, "surface", err, "create file surface")
+	}
+	defer func() { _ = surf.Close() }()
+
+	if err := output.Render(ctx, fig, surf); err != nil {
+		return 0, Errorf(PhaseRender, -1, "render", err, "encode %s", format)
+	}
+
+	if bw, ok := surf.(interface{ BytesWritten() int64 }); ok {
+		return bw.BytesWritten(), nil
+	}
+
+	return 0, nil
 }
 
 // WriteTo renders the plot and writes the output to w in the given format.
-// Supported formats: "png" (default), "svg", "pdf".
-// If height ≤ 0, it is inferred from width (see [Built.Save] for rules).
-// Options: [WithScale] for HiDPI output.
-// Returns the number of bytes written.
 //
-// Shorthand for [Plot.Build] followed by [Built.WriteTo].
+// Deprecated: use [Plot.Encode], which has an identical signature.
 func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, height int, opts ...RenderOpt) (int64, error) {
-	built, err := p.Build(ctx)
+	return p.Encode(ctx, w, format, width, height, opts...)
+}
+
+// Image renders the plot into an in-memory image at the given dimensions,
+// routed through [output.Render] and the "image" surface (always CPU
+// rasterized for deterministic, headless-safe output). If height ≤ 0, it is
+// inferred from width.
+func (p *Plot) Image(ctx context.Context, width, height int, opts ...RenderOpt) (image.Image, error) {
+	fig, h, cfg, err := p.figureForOutput(ctx, width, height, opts)
 	if err != nil {
-		return 0, Errorf(PhaseRender, -1, "build", err, "build failed")
+		return nil, err
 	}
 
-	return built.WriteTo(ctx, w, format, width, height, opts...)
+	surf, err := output.NewSurface(ctx, "image",
+		output.WithSize(width, h),
+		output.WithScale(cfg.scale),
+	)
+	if err != nil {
+		return nil, Errorf(PhaseRender, -1, "surface", err, "create image surface")
+	}
+	defer func() { _ = surf.Close() }()
+
+	if err := output.Render(ctx, fig, surf); err != nil {
+		return nil, Errorf(PhaseRender, -1, "render", err, "render to image")
+	}
+
+	im, ok := surf.(output.Imager)
+	if !ok {
+		return nil, Errorf(PhaseRender, -1, "image", output.ErrNoImage, "image surface produced no image")
+	}
+
+	return im.Image(), nil
+}
+
+// figureForOutput builds the plot, resolves a non-positive height via the
+// figure's [output.Sizer], and resolves render options. Shared by the static
+// output façades (Save, Encode, Image).
+func (p *Plot) figureForOutput(ctx context.Context, width, height int, opts []RenderOpt) (output.Figure, int, renderConfig, error) {
+	b, err := p.build(ctx)
+	if err != nil {
+		return nil, 0, renderConfig{}, Errorf(PhaseRender, -1, "build", err, "build failed")
+	}
+
+	if height <= 0 {
+		_, height = b.PreferredSize(width)
+	}
+
+	cfg := defaultRenderConfig()
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	return b, height, cfg, nil
 }
 
 // --- Built convenience methods ---
 
-// DrawCanvas creates a new [canvas.GGCanvas] and draws the built plot onto it.
-// The caller owns the returned canvas and must call [canvas.GGCanvas.Close]
+// RenderTo draws the built plot onto an arbitrary [output.Surface] — the escape
+// hatch for custom destinations. It is equivalent to [output.Render] with this
+// Built as the figure.
+func (b *Built) RenderTo(ctx context.Context, surf output.Surface) error {
+	if err := output.Render(ctx, b, surf); err != nil {
+		return Errorf(PhaseRender, -1, "render", err, "render to surface")
+	}
+
+	return nil
+}
+
+// DrawCanvas creates a new [canvas.RasterCanvas] and draws the built plot onto it.
+// The caller owns the returned canvas and must call [canvas.RasterCanvas.Close]
 // when finished to release GPU resources.
-func (b *Built) DrawCanvas(ctx context.Context, width, height int) (*canvas.GGCanvas, error) {
-	cv := canvas.NewGGCanvas(width, height)
+func (b *Built) DrawCanvas(ctx context.Context, width, height int) (*canvas.RasterCanvas, error) {
+	cv := canvas.NewRasterCanvas(width, height)
 	if err := b.Draw(ctx, cv, width, height); err != nil {
 		_ = cv.Close()
 
@@ -700,11 +809,11 @@ func (b *Built) Save(ctx context.Context, filename string, width, height int, op
 		return nil
 
 	default:
-		var cv *canvas.GGCanvas
+		var cv *canvas.RasterCanvas
 		if cfg.cpu {
-			cv = canvas.NewGGCanvasCPU(sw, sh)
+			cv = canvas.NewRasterCanvasCPU(sw, sh)
 		} else {
-			cv = canvas.NewGGCanvas(sw, sh)
+			cv = canvas.NewRasterCanvas(sw, sh)
 		}
 		defer func() { _ = cv.Close() }()
 
@@ -764,11 +873,11 @@ func (b *Built) WriteTo(ctx context.Context, w io.Writer, format string, width, 
 		}
 
 	case "png", "":
-		var cv *canvas.GGCanvas
+		var cv *canvas.RasterCanvas
 		if cfg.cpu {
-			cv = canvas.NewGGCanvasCPU(sw, sh)
+			cv = canvas.NewRasterCanvasCPU(sw, sh)
 		} else {
-			cv = canvas.NewGGCanvas(sw, sh)
+			cv = canvas.NewRasterCanvas(sw, sh)
 		}
 		defer func() { _ = cv.Close() }()
 
@@ -1107,13 +1216,39 @@ func (b *Built) Labels() Labels { return b.labels }
 // PanelLayout returns the layout geometry.
 func (b *Built) PanelLayout() Layout { return b.layout }
 
+// PreferredSize implements [output.Sizer]: given a width, it proposes a height
+// using the same auto-height rules as [Built.Save]. The width is returned
+// unchanged.
+func (b *Built) PreferredSize(width int) (int, int) { return width, b.autoHeight(width) }
+
+// Compile-time guarantees that the output layer's interfaces are satisfied:
+// a built plot is a drawable Figure (and a Sizer), and a Plot is a Source.
+var (
+	_ output.Figure = (*Built)(nil)
+	_ output.Sizer  = (*Built)(nil)
+	_ output.Source = (*Plot)(nil)
+)
+
 // Build resolves the plot specification through the grammar pipeline and
-// returns a [*Built] containing fully resolved layer data, trained scales,
-// layout geometry, and theme. The result can be inspected via [Built.LayerData]
-// or rendered via [Built.Draw].
+// returns an [output.Figure] (concretely a [*Built]) containing fully resolved
+// layer data, trained scales, layout geometry, and theme. Render it via
+// [output.Render] or [Built.Draw]; introspect it by asserting to [*Built],
+// which exposes [Built.LayerData], [Built.NumPanels], [Built.Explain], and more.
 //
 // This is the Go equivalent of ggplot2's ggplot_build(plot).
-func (p *Plot) Build(ctx context.Context) (*Built, error) {
+func (p *Plot) Build(ctx context.Context) (output.Figure, error) {
+	b, err := p.build(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
+}
+
+// build runs the grammar pipeline and returns the concrete [*Built]. Internal
+// callers (Save, WriteTo, Image) use this to reach Built's full method set; the
+// exported [Plot.Build] widens the return type to [output.Figure].
+func (p *Plot) build(ctx context.Context) (*Built, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, Errorf(PhaseBuild, -1, "context", err, "context cancelled")
 	}
@@ -2989,7 +3124,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 					ch = 1
 				}
 
-				sub := canvas.NewGGCanvasCPU(cw, ch)
+				sub := canvas.NewRasterCanvasCPU(cw, ch)
 
 				xMin, xMax := pri.xScale.Bounds()
 				yMin, yMax := pri.yScale.Bounds()

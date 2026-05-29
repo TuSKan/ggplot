@@ -16,6 +16,7 @@ import (
 // into any backend (SVG, PDF, raster, etc.) via [Recording.Playback].
 type RecordingCanvas struct {
 	rec      *recording.Recorder
+	face     text.Face // current font face, for anchor measurement
 	fontSize float64
 	tabNums  bool // tabular figures enabled
 }
@@ -149,7 +150,9 @@ func (c *RecordingCanvas) SetFontSize(size float64) {
 		})
 		if err == nil && handle != nil {
 			if src := handle.FontSource(); src != nil {
-				c.rec.SetFont(src.Face(size, opts...))
+				face := src.Face(size, opts...)
+				c.face = face
+				c.rec.SetFont(face)
 
 				return
 			}
@@ -158,7 +161,9 @@ func (c *RecordingCanvas) SetFontSize(size float64) {
 
 	// Fallback to embedded Go Regular.
 	if embeddedSource != nil {
-		c.rec.SetFont(embeddedSource.Face(size, opts...))
+		face := embeddedSource.Face(size, opts...)
+		c.face = face
+		c.rec.SetFont(face)
 	}
 }
 
@@ -173,8 +178,25 @@ func (c *RecordingCanvas) SetTabularNums(enabled bool) {
 }
 
 // DrawStringAnchored draws text at (x, y) with anchor (ax, ay).
+//
+// The anchor is pre-applied here rather than deferred to the recorder: the
+// recording playback drops the anchor (its Backend.DrawText takes no anchor and
+// is handed a nil face), so anchored text would otherwise render left-aligned
+// at the baseline in SVG/PDF. We replicate gg's exact anchor math against the
+// current face and record a base-positioned DrawString, keeping vector text
+// aligned with the raster output.
 func (c *RecordingCanvas) DrawStringAnchored(s string, x, y, ax, ay float64) {
-	c.rec.DrawStringAnchored(s, x, y, ax, ay)
+	if c.face == nil {
+		c.rec.DrawString(s, x, y)
+
+		return
+	}
+
+	w, _ := text.Measure(s, c.face)
+	m := c.face.Metrics()
+	h := m.Ascent + m.Descent
+	// baseline-left position: x -= w*ax ; baseline = y + ascent - ay*h
+	c.rec.DrawString(s, x-w*ax, y+m.Ascent-ay*h)
 }
 
 // MeasureString returns the width and height of the rendered text.
@@ -204,7 +226,7 @@ func (c *RecordingCanvas) Height() int { return c.rec.Height() }
 
 // DrawImage is a no-op for RecordingCanvas. SVG/PDF recording does not
 // support raster compositing; parallel panel rendering is only used by
-// raster backends (GGCanvas).
+// raster backends (RasterCanvas).
 func (c *RecordingCanvas) DrawImage(_ image.Image, _, _ float64) {}
 
 // Close is a no-op for RecordingCanvas (no GPU resources to release).
