@@ -7,7 +7,7 @@ require (
 	github.com/ajroetker/go-highway v0.0.12
 	github.com/apache/arrow-go/v18 v18.6.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
-	github.com/gogpu/gg v0.48.3
+	github.com/gogpu/gg v0.48.7
 	github.com/gogpu/gogpu v0.40.0
 	github.com/gogpu/gpucontext v0.19.0
 	github.com/parquet-go/parquet-go v0.30.1
@@ -77,4 +77,4 @@ require (
 	google.golang.org/grpc v1.81.1 // indirect
 )
 
-replace github.com/gogpu/gg => github.com/TuSKan/gogpugg v0.0.0-20260523223458-25c883b6a9b8
+replace github.com/gogpu/gg => github.com/TuSKan/gogpugg v0.0.0-20260531212857-a6d9700d1b3a

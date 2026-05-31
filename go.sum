@@ -30,8 +30,8 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55.0/go.mod h1:IA1C1U7jO/ENqm/vhi7V9YYpBsp+IMyqNrEN94N7tVc=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.55.0 h1:0s6TxfCu2KHkkZPnBfsQ2y5qia0jl3MMrmBhu3nCOYk=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.55.0/go.mod h1:Mf6O40IAyB9zR/1J8nGDDPirZQQPbYJni8Yisy7NTMc=
-github.com/TuSKan/gogpugg v0.0.0-20260523223458-25c883b6a9b8 h1:SCM8ER1+i5peFq5pHlX7PWQiFsSbnfRLHFXiwVMty7o=
-github.com/TuSKan/gogpugg v0.0.0-20260523223458-25c883b6a9b8/go.mod h1:LC23ngZi+Ty/LOmfeSY0xzlBTnyZYr0HGPwAie1w3Lk=
+github.com/TuSKan/gogpugg v0.0.0-20260531212857-a6d9700d1b3a h1:pAJzbmCm0g0h7FGYt/uRQ2W0R0N62lCprHJoAbQNLFs=
+github.com/TuSKan/gogpugg v0.0.0-20260531212857-a6d9700d1b3a/go.mod h1:KtMYgYxsSSNhKhia9vmOU9muvz9gROCTj8A7ZGxPwb8=
 github.com/ajroetker/go-highway v0.0.12 h1:OcGp/l/W7WQtH5ELLuNnKXCuR7ePpWGh2RWZI/INtck=
 github.com/ajroetker/go-highway v0.0.12/go.mod h1:un7fcrwix7UOHJrr18Lgh5eeF+1yaZiGWdTw3FbfDv4=
 github.com/alecthomas/assert/v2 v2.10.0 h1:jjRCHsj6hBJhkmhznrCzoNpbA3zqy0fYiUcYZP/GkPY=
