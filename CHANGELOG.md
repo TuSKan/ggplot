@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Vector text ignored its anchor.** `RecordingCanvas.DrawStringAnchored` now pre-applies the anchor with the same metrics the raster path uses (the recording playback drops the anchor and font face), so tick labels, the title, and axis labels are aligned in SVG/PDF instead of left-/baseline-anchored.
 - **Rotated text rendered upright in SVG/PDF** (axis titles, facet strips, slanted tick labels). The recorder bakes only the anchor *position*, not the glyph *orientation* — but it does record the active transform. The backends now track the CTM (without applying it to baked geometry) and recover the rotation for text only: SVG emits `transform="rotate(deg x y)"`, PDF bakes the rotation into the text matrix `Tm`. New regression tests in `canvas/export_test.go`.
 - Added example `examples/output/` exercising `Save`/`Image`/`Encode`, `output.NewSurface`+`Render`, and `Built.RenderTo`.
+- Added example `examples/window/` — a runnable `window.Show` program (interactive pan/zoom desktop window); needs a display/GPU, so it is not run in CI.
 
 > Known limitation: vector text renders at a single default size because the recording playback hands the backend a nil font face and drops the recorded font size; fixable in the gg recording layer (forward `FontSize`/face through `Backend.DrawText`).
 

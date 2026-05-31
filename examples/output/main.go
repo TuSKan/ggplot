@@ -157,7 +157,8 @@ func main() {
 	//	    window.WithSize(900, 600))
 	//
 	// window.Show opens a GPU window, presents the plot zero-copy, supports
-	// pan (drag) and wheel-zoom, and blocks until the window is closed.
+	// pan (drag) and wheel-zoom, and blocks until the window is closed. See the
+	// runnable examples/window for the full program.
 
 	log.Println("all output written to", dir)
 }
