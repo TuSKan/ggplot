@@ -27,7 +27,7 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 | **Faceting** | Grid (row ~ col, margins, drop), Wrap (NCols, drop), Labellers (Value, Both, Context, custom) |
 | **Data Backends** | Native Memory, Apache Arrow IPC/Parquet, BigQuery SQL pushdown |
 | **Data Types** | Float64, Int64, String, Bool, Timestamp, Date, Time |
-| **Output** | PNG, SVG 1.1, PDF 1.4, HiDPI via `WithScale()` |
+| **Output** | PNG, SVG 1.1, PDF 1.4, HiDPI via `WithScale()`; interactive desktop window + headless `Session` loop |
 | **Theming** | 60+ themes — Dashboard, Dark, Classic, Minimal, Observable, Seaborn, Nord, Dracula, and more |
 | **Annotations** | `AnnotateText`, `AnnotateRect`, `AnnotateSegment`, `AnnotateArrow`, `AnnotateLabel` — layer-less fixed-coordinate annotations |
 | **Coordinate Systems** | `CoordCartesian` (viewport zoom), `CoordFixed` (aspect ratio), `CoordFlip`, `Coord(Polar())` |
@@ -280,6 +280,27 @@ ggplot.New(ds, aes.X("group"), aes.Y("value")).
     Labs(ggplot.Title("Distribution by Group")).
     Theme("classic").
     Save(ctx, "boxplot.png", 800, 500)
+```
+
+### Interactive output (window & session)
+
+A `*Plot` is an `output.Source` that an `output.Session` drives onto a `LiveSurface` — build → draw → event loop, with a fast path (pan/zoom redraw) and a slow path (rebuild when an interaction crosses the trained data extent). The desktop backend wires this to a GPU window:
+
+```go
+import "github.com/TuSKan/ggplot/output/window"
+
+// Opens a GPU window; drag to pan, scroll to zoom. Blocks until closed.
+// Call from the main goroutine. See examples/window.
+_ = window.Show(ctx, plot, window.WithTitle("ggplot"), window.WithSize(900, 600))
+```
+
+The same `Session` loop runs headless against any `LiveSurface` — for tests, servers, or a custom frontend. `WithRebuildDelay` makes rebuilds asynchronous and debounced (the last good frame keeps drawing while the next is computed):
+
+```go
+sess := output.NewSession(plot, surface,
+    output.WithRebuildDelay(30*time.Millisecond),
+)
+_ = sess.Run(ctx) // runs until the surface's events close. See examples/session.
 ```
 
 ---

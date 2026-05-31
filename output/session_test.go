@@ -271,3 +271,73 @@ func TestSessionEventsChannelClose(t *testing.T) {
 
 	waitRun(t, done, nil)
 }
+
+func TestSessionAsyncRebuildCoalesces(t *testing.T) {
+	t.Parallel()
+
+	src := &countingSource{}
+	surf := newFakeLive(80, 60)
+
+	ctrl := output.ControllerFunc(func(ev output.Event, _ *output.State) output.Action {
+		if ev.Kind == output.EventKey {
+			return output.ActionRebuild
+		}
+
+		return output.ActionIgnore
+	})
+
+	sess := output.NewSession(src, surf,
+		output.WithController(ctrl),
+		output.WithRebuildDelay(20*time.Millisecond),
+	)
+
+	// Queue three rapid rebuild triggers, then close: with debouncing they
+	// collapse to a single background build, flushed on channel close.
+	for range 3 {
+		surf.events <- output.Event{Kind: output.EventKey}
+	}
+
+	close(surf.events)
+
+	done := make(chan error, 1)
+	go func() { done <- sess.Run(context.Background()) }()
+
+	waitRun(t, done, nil)
+
+	if got := src.count(); got != 2 {
+		t.Errorf("builds=%d, want 2 (initial + 1 coalesced rebuild)", got)
+	}
+
+	if surf.commitCount() < 2 {
+		t.Errorf("commits=%d, want >=2 (initial + rebuilt frame)", surf.commitCount())
+	}
+}
+
+func TestSessionSyncRebuildUnchanged(t *testing.T) {
+	t.Parallel()
+
+	src := &countingSource{}
+	surf := newFakeLive(80, 60)
+
+	ctrl := output.ControllerFunc(func(ev output.Event, _ *output.State) output.Action {
+		if ev.Kind == output.EventKey {
+			return output.ActionRebuild
+		}
+
+		return output.ActionIgnore
+	})
+
+	// No WithRebuildDelay: each rebuild is synchronous, so three keys build thrice.
+	sess := output.NewSession(src, surf, output.WithController(ctrl))
+
+	runEvents(t, sess, surf,
+		output.Event{Kind: output.EventKey},
+		output.Event{Kind: output.EventKey},
+		output.Event{Kind: output.EventKey},
+		output.Event{Kind: output.EventClose},
+	)
+
+	if got := src.count(); got != 4 {
+		t.Errorf("builds=%d, want 4 (initial + 3 synchronous rebuilds)", got)
+	}
+}

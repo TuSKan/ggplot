@@ -469,6 +469,8 @@ web.Mount(ctx, plot, "plot-container")
 
 Each phase ships independently; the existing public API is preserved throughout.
 
+> **Status:** Phases 1–5 are implemented (unreleased). Phase 4 also has async/debounced rebuild (`Session.WithRebuildDelay`/`WithRebuildError`) and a runnable headless example (`examples/session/`); Phase 5 ships `examples/window/`. Phase 6 (`output/web`, wasm) is the remaining work.
+
 | Phase | Deliverable | Risk |
 |---|---|---|
 | **1** | Rename `GGCanvas → RasterCanvas` (§9). Mechanical; gated by golden tests. | Low |
