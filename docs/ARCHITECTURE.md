@@ -104,6 +104,7 @@ github.com/TuSKan/ggplot
 ├── canvas/              # Drawing seam — the path-level Canvas API and its backends
 │   ├── canvas.go        #   Canvas interface: MoveTo, LineTo, Stroke, Fill, DrawImage, …
 │   ├── raster.go        #   RasterCanvas (gg-backed; GPU or CPU rasterizer)   [was gg.go]
+│   ├── scene_canvas.go  #   SceneCanvas (records into scene.Scene for GPU vector rendering)
 │   ├── recording.go     #   RecordingCanvas (records ops; replayed to vector)
 │   └── export_*.go      #   SVG / PDF vector backends (replay a Recording)
 │

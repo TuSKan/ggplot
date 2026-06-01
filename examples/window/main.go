@@ -26,6 +26,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 	"github.com/TuSKan/ggplot/output/window"
+	_ "github.com/TuSKan/ggplot/canvas/gpu"
 )
 
 func main() {

@@ -268,16 +268,22 @@ the surface exposes `Image() image.Image`. No GPU, no window — pure Go.
 
 `//go:build !js`. Wraps a `gogpu` window and a `gg/integration/ggcanvas.Canvas`.
 
-- `Acquire` returns `canvas.RasterFromContext(gc.Context())` — the plot draws
-  straight into the `gg.Context` that `ggcanvas` owns.
-- `Commit` calls `ggcanvas.RenderDirect` — the gg GPU accelerator flushes shapes
-  directly onto the swapchain texture view. No pixmap readback, no `image.Image`.
-- `Events()` wraps the `gogpu` event source; translated into `output.Event`.
-- Requires `import _ "github.com/gogpu/gg/gpu"` (GPU accelerator registration)
-  and `gogpu` ≥ v0.26.
-
-The borrowed `RasterCanvas` is never `Close()`d by the surface — `ggcanvas`
-owns the context.
+- `window.Show` is a standalone package-level function (not a `Surface`
+  registered in the blank-import registry). gogpu owns the run loop via
+  callbacks, which is incompatible with the `Surface.Acquire`/`Commit` pull
+  model, so the window backend integrates directly.
+- The plot draws into `canvas.RasterFromContext(ggcanvas.Context())` — a
+  borrowed `gg.Context`. The borrowed `RasterCanvas` is never `Close()`d;
+  `ggcanvas` owns the context.
+- Presentation is zero-copy via `ggcanvas.Render` onto the swapchain texture.
+- Interaction reuses the platform-neutral `Controller` / `State` policy from
+  the `output` core. gogpu input callbacks are translated to `output.Event`s
+  and dispatched through the same controller.
+- `WithRebuildDelay` enables async, debounced rebuilds: rapid rebuild requests
+  coalesce, and the build runs in a background goroutine while the last good
+  figure keeps drawing. `WithRebuildError` sets a handler for non-fatal
+  background build errors.
+- Requires `gogpu` ≥ v0.40.
 
 ### 6.4 `output/web` — browser, WASM
 
@@ -314,29 +320,32 @@ func NewSurface(ctx context.Context, name string, opt ...SurfaceOpt) (Surface, e
 func NewLiveSurface(ctx context.Context, name string, opt ...SurfaceOpt) (LiveSurface, error)
 ```
 
-Each subpackage registers in `init()`:
+Each subpackage that uses the registry registers in `init()`:
 
 ```go
-// output/window/window.go   //go:build !js
-func init() { output.Register("window", newWindowSurface) }
+// output/file/file.go       (no build tag)
+func init() { output.Register("file", newFileSurface) }
+
+// output/image/image.go     (no build tag)
+func init() { output.Register("image", newImageSurface) }
 
 // output/web/web.go         //go:build js && wasm
 func init() { output.Register("web", newCanvasSurface) }
-
-// output/file/file.go       (no build tag)
-func init() { output.Register("file", newFileSurface) }
 ```
 
-User code selects a platform purely by which subpackage it blank-imports — no
+**Note:** `output/window` does **not** register into the registry. gogpu owns
+the run loop via callbacks (callback-driven), which is incompatible with the
+pull-model `Acquire`/`Commit` contract. Instead, `window.Show` is a standalone
+package-level function. User code imports `output/window` and calls `Show`
+directly — no `NewSurface` / `NewLiveSurface` indirection.
+
+User code selects a platform purely by which subpackage it imports — no
 `//go:build` in user code:
 
 ```go
-import (
-    "github.com/TuSKan/ggplot/output"
-    _ "github.com/TuSKan/ggplot/output/window" // registers "window"
-)
+import "github.com/TuSKan/ggplot/output/window"
 
-surf, _ := output.NewLiveSurface(ctx, "window", output.WithSize(900, 600))
+window.Show(ctx, plot, window.WithSize(900, 600))
 ```
 
 A `js/wasm` build blank-imports `output/web` instead; `output/window`'s `!js`
@@ -409,19 +418,21 @@ state its role — a raster backend of `canvas.Canvas`, peer to `RecordingCanvas
 
 Call sites to update (verified against current source): `canvas/gg.go`
 (definition); `ggplot.go` — `Built.DrawCanvas` (return type + doc),
-`Built.Save` (two sites), `Built.WriteTo` (two sites), and the panel
-sub-canvas in `Built.Draw` (~line 2098). No behavioral change. The file
-`canvas/gg.go` may be renamed to `canvas/raster.go` for consistency.
+and the panel sub-canvas in `Built.Draw` (~line 2098). No behavioral change.
+The file `canvas/gg.go` may be renamed to `canvas/raster.go` for consistency.
+
+`Built.Save` and `Built.WriteTo` have been removed — all output goes through
+`Plot.Save` / `Plot.Encode` / `output.Render`.
 
 ---
 
 ## 10. ggplot-facing API
 
 ```go
-// --- static, on *Plot ---  (Save/WriteTo preserved; WriteTo renamed Encode)
+// --- static, on *Plot ---
 func (p *Plot) Save(ctx context.Context, filename string, w, h int, opt ...RenderOpt) error
 func (p *Plot) Encode(ctx context.Context, dst io.Writer, format string, w, h int, opt ...RenderOpt) (int64, error)
-func (p *Plot) Image(ctx context.Context, w, h int, opt ...RenderOpt) (image.Image, error)  // new
+func (p *Plot) Image(ctx context.Context, w, h int, opt ...RenderOpt) (image.Image, error)
 
 // --- escape hatch: any custom Surface, on *Built ---
 func (b *Built) RenderTo(ctx context.Context, surf output.Surface) error
@@ -430,9 +441,13 @@ func (b *Built) RenderTo(ctx context.Context, surf output.Surface) error
 func (p *Plot) Build(ctx context.Context) (output.Figure, error)  // concretely a *Built
 
 // --- live, package-level functions (decision #5) ---
-func window.Show(ctx context.Context, src output.Source, opt ...ShowOpt) error   // //go:build !js
+func window.Show(ctx context.Context, src output.Source, opt ...window.Opt) error  // //go:build !js
 func web.Mount(ctx context.Context, src output.Source, containerID string, opt ...MountOpt) error // //go:build js
 ```
+
+**Removed:** `Built.Save` and `Built.WriteTo` — these bypassed the output layer
+with duplicated encoding logic. Use `Plot.Save`, `Plot.Encode`, or
+`output.Render` + a surface instead.
 
 `Save`, `Encode`, `Image`, `RenderTo`, `window.Show`, `web.Mount` all depend on
 `Figure` + optional `Sizer` — never on the concrete `*Built`. Only user-facing
@@ -469,7 +484,7 @@ web.Mount(ctx, plot, "plot-container")
 
 Each phase ships independently; the existing public API is preserved throughout.
 
-> **Status:** Phases 1–5 are implemented (unreleased). Phase 4 also has async/debounced rebuild (`Session.WithRebuildDelay`/`WithRebuildError`) and a runnable headless example (`examples/session/`); Phase 5 ships `examples/window/`. Phase 6 (`output/web`, wasm) is the remaining work.
+> **Status:** Phases 1–5 are implemented (unreleased). Phase 4 also has async/debounced rebuild (`Session.WithRebuildDelay`/`WithRebuildError`) and a runnable headless example (`examples/session/`); Phase 5 ships `window.Show` with `WithRebuildDelay`/`WithRebuildError` for async builds, and `examples/window/`. `Built.Save` and `Built.WriteTo` have been removed — all output goes through the `output` layer. Phase 6 (`output/web`, wasm) is the remaining work.
 
 | Phase | Deliverable | Risk |
 |---|---|---|

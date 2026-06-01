@@ -4,6 +4,7 @@ package window_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/TuSKan/ggplot/output"
 	"github.com/TuSKan/ggplot/output/window"
@@ -44,5 +45,37 @@ func TestWithControllerNilIgnored(t *testing.T) {
 
 	if o.Controller == nil {
 		t.Error("WithController(nil) should not clear an existing controller")
+	}
+}
+
+func TestWithRebuildDelay(t *testing.T) {
+	t.Parallel()
+
+	var o window.Options
+	window.WithRebuildDelay(50 * time.Millisecond)(&o)
+
+	if o.RebuildDelay != 50*time.Millisecond {
+		t.Errorf("RebuildDelay=%v, want 50ms", o.RebuildDelay)
+	}
+}
+
+func TestWithRebuildError(t *testing.T) {
+	t.Parallel()
+
+	var called bool
+
+	fn := func(_ error) { called = true }
+
+	var o window.Options
+	window.WithRebuildError(fn)(&o)
+
+	if o.OnRebuildErr == nil {
+		t.Fatal("OnRebuildErr not set")
+	}
+
+	o.OnRebuildErr(nil)
+
+	if !called {
+		t.Error("OnRebuildErr was not invoked")
 	}
 }

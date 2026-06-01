@@ -96,17 +96,20 @@ func (s *fileSurface) Commit(_ context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer closeFn()
 
 	cw := &countWriter{w: dst}
 
-	if err := s.encode(cw); err != nil {
-		return err
-	}
+	encErr := s.encode(cw)
 
 	s.written = cw.n
 
-	return nil
+	closeErr := closeFn()
+
+	if encErr != nil {
+		return encErr
+	}
+
+	return closeErr
 }
 
 func (s *fileSurface) encode(w io.Writer) error {
@@ -150,11 +153,11 @@ func (s *fileSurface) encode(w io.Writer) error {
 }
 
 // destination resolves where encoded bytes go: an explicit Writer if set,
-// otherwise a newly created file at Path. closeFn closes the file (no-op for a
-// borrowed Writer).
-func (s *fileSurface) destination() (io.Writer, func(), error) {
+// otherwise a newly created file at Path. closeFn closes the file and returns
+// any error (no-op for a borrowed Writer).
+func (s *fileSurface) destination() (io.Writer, func() error, error) {
 	if s.opt.Writer != nil {
-		return s.opt.Writer, func() {}, nil
+		return s.opt.Writer, func() error { return nil }, nil
 	}
 
 	if s.opt.Path == "" {
@@ -166,7 +169,13 @@ func (s *fileSurface) destination() (io.Writer, func(), error) {
 		return nil, nil, fmt.Errorf("file: create %s: %w", s.opt.Path, err)
 	}
 
-	return f, func() { _ = f.Close() }, nil
+	return f, func() error {
+		if cerr := f.Close(); cerr != nil {
+			return fmt.Errorf("file: close %s: %w", s.opt.Path, cerr)
+		}
+
+		return nil
+	}, nil
 }
 
 // Bounds is the scaled (device) drawing size; Render draws at these dimensions.

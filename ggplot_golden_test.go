@@ -98,7 +98,7 @@ func renderPNG(t *testing.T, p *ggplot.Plot, w, h int) []byte {
 
 	var buf bytes.Buffer
 
-	_, err := p.WriteTo(context.Background(), &buf, "png", w, h, ggplot.WithCPU())
+	_, err := p.Encode(context.Background(), &buf, "png", w, h, ggplot.WithCPU())
 	if err != nil {
 		t.Fatalf("render PNG: %v", err)
 	}

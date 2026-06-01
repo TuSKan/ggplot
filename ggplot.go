@@ -37,9 +37,6 @@ import (
 	"io"
 	"maps"
 	"math"
-
-	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -753,167 +750,6 @@ func (b *Built) DrawCanvas(ctx context.Context, width, height int) (*canvas.Rast
 	return cv, nil
 }
 
-// Save renders the built plot to a file. Format is inferred from extension.
-// If height ≤ 0, it is inferred from width and the y-scale type:
-//
-//   - continuous y: width / φ (golden ratio ≈ 1.618)
-//   - discrete y: 18px per category, clamped to [240, width]
-//
-// Supported extensions:
-//
-//	.png — raster PNG (default)
-//	.svg — SVG 1.1 vector
-//	.pdf — PDF 1.4 vector
-//
-// Options: [WithScale] for HiDPI output.
-func (b *Built) Save(ctx context.Context, filename string, width, height int, opts ...RenderOpt) error {
-	if height <= 0 {
-		height = b.autoHeight(width)
-	}
-
-	cfg := defaultRenderConfig()
-	for _, o := range opts {
-		o(&cfg)
-	}
-
-	sw, sh := int(float64(width)*cfg.scale), int(float64(height)*cfg.scale)
-
-	ext := strings.ToLower(filepath.Ext(filename))
-
-	switch ext {
-	case ".svg", ".pdf":
-		cv := canvas.NewRecordingCanvas(sw, sh)
-		if err := b.Draw(ctx, cv, sw, sh); err != nil {
-			return Errorf(PhaseRender, -1, "draw", err, "draw to %s canvas", ext)
-		}
-
-		rec := cv.FinishRecording()
-
-		f, err := os.Create(filename) //nolint:gosec // G304: user-provided plot output path.
-		if err != nil {
-			return Errorf(PhaseRender, -1, "io", err, "create %s", filename)
-		}
-		defer func() { _ = f.Close() }()
-
-		switch ext {
-		case ".svg":
-			_, err = canvas.ExportSVG(rec, f)
-		case ".pdf":
-			_, err = canvas.ExportPDF(rec, f)
-		}
-
-		if err != nil {
-			return Errorf(PhaseRender, -1, "export", err, "export %s", ext)
-		}
-
-		return nil
-
-	default:
-		var cv *canvas.RasterCanvas
-		if cfg.cpu {
-			cv = canvas.NewRasterCanvasCPU(sw, sh)
-		} else {
-			cv = canvas.NewRasterCanvas(sw, sh)
-		}
-		defer func() { _ = cv.Close() }()
-
-		if err := b.Draw(ctx, cv, sw, sh); err != nil {
-			return Errorf(PhaseRender, -1, "draw", err, "draw to png canvas")
-		}
-
-		if err := cv.SavePNG(filename); err != nil {
-			return Errorf(PhaseRender, -1, "io", err, "save png %s", filename)
-		}
-
-		return nil
-	}
-}
-
-// WriteTo writes the built plot to w in the given format.
-// Supported formats: "png" (default), "svg", "pdf".
-// If height ≤ 0, it is inferred from width (see [Built.Save] for rules).
-// Options: [WithScale] for HiDPI output.
-// Returns the number of bytes written.
-func (b *Built) WriteTo(ctx context.Context, w io.Writer, format string, width, height int, opts ...RenderOpt) (int64, error) {
-	if height <= 0 {
-		height = b.autoHeight(width)
-	}
-
-	cfg := defaultRenderConfig()
-	for _, o := range opts {
-		o(&cfg)
-	}
-
-	sw, sh := int(float64(width)*cfg.scale), int(float64(height)*cfg.scale)
-
-	switch format {
-	case "svg", "pdf":
-		cv := canvas.NewRecordingCanvas(sw, sh)
-		if err := b.Draw(ctx, cv, sw, sh); err != nil {
-			return 0, Errorf(PhaseRender, -1, "draw", err, "draw to %s canvas", format)
-		}
-
-		rec := cv.FinishRecording()
-
-		switch format {
-		case "svg":
-			n, err := canvas.ExportSVG(rec, w)
-			if err != nil {
-				return n, Errorf(PhaseRender, -1, "export", err, "export svg")
-			}
-
-			return n, nil
-		default: // pdf
-			n, err := canvas.ExportPDF(rec, w)
-			if err != nil {
-				return n, Errorf(PhaseRender, -1, "export", err, "export pdf")
-			}
-
-			return n, nil
-		}
-
-	case "png", "":
-		var cv *canvas.RasterCanvas
-		if cfg.cpu {
-			cv = canvas.NewRasterCanvasCPU(sw, sh)
-		} else {
-			cv = canvas.NewRasterCanvas(sw, sh)
-		}
-		defer func() { _ = cv.Close() }()
-
-		if err := b.Draw(ctx, cv, sw, sh); err != nil {
-			return 0, Errorf(PhaseRender, -1, "draw", err, "draw to png canvas")
-		}
-
-		cw := &countWriter{w: w}
-		if err := cv.EncodePNG(cw); err != nil {
-			return cw.n, Errorf(PhaseRender, -1, "encode", err, "encode png")
-		}
-
-		return cw.n, nil
-
-	default:
-		return 0, Errorf(PhaseRender, -1, "format", ErrUnsupportedFormat, "unsupported format %q", format)
-	}
-}
-
-// countWriter wraps an io.Writer and counts bytes written.
-type countWriter struct {
-	w io.Writer
-	n int64
-}
-
-func (cw *countWriter) Write(p []byte) (int, error) {
-	n, err := cw.w.Write(p)
-	cw.n += int64(n)
-
-	if err != nil {
-		return n, Errorf(PhaseRender, -1, "io", err, "write")
-	}
-
-	return n, nil
-}
-
 // goldenRatio is the golden ratio used for default aspect-ratio inference.
 const goldenRatio = 1.618
 
@@ -1217,7 +1053,7 @@ func (b *Built) Labels() Labels { return b.labels }
 func (b *Built) PanelLayout() Layout { return b.layout }
 
 // PreferredSize implements [output.Sizer]: given a width, it proposes a height
-// using the same auto-height rules as [Built.Save]. The width is returned
+// using the same auto-height rules as [Plot.Save]. The width is returned
 // unchanged.
 func (b *Built) PreferredSize(width int) (int, int) { return width, b.autoHeight(width) }
 

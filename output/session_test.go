@@ -341,3 +341,182 @@ func TestSessionSyncRebuildUnchanged(t *testing.T) {
 		t.Errorf("builds=%d, want 4 (initial + 3 synchronous rebuilds)", got)
 	}
 }
+
+// errSimulatedBuild is a sentinel used by failSource in tests.
+var errSimulatedBuild = errors.New("simulated build failure")
+
+// failSource returns a fixed error from Build after an initial success. It
+// counts calls and optionally sleeps to simulate a slow build.
+type failSource struct {
+	mu     sync.Mutex
+	builds int
+	err    error // returned on build 2+
+	delay  time.Duration
+}
+
+func (s *failSource) Build(_ context.Context) (output.Figure, error) {
+	s.mu.Lock()
+	s.builds++
+	n := s.builds
+	s.mu.Unlock()
+
+	if s.delay > 0 {
+		time.Sleep(s.delay)
+	}
+
+	// First build succeeds (initial); subsequent builds return the error.
+	if n > 1 && s.err != nil {
+		return nil, s.err
+	}
+
+	return nopFigure{}, nil
+}
+
+func (s *failSource) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.builds
+}
+
+func TestSessionRebuildErrorHandler(t *testing.T) {
+	t.Parallel()
+
+	src := &failSource{err: errSimulatedBuild}
+	surf := newFakeLive(80, 60)
+
+	var rebuildErrs []error
+
+	var errMu sync.Mutex
+
+	ctrl := output.ControllerFunc(func(ev output.Event, _ *output.State) output.Action {
+		if ev.Kind == output.EventKey {
+			return output.ActionRebuild
+		}
+
+		return output.ActionIgnore
+	})
+
+	sess := output.NewSession(src, surf,
+		output.WithController(ctrl),
+		output.WithRebuildDelay(10*time.Millisecond),
+		output.WithRebuildError(func(err error) {
+			errMu.Lock()
+
+			rebuildErrs = append(rebuildErrs, err)
+			errMu.Unlock()
+		}),
+	)
+
+	done := make(chan error, 1)
+	go func() { done <- sess.Run(context.Background()) }()
+
+	// Trigger a rebuild that will fail.
+	surf.events <- output.Event{Kind: output.EventKey}
+
+	// Give the async rebuild time to fire.
+	time.Sleep(80 * time.Millisecond)
+
+	close(surf.events)
+	waitRun(t, done, nil)
+
+	errMu.Lock()
+	defer errMu.Unlock()
+
+	if len(rebuildErrs) == 0 {
+		t.Fatal("expected WithRebuildError handler to be called")
+	}
+
+	if !errors.Is(rebuildErrs[0], errSimulatedBuild) {
+		t.Errorf("rebuild error = %v, want wrapping %v", rebuildErrs[0], errSimulatedBuild)
+	}
+
+	// Session should still be alive (used the last good figure).
+	if surf.commitCount() < 1 {
+		t.Error("expected at least one commit (initial frame)")
+	}
+}
+
+func TestSessionExportNilFactory(t *testing.T) {
+	t.Parallel()
+
+	src := &countingSource{}
+	surf := newFakeLive(60, 40)
+
+	ctrl := output.ControllerFunc(func(ev output.Event, _ *output.State) output.Action {
+		if ev.Kind == output.EventKey {
+			return output.ActionExport
+		}
+
+		if ev.Kind == output.EventClose {
+			return output.ActionClose
+		}
+
+		return output.ActionIgnore
+	})
+
+	// No WithExportSurface — nil factory. ActionExport should be a no-op.
+	sess := output.NewSession(src, surf, output.WithController(ctrl))
+
+	runEvents(t, sess, surf,
+		output.Event{Kind: output.EventKey},
+		output.Event{Kind: output.EventClose},
+	)
+
+	// If we get here without panic/error, nil factory is handled correctly.
+}
+
+func TestSessionAsyncDirtyReplay(t *testing.T) {
+	t.Parallel()
+
+	// Source where only async rebuilds are slow (initial build is fast).
+	src := &failSource{delay: 100 * time.Millisecond}
+	// Override: initial build should be fast. We handle this by making the
+	// failSource delay only apply after the initial build. Already the case:
+	// delay applies to ALL builds, including initial. So we wait for the
+	// initial build to finish before sending events.
+	surf := newFakeLive(80, 60)
+
+	ctrl := output.ControllerFunc(func(ev output.Event, _ *output.State) output.Action {
+		if ev.Kind == output.EventKey {
+			return output.ActionRebuild
+		}
+
+		return output.ActionIgnore
+	})
+
+	sess := output.NewSession(src, surf,
+		output.WithController(ctrl),
+		output.WithRebuildDelay(10*time.Millisecond),
+	)
+
+	done := make(chan error, 1)
+	go func() { done <- sess.Run(context.Background()) }()
+
+	// Wait for the initial build (100ms) + render to complete, so Run is
+	// actively reading from the event channel.
+	time.Sleep(200 * time.Millisecond)
+
+	// First rebuild triggers an async build.
+	surf.events <- output.Event{Kind: output.EventKey}
+
+	// Wait past the debounce (10ms) so the build goroutine starts, but well
+	// within the 100ms build time so the build is still in-flight.
+	time.Sleep(50 * time.Millisecond)
+
+	// Second rebuild while the first build is in-flight → sets dirty flag.
+	surf.events <- output.Event{Kind: output.EventKey}
+
+	// Wait for the timer (10ms debounce) + startBuild (sees building=true, sets
+	// dirty) + first build to finish (remaining ~50ms) + dirty replay timer
+	// (10ms) + replay build (100ms).
+	time.Sleep(400 * time.Millisecond)
+
+	close(surf.events)
+	waitRun(t, done, nil)
+
+	// Expect ≥3 builds: initial + first async + dirty replay.
+	if got := src.count(); got < 3 {
+		t.Errorf("builds=%d, want >=3 (initial + first async + dirty replay)", got)
+	}
+}
