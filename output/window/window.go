@@ -1,12 +1,12 @@
 //go:build !js
 
 // Package window presents a ggplot figure in a native desktop GPU window via
-// gogpu/ui, the enterprise-grade GUI toolkit. It creates a custom widget that
-// renders the figure directly into gogpu's GPU scene graph for hardware-
-// accelerated vector rendering.
+// gogpu + ggcanvas, the zero-copy GPU rendering integration. Drawing goes
+// through gg.Context (GPU-accelerated), and ggcanvas.Canvas presents via
+// RenderDirect (zero-copy to surface) with automatic fallback to CPU upload.
 //
-// Pan (mouse drag) and zoom (mouse wheel) are handled through gogpu/ui's
-// event system, translated to ggplot's platform-neutral [output.Controller].
+// Pan (mouse drag) and zoom (mouse wheel) are handled through gogpu's event
+// system, translated to ggplot's platform-neutral [output.Controller].
 //
 // [Show] blocks until the window closes and must be called from the main
 // goroutine (GPU/windowing requires the main OS thread).
@@ -21,13 +21,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gogpu/gg/scene"
+	"github.com/gogpu/gg"
+	"github.com/gogpu/gg/integration/ggcanvas"
 	"github.com/gogpu/gogpu"
-	"github.com/gogpu/ui/app"
-	"github.com/gogpu/ui/desktop"
-	"github.com/gogpu/ui/event"
-	"github.com/gogpu/ui/geometry"
-	"github.com/gogpu/ui/widget"
+	"github.com/gogpu/gpucontext"
 
 	"github.com/TuSKan/ggplot/canvas"
 	"github.com/TuSKan/ggplot/output"
@@ -95,56 +92,64 @@ func Show(ctx context.Context, src output.Source, opts ...Opt) error {
 		return fmt.Errorf("window: initial build: %w", err)
 	}
 
-	gogpuApp := gogpu.NewApp(gogpu.DefaultConfig().
-		WithTitle(o.Title+" — window.Show").
+	app := gogpu.NewApp(gogpu.DefaultConfig().
+		WithTitle(o.Title).
 		WithSize(o.Width, o.Height).
 		WithContinuousRender(false)) // event-driven: 0% CPU when idle
 
-	pw := newPlotWidget(ctx, src, fig, o, gogpuApp)
+	ws := &windowState{
+		ctx:          ctx,
+		src:          src,
+		app:          app,
+		controller:   o.Controller,
+		cur:          fig,
+		state:        output.State{Scale: 1, Bounds: image.Rect(0, 0, o.Width, o.Height), Figure: fig},
+		rebuildDelay: o.RebuildDelay,
+		onRebuildErr: o.OnRebuildErr,
+	}
 
-	uiApp := app.New(
-		app.WithWindowProvider(gogpuApp),
-		app.WithPlatformProvider(gogpuApp),
-		app.WithEventSource(gogpuApp.EventSource()),
-	)
+	// Register input event handlers before Run() starts the main loop.
+	ws.registerEvents(app) //nolint:contextcheck // Context stored on struct (ws.ctx), not threaded through gogpu callbacks.
 
-	uiApp.SetRoot(pw)
+	// Set up the draw callback.
+	app.OnDraw(func(dc *gogpu.Context) {
+		ws.draw(dc)
+	})
 
-	if runErr := desktop.Run(gogpuApp, uiApp); runErr != nil {
+	// Close ggcanvas on shutdown (while GPU is still alive).
+	app.OnClose(func() {
+		if ws.cv != nil {
+			_ = ws.cv.Close()
+			ws.cv = nil
+		}
+	})
+
+	if runErr := app.Run(); runErr != nil {
 		return fmt.Errorf("window: run: %w", runErr)
 	}
 
-	return pw.err
+	return ws.err
 }
 
-// sceneProvider is satisfied by gogpu/ui's internal render.SceneCanvas, which
-// records drawing commands into a scene.Scene for GPU-accelerated rendering.
-//
-// When plotWidget is the root widget, SetRoot calls SetRepaintBoundary(true),
-// so Draw receives a SceneCanvas (not a render.Canvas). The scene.Scene is
-// the GPU scene graph — drawing into it is fully GPU-accelerated via
-// SDF shapes, MSDF text, and hardware path processing.
-type sceneProvider interface {
-	Scene() *scene.Scene
-}
-
-// plotWidget is a gogpu/ui widget that renders a ggplot figure.
-//
-// It implements [widget.Widget] with:
-//   - Layout: fills all available space
-//   - Draw: renders the figure into the GPU scene graph via [canvas.SceneCanvas]
-//   - Event: translates mouse/wheel events to [output.Event] for pan/zoom
-type plotWidget struct {
-	widget.WidgetBase
-
+// windowState holds all mutable state for the interactive window.
+type windowState struct {
 	ctx        context.Context
 	src        output.Source
-	gogpuApp   *gogpu.App
+	app        *gogpu.App
 	controller output.Controller
 
 	cur   output.Figure
 	state output.State
 	err   error
+
+	// ggcanvas — created lazily on first draw frame.
+	cv    *ggcanvas.Canvas
+	lastW int
+	lastH int
+
+	// Mouse tracking for pan.
+	mouseX float64
+	mouseY float64
 
 	// Async rebuild — active only when rebuildDelay > 0.
 	rebuildDelay time.Duration
@@ -157,287 +162,222 @@ type plotWidget struct {
 	dirty       bool
 }
 
-func newPlotWidget(
-	ctx context.Context,
-	src output.Source,
-	fig output.Figure,
-	o Options,
-	gogpuApp *gogpu.App,
-) *plotWidget {
-	pw := &plotWidget{
-		ctx:          ctx,
-		src:          src,
-		gogpuApp:     gogpuApp,
-		controller:   o.Controller,
-		cur:          fig,
-		state:        output.State{Scale: 1, Bounds: image.Rect(0, 0, o.Width, o.Height), Figure: fig},
-		rebuildDelay: o.RebuildDelay,
-		onRebuildErr: o.OnRebuildErr,
+// registerEvents hooks the gogpu event system for mouse/scroll input.
+func (ws *windowState) registerEvents(app *gogpu.App) {
+	es := app.EventSource()
+
+	es.OnMousePress(func(_ gpucontext.MouseButton, x, y float64) {
+		ws.mouseX, ws.mouseY = x, y
+		ws.dispatch(output.Event{Kind: output.EventPointerDown, X: x, Y: y})
+	})
+
+	es.OnMouseRelease(func(_ gpucontext.MouseButton, x, y float64) {
+		ws.mouseX, ws.mouseY = x, y
+		ws.dispatch(output.Event{Kind: output.EventPointerUp, X: x, Y: y})
+	})
+
+	es.OnMouseMove(func(x, y float64) {
+		ws.mouseX, ws.mouseY = x, y
+		ws.dispatch(output.Event{Kind: output.EventPointerMove, X: x, Y: y})
+	})
+
+	// Use detailed ScrollEvent when available (provides cursor position at
+	// scroll time). Fall back to basic OnScroll + tracked cursor position.
+	if ses, ok := es.(gpucontext.ScrollEventSource); ok {
+		ses.OnScrollEvent(func(ev gpucontext.ScrollEvent) {
+			ws.dispatch(output.Event{
+				Kind: output.EventScroll,
+				X:    ev.X,
+				Y:    ev.Y,
+				DX:   ev.DeltaX,
+				DY:   ev.DeltaY,
+			})
+		})
+	} else {
+		es.OnScroll(func(dx, dy float64) {
+			ws.dispatch(output.Event{
+				Kind: output.EventScroll,
+				X:    ws.mouseX,
+				Y:    ws.mouseY,
+				DX:   dx,
+				DY:   dy,
+			})
+		})
 	}
-
-	pw.SetVisible(true)
-	pw.SetEnabled(true)
-
-	return pw
 }
 
-// Layout fills all available space — the plot takes the entire window.
-func (pw *plotWidget) Layout(_ widget.Context, c geometry.Constraints) geometry.Size {
-	return c.Biggest()
-}
-
-// Draw renders the ggplot figure onto the widget canvas.
-//
-// Because plotWidget is the root widget, SetRoot calls SetRepaintBoundary(true),
-// so the canvas passed here is a SceneCanvas recording into a scene.Scene —
-// the GPU scene graph used by gogpu/ui's compositor pipeline.
-//
-// Primary path: type-assert for [sceneProvider] to get the scene.Scene.
-// Create ggplot's [canvas.SceneCanvas] wrapping it and draw the figure
-// directly into the GPU scene graph. All shapes (paths, fills, strokes, text)
-// are recorded as GPU-accelerated scene commands (SDF shapes, MSDF text,
-// hardware path processing). The compositor renders the scene into a
-// per-boundary GPU texture via FlushGPUWithView. Zero bitmap copies.
-//
-// Fallback path: for non-scene canvases (testing, headless, or custom
-// canvas implementations), create an independent [canvas.RasterCanvas],
-// render, flush GPU, and blit via DrawImage.
-func (pw *plotWidget) Draw(_ widget.Context, cv widget.Canvas) {
-	bounds := pw.Bounds()
-	width := int(bounds.Width())
-	height := int(bounds.Height())
-
-	if width <= 0 || height <= 0 {
+// draw is the OnDraw callback — runs on the render thread each frame.
+func (ws *windowState) draw(dc *gogpu.Context) {
+	w, h := dc.Width(), dc.Height()
+	if w <= 0 || h <= 0 {
 		return
 	}
 
 	// Swap in a pending async-rebuilt figure, if any.
-	pw.mu.Lock()
-	if pw.pendingFig != nil {
-		pw.cur = pw.pendingFig
-		pw.pendingFig = nil
-		pw.state.OffsetX, pw.state.OffsetY, pw.state.Scale = 0, 0, 1
+	ws.mu.Lock()
+	if ws.pendingFig != nil {
+		ws.cur = ws.pendingFig
+		ws.pendingFig = nil
+		ws.state.OffsetX, ws.state.OffsetY, ws.state.Scale = 0, 0, 1
 	}
-	pw.mu.Unlock()
+	ws.mu.Unlock()
 
-	// Update bounds if window resized.
-	pw.state.Bounds = image.Rect(0, 0, width, height)
+	// Update bounds on resize.
+	ws.state.Bounds = image.Rect(0, 0, w, h)
 
-	// Primary path: draw directly into the GPU scene graph.
-	if sp, ok := cv.(sceneProvider); ok {
-		pw.drawScene(sp.Scene(), width, height)
+	// Lazy init or resize the ggcanvas.
+	if ws.cv == nil {
+		provider := ws.app.GPUContextProvider()
+		if provider == nil {
+			return // GPU not ready yet; will retry next frame.
+		}
+
+		cv, err := ggcanvas.New(provider, w, h)
+		if err != nil {
+			ws.fail(fmt.Errorf("window: ggcanvas.New: %w", err))
+
+			return
+		}
+
+		ws.cv = cv
+		ws.lastW, ws.lastH = w, h
+	} else if w != ws.lastW || h != ws.lastH {
+		if err := ws.cv.Resize(w, h); err != nil {
+			ws.fail(fmt.Errorf("window: ggcanvas.Resize: %w", err))
+
+			return
+		}
+
+		ws.lastW, ws.lastH = w, h
+	}
+
+	// Draw the figure into gg.Context via ggcanvas.
+	if err := ws.cv.Draw(func(cc *gg.Context) {
+		c := canvas.RasterFromContext(cc)
+		c.Clear(color.White)
+
+		if drawErr := output.DrawViewport(ws.ctx, ws.cur, c, w, h, &ws.state); drawErr != nil {
+			ws.fail(drawErr)
+		}
+	}); err != nil {
+		ws.fail(fmt.Errorf("window: ggcanvas.Draw: %w", err))
 
 		return
 	}
 
-	// Fallback path: independent raster canvas + DrawImage.
-	pw.drawFallback(cv, width, height)
-}
-
-// drawScene renders the figure into the GPU scene graph via [canvas.SceneCanvas].
-//
-// The scene.Scene is owned by gogpu/ui's boundary recording pipeline. Drawing
-// into it records GPU-accelerated commands that the compositor renders via
-// FlushGPUWithView into a per-boundary GPU texture. No intermediate bitmap,
-// no CPU rasterization, no DrawImage.
-func (pw *plotWidget) drawScene(sc *scene.Scene, width, height int) {
-	c := canvas.NewSceneCanvas(sc, width, height)
-	defer func() { _ = c.Close() }()
-
-	c.Clear(color.White)
-
-	if err := output.DrawViewport(pw.ctx, pw.cur, c, width, height, &pw.state); err != nil {
-		pw.fail(err)
+	// Present: zero-copy GPU-direct via RenderDirect, or universal fallback.
+	if err := ws.cv.Render(dc.RenderTarget()); err != nil {
+		ws.fail(fmt.Errorf("window: ggcanvas.Render: %w", err))
 	}
-}
-
-// drawFallback renders the figure into an independent [canvas.RasterCanvas]
-// and blits the result via DrawImage. Used when the widget.Canvas doesn't
-// expose a scene.Scene (e.g. testing, headless, or render.Canvas).
-func (pw *plotWidget) drawFallback(cv widget.Canvas, width, height int) {
-	rc := canvas.NewRasterCanvas(width, height)
-	defer func() { _ = rc.Close() }()
-
-	rc.Clear(color.White)
-
-	if err := output.DrawViewport(pw.ctx, pw.cur, rc, width, height, &pw.state); err != nil {
-		pw.fail(err)
-
-		return
-	}
-
-	// Flush pending GPU shapes to the CPU pixmap before reading pixels.
-	// gg.Context.Image() reads from the pixmap but GPU-accelerated shapes
-	// are queued in the GPU render context until FlushGPU is called.
-	_ = rc.Context().FlushGPU()
-
-	img := rc.Context().Image()
-	cv.DrawImage(img, pw.Bounds().Min)
-}
-
-// Event handles mouse and wheel events for pan/zoom.
-func (pw *plotWidget) Event(_ widget.Context, e event.Event) bool {
-	switch ev := e.(type) {
-	case *event.MouseEvent:
-		return pw.handleMouse(ev)
-	case *event.WheelEvent:
-		return pw.handleWheel(ev)
-	}
-
-	return false
-}
-
-// handleMouse translates gogpu/ui mouse events to output.Event.
-func (pw *plotWidget) handleMouse(ev *event.MouseEvent) bool {
-	pos := ev.Position
-
-	var kind output.EventKind
-
-	switch ev.MouseType {
-	case event.MousePress:
-		kind = output.EventPointerDown
-	case event.MouseRelease:
-		kind = output.EventPointerUp
-	case event.MouseMove, event.MouseDrag:
-		kind = output.EventPointerMove
-	case event.MouseEnter, event.MouseLeave, event.MouseDoubleClick:
-		return false // Not handled yet; future tooltip/selection support.
-	default:
-		return false
-	}
-
-	pw.dispatch(output.Event{Kind: kind, X: float64(pos.X), Y: float64(pos.Y)})
-
-	return true
-}
-
-// handleWheel translates gogpu/ui wheel events to output.Event.
-func (pw *plotWidget) handleWheel(ev *event.WheelEvent) bool {
-	pos := ev.Position
-
-	pw.dispatch(output.Event{
-		Kind: output.EventScroll,
-		X:    float64(pos.X),
-		Y:    float64(pos.Y),
-		DX:   float64(ev.Delta.X),
-		DY:   float64(ev.Delta.Y),
-	})
-
-	return true
 }
 
 // dispatch runs one event through the controller and performs the action.
-func (pw *plotWidget) dispatch(ev output.Event) {
-	pw.state.Figure = pw.cur
+func (ws *windowState) dispatch(ev output.Event) {
+	ws.state.Figure = ws.cur
 
-	switch pw.controller.OnEvent(ev, &pw.state) {
+	switch ws.controller.OnEvent(ev, &ws.state) {
 	case output.ActionIgnore:
 	case output.ActionRedraw:
-		pw.SetNeedsRedraw(true)
-		pw.gogpuApp.RequestRedraw()
+		ws.app.RequestRedraw()
 	case output.ActionRebuild:
-		if pw.rebuildDelay > 0 {
-			pw.scheduleRebuild()
+		if ws.rebuildDelay > 0 {
+			ws.scheduleRebuild()
 		} else {
-			pw.rebuildSync()
+			ws.rebuildSync()
 		}
 
-		pw.SetNeedsRedraw(true)
-		pw.gogpuApp.RequestRedraw()
+		ws.app.RequestRedraw()
 	case output.ActionExport:
 		// Export from a live window is not supported; ignore.
 	case output.ActionClose:
-		pw.gogpuApp.Quit()
+		ws.app.Quit()
 	}
 }
 
-// Children returns nil — plotWidget is a leaf widget.
-func (pw *plotWidget) Children() []widget.Widget { return nil }
-
 // rebuildSync recomputes the figure from the source synchronously (slow path)
 // and resets the viewport. On error the last good figure is kept.
-func (pw *plotWidget) rebuildSync() {
-	fig, err := pw.src.Build(pw.ctx)
+func (ws *windowState) rebuildSync() {
+	fig, err := ws.src.Build(ws.ctx)
 	if err != nil {
-		pw.fail(fmt.Errorf("window: rebuild: %w", err))
+		ws.fail(fmt.Errorf("window: rebuild: %w", err))
 
 		return
 	}
 
-	pw.cur = fig
-	pw.state.OffsetX, pw.state.OffsetY, pw.state.Scale = 0, 0, 1
+	ws.cur = fig
+	ws.state.OffsetX, ws.state.OffsetY, ws.state.Scale = 0, 0, 1
 }
 
 // scheduleRebuild arms a debounced async rebuild. Rapid calls coalesce: if a
 // build is already in flight, the request is recorded and replayed when the
 // current build finishes.
-func (pw *plotWidget) scheduleRebuild() {
-	pw.mu.Lock()
-	defer pw.mu.Unlock()
+func (ws *windowState) scheduleRebuild() {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
 
-	if pw.building {
-		pw.dirty = true
+	if ws.building {
+		ws.dirty = true
 
 		return
 	}
 
 	// Cancel any pending (not-yet-started) build.
-	if pw.buildCancel != nil {
-		pw.buildCancel()
+	if ws.buildCancel != nil {
+		ws.buildCancel()
 	}
 
-	bctx, cancel := context.WithCancel(pw.ctx)
-	pw.buildCancel = cancel
-	pw.building = true
+	bctx, cancel := context.WithCancel(ws.ctx)
+	ws.buildCancel = cancel
+	ws.building = true
 
-	delay := pw.rebuildDelay
-	src := pw.src
+	delay := ws.rebuildDelay
+	src := ws.src
 
 	go func() {
 		// Debounce delay.
 		select {
 		case <-time.After(delay):
 		case <-bctx.Done():
-			pw.mu.Lock()
-			pw.building = false
-			pw.mu.Unlock()
+			ws.mu.Lock()
+			ws.building = false
+			ws.mu.Unlock()
 
 			return
 		}
 
 		fig, err := src.Build(bctx)
 
-		pw.mu.Lock()
-		pw.building = false
-		reschedule := pw.dirty
-		pw.dirty = false
+		ws.mu.Lock()
+		ws.building = false
+		reschedule := ws.dirty
+		ws.dirty = false
 
 		switch {
 		case err != nil && !errors.Is(err, context.Canceled):
-			if pw.onRebuildErr != nil {
-				pw.onRebuildErr(fmt.Errorf("window: async rebuild: %w", err))
+			if ws.onRebuildErr != nil {
+				ws.onRebuildErr(fmt.Errorf("window: async rebuild: %w", err))
 			}
 		case err == nil:
-			pw.pendingFig = fig
+			ws.pendingFig = fig
 		}
 
-		pw.mu.Unlock()
+		ws.mu.Unlock()
 
 		if err == nil {
-			pw.gogpuApp.RequestRedraw()
+			ws.app.RequestRedraw()
 		}
 
 		if reschedule {
-			pw.scheduleRebuild() //nolint:contextcheck // Context stored on struct (pw.ctx), not threaded through gogpu callbacks.
+			ws.scheduleRebuild() //nolint:contextcheck // Context stored on struct (ws.ctx), not threaded through gogpu callbacks.
 		}
 	}()
 }
 
 // fail records the first error and asks the app to quit; Show returns it.
-func (pw *plotWidget) fail(err error) {
-	if pw.err == nil {
-		pw.err = err
+func (ws *windowState) fail(err error) {
+	if ws.err == nil {
+		ws.err = err
 	}
 
-	pw.gogpuApp.Quit()
+	ws.app.Quit()
 }

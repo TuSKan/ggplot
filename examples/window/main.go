@@ -22,11 +22,11 @@ import (
 
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
+	_ "github.com/TuSKan/ggplot/canvas/gpu"
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
 	"github.com/TuSKan/ggplot/output/window"
-	_ "github.com/TuSKan/ggplot/canvas/gpu"
 )
 
 func main() {

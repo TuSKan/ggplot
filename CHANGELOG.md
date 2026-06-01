@@ -29,15 +29,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`output.Session` / `Controller` interaction loop** (Phase 4) — drives a `Source` onto a `LiveSurface`: build once, draw, then re-render on `Event`s. `Action` (`Ignore`/`Redraw`/`Rebuild`/`Export`/`Close`) is the per-event decision; `State` carries the viewport (offset/scale) shared with the controller. Fast path (`ActionRedraw`) re-renders the current figure under a viewport affine transform; slow path (`ActionRebuild`) calls `Source.Build` again. `ControllerFunc` adapter and a default pan/wheel-zoom controller; `NewSession`, `WithController`, `WithExportSurface`, `Session.Run(ctx)`, plus exported `output.DefaultController()` and `output.DrawViewport()` for backend reuse.
 - **`output.Session` async/debounced rebuild** — `WithRebuildDelay(d)` makes `ActionRebuild` non-blocking: rapid triggers within `d` coalesce into a single background `Source.Build`, the last good figure keeps drawing while it computes, and the result swaps in when ready. Pending rebuilds flush on event-channel close and are cancelled on `Close`/context cancellation. `WithRebuildError(fn)` handles non-fatal background-build errors. Default (no delay) stays synchronous.
 - **`output/window` — native desktop GPU window** (Phase 5, `//go:build !js`). `window.Show(ctx, src, opts...)` opens a `gogpu` window and presents the figure zero-copy through `gg/integration/ggcanvas` (`Render` onto the swapchain surface). Reuses the Phase-4 `Controller`/`State` policy (pan/wheel-zoom) driven from gogpu's frame and input callbacks rather than `Session.Run` (gogpu owns the run loop). Options: `WithTitle`, `WithSize`, `WithController`, `WithRebuildDelay`, `WithRebuildError`. *(`output/web` (Phase 6) is still pending.)*
-- **`canvas.SceneCanvas` — GPU scene graph adapter** (new). Implements `canvas.Canvas` by recording drawing commands into `scene.Scene` (gogpu/gg's GPU scene graph) instead of CPU-rasterizing to a pixel buffer. All paths, fills, strokes, and text are recorded as GPU scene commands (SDF shapes, vector text). This enables:
-  - GPU-accelerated rendering (no CPU rasterization)
-  - Resolution independence (zoom without re-rasterization)
-  - Coordinate alignment with gogpu/ui widgets (for future hit-testing, tooltips)
-  - Dash pattern support via path flattening and segment decomposition
-- **`output/window` now renders directly into the GPU scene graph** via `canvas.SceneCanvas`. The figure is drawn as vector commands through `scene.Scene.Fill/Stroke/DrawText/PushClip/PushTransform` instead of CPU-rasterizing to `image.RGBA` and uploading via `DrawImage`. Falls back to CPU rasterization for testing/headless environments.
+- **`output/window` uses direct `ggcanvas.Canvas` integration** — draws the figure into `gg.Context` via `ggcanvas.Canvas.Draw()` and presents via `ggcanvas.Canvas.Render()` (zero-copy `RenderDirect` when GPU is available, universal CPU fallback otherwise). Replaces the previous `gogpu/ui` widget + `SceneCanvas` approach which had device-scale mismatch issues on HiDPI displays.
+
+#### Removed
+- **`canvas.SceneCanvas`** — removed. The `scene.Scene`-based canvas adapter is no longer needed; all rendering now goes through `canvas.RasterCanvas` wrapping the `gg.Context` provided by `ggcanvas.Canvas.Draw()`.
+- **`gogpu/ui` dependency** — the window no longer uses the `gogpu/ui` widget system (`app`, `desktop`, `widget`, `event`, `geometry`). Instead it uses bare `gogpu.App` + `ggcanvas.Canvas`, exactly matching the official ggcanvas integration pattern.
 
 #### Dependencies
 - Added `github.com/gogpu/gogpu` (desktop window/GPU app, used by `output/window`). Bumped `github.com/gogpu/wgpu` 0.28.7 → 0.29.1 and `go-webgpu/goffi`; added `go-webgpu/webgpu`. Rendering goldens are unaffected.
+- Removed `github.com/gogpu/ui` — no longer needed.
+- Promoted `github.com/gogpu/gpucontext` from indirect to direct dependency (used for `ScrollEventSource` type assertion).
 
 #### Fixed
 - **SVG/PDF vector export was double-transforming geometry.** The recording recorder bakes the active transform into every coordinate, but the SVG/PDF backends *also* re-emitted it (`<g transform>` / `cm`), so the panel's data layer (points, lines) rendered shifted off the axes. The backends now use the baked world coordinates for paths/rects verbatim and never re-apply the matrix to geometry (`SetClip`/`ClearClip` stay no-ops). PNG/raster output was unaffected.

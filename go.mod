@@ -4,12 +4,12 @@ go 1.26.0
 
 require (
 	cloud.google.com/go/bigquery v1.77.0
-	github.com/ajroetker/go-highway v0.0.12
+	github.com/ajroetker/go-highway v0.0.13-0.20260528204430-c3b5b59834b1
 	github.com/apache/arrow-go/v18 v18.6.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/gogpu/gg v0.48.7
 	github.com/gogpu/gogpu v0.40.0
-	github.com/gogpu/ui v0.1.29
+	github.com/gogpu/gpucontext v0.19.0
 	github.com/parquet-go/parquet-go v0.30.1
 	github.com/rickb777/date/v2 v2.3.11
 	golang.org/x/image v0.41.0
@@ -28,7 +28,6 @@ require (
 	github.com/apache/arrow/go/v15 v15.0.2 // indirect
 	github.com/apache/thrift v0.22.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/coregx/signals v0.1.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -36,7 +35,6 @@ require (
 	github.com/go-webgpu/goffi v0.5.2 // indirect
 	github.com/go-webgpu/webgpu v0.5.2 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
-	github.com/gogpu/gpucontext v0.19.0 // indirect
 	github.com/gogpu/gputypes v0.5.0 // indirect
 	github.com/gogpu/naga v0.17.13 // indirect
 	github.com/gogpu/wgpu v0.29.1 // indirect
