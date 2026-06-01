@@ -284,12 +284,14 @@ ggplot.New(ds, aes.X("group"), aes.Y("value")).
 
 ### Interactive output (window & session)
 
-A `*Plot` is an `output.Source` that an `output.Session` drives onto a `LiveSurface` — build → draw → event loop, with a fast path (pan/zoom redraw) and a slow path (rebuild when an interaction crosses the trained data extent). The desktop backend wires this to a GPU window:
+A `*Plot` is an `output.Source` that an `output.Session` drives onto a `LiveSurface` — build → draw → event loop. The desktop backend wires this to a GPU window with data-space interactive zoom:
 
 ```go
 import "github.com/TuSKan/ggplot/output/window"
 
-// Opens a GPU window; drag to pan, scroll to zoom. Blocks until closed.
+// Opens a GPU window. Drag to pan, scroll to zoom — axes stay fixed,
+// tick labels update dynamically. Double-click to reset.
+// Operates on data-space scale bounds (O(1)), not canvas transforms.
 // Call from the main goroutine. See examples/window.
 _ = window.Show(ctx, plot, window.WithTitle("ggplot"), window.WithSize(900, 600))
 ```

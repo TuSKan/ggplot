@@ -82,7 +82,7 @@ func WithRebuildError(fn func(error)) Opt {
 // pan/zoom and other interactions until the window is closed. It blocks and
 // must be called from the main goroutine.
 func Show(ctx context.Context, src output.Source, opts ...Opt) error {
-	o := Options{Title: "ggplot", Width: defaultWidth, Height: defaultHeight, Controller: output.DefaultController()}
+	o := Options{Title: "ggplot", Width: defaultWidth, Height: defaultHeight, Controller: output.DataSpaceController()}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -151,6 +151,9 @@ type windowState struct {
 	mouseX float64
 	mouseY float64
 
+	// Double-click detection.
+	lastClickTime time.Time
+
 	// Async rebuild — active only when rebuildDelay > 0.
 	rebuildDelay time.Duration
 	onRebuildErr func(error)
@@ -168,7 +171,16 @@ func (ws *windowState) registerEvents(app *gogpu.App) {
 
 	es.OnMousePress(func(_ gpucontext.MouseButton, x, y float64) {
 		ws.mouseX, ws.mouseY = x, y
-		ws.dispatch(output.Event{Kind: output.EventPointerDown, X: x, Y: y})
+
+		// Double-click detection: two clicks within 400ms.
+		now := time.Now()
+		if now.Sub(ws.lastClickTime) < 400*time.Millisecond { //nolint:mnd // Standard double-click threshold.
+			ws.dispatch(output.Event{Kind: output.EventDoubleClick, X: x, Y: y})
+			ws.lastClickTime = time.Time{} // reset to avoid triple-click
+		} else {
+			ws.dispatch(output.Event{Kind: output.EventPointerDown, X: x, Y: y})
+			ws.lastClickTime = now
+		}
 	})
 
 	es.OnMouseRelease(func(_ gpucontext.MouseButton, x, y float64) {

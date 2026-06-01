@@ -474,6 +474,8 @@ func (c *defaultController) OnEvent(ev Event, st *State) Action {
 		return ActionRedraw
 	case EventKey:
 		return ActionIgnore
+	case EventDoubleClick:
+		return ActionIgnore
 	case EventClose:
 		return ActionClose
 	}

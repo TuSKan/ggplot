@@ -13,6 +13,7 @@ const (
 	EventScroll
 	EventKey
 	EventClose
+	EventDoubleClick // double-click / double-tap for viewport reset
 )
 
 // Event is the platform-neutral input event. output/window translates OS events

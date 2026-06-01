@@ -870,6 +870,12 @@ type Built struct {
 	ndodgeX     int // X-axis label dodge rows (0 = auto, 1 = no dodge, ≥ 2 = forced)
 	annotations []Annotation
 	secAxis     *scale.SecAxisSpec // secondary Y-axis specification (nil = none)
+
+	// vp holds the interactive viewport state: cached panel geometry
+	// (populated during Draw) and original trained bounds (captured on
+	// first zoom). Protected by an internal mutex for concurrent
+	// draw/event goroutine access.
+	vp viewportState
 }
 
 // BuiltLayer holds one resolved layer's data after stat transform and grouping.
@@ -2894,6 +2900,20 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 			b.drawLegend(cv, bp, legendPos, dataX, dataY, cellW, cellH, mBottom, legendW, th)
 		}
 	}
+
+	// Cache panel geometry for the Measurable interface. Controllers use this
+	// to convert pixel positions to data coordinates for interactive zoom.
+	geoms := make([]panelGeometry, len(panelRenderInfos))
+	for i, pri := range panelRenderInfos {
+		geoms[i] = panelGeometry{
+			dataX:  pri.dataX,
+			dataY:  pri.dataY,
+			panelW: pri.cellW,
+			panelH: pri.cellH,
+		}
+	}
+
+	b.storePanelGeometry(width, height, geoms)
 
 	// Render data layers — parallel when multiple panels, sequential otherwise.
 	if len(panelRenderInfos) == 1 {

@@ -109,6 +109,8 @@ github.com/TuSKan/ggplot
 │
 ├── output/              # Output layer — destinations for a Figure. See docs/OUTPUT-SPEC.md
 │   ├── output.go        #   Figure, Source, Sizer, Surface, LiveSurface, Event, Render
+│   ├── viewport.go      #   PanelInfo, Measurable, Zoomable — data-space viewport interfaces
+│   ├── controller_dataspace.go # DataSpaceController — data-space pan/zoom (default for window)
 │   ├── registry.go      #   blank-import surface registry: NewSurface / NewLiveSurface
 │   ├── session.go       #   Session + Controller — interaction loop for live surfaces
 │   ├── file/            #   FileSurface — PNG / SVG / PDF on disk

@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Data-Space Interactive Pan/Zoom
+
+#### Added
+- **`output.DataSpaceController()`** — new default controller for `output/window`. Pan (drag) and zoom (scroll wheel) operate on data-space scale bounds instead of a canvas-level affine transform. Axes stay at fixed screen positions; tick labels update dynamically. O(1) viewport change — no rebuild, no data iteration.
+- **`output.Measurable` interface** — optional `Figure` extension exposing per-panel pixel geometry and data-space bounds. Controllers use this for pixel→data coordinate conversion and per-panel hit-testing (faceted plots).
+- **`output.Zoomable` interface** — optional `Figure` extension for fast viewport changes without rebuilding. `SetPanelViewport(idx, xlim, ylim)` mutates scale bounds directly. `ResetViewport()` restores original trained bounds.
+- **`output.PanelInfo`** — describes one panel's pixel geometry (`Bounds`) and data-space extent (`XRange`, `YRange`) with helper methods `PixelToData` and `ContainsPixel`.
+- **`output.EventDoubleClick`** — new event kind for viewport reset gesture. `output/window` detects double-clicks (two clicks within 400ms).
+- **`Built` implements `Measurable` + `Zoomable`** — panel geometry is cached during `Draw()` and exposed via `PanelInfos()`. Scale bounds are mutated directly via `SetPanelViewport()` with mutex-protected thread safety.
+- **Per-panel zoom for faceted plots** — zoom/pan applies only to the panel under the cursor.
+
 ### Output Layer (Phases 1–5 of OUTPUT-SPEC.md)
 
 #### Changed (Breaking)
