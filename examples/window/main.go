@@ -18,7 +18,6 @@ import (
 	"context"
 	"log"
 	"math"
-	"runtime"
 
 	"github.com/TuSKan/ggplot"
 	"github.com/TuSKan/ggplot/aes"
