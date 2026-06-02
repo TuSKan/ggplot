@@ -18,6 +18,10 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/http/pprof"
 	"runtime"
 	"sync"
 	"time"
@@ -44,6 +48,8 @@ type Options struct {
 	Controller   output.Controller
 	RebuildDelay time.Duration // 0 = synchronous rebuild (default)
 	OnRebuildErr func(error)   // called when an async rebuild fails (nil = silent)
+	ShowFPS      bool          // show FPS counter overlay
+	PprofAddr    string        // if non-empty, start pprof HTTP server on this address
 }
 
 // Opt functionally configures [Options].
@@ -78,6 +84,19 @@ func WithRebuildDelay(d time.Duration) Opt {
 func WithRebuildError(fn func(error)) Opt {
 	return func(o *Options) { o.OnRebuildErr = fn }
 }
+
+// WithFPS enables an FPS counter overlay in the top-right corner of the window.
+// Uses an exponential moving average for smooth readings.
+func WithFPS() Opt { return func(o *Options) { o.ShowFPS = true } }
+
+// WithPprof enables a pprof HTTP server on localhost:6060 for the lifetime of
+// the window. While the window is open and you are interacting, capture a CPU
+// profile with:
+//
+//	go tool pprof http://localhost:6060/debug/pprof/profile?seconds=5
+//
+// Or open http://localhost:6060/debug/pprof/ in a browser for all profiles.
+func WithPprof() Opt { return func(o *Options) { o.PprofAddr = "localhost:6060" } }
 
 // Show builds src into a figure and presents it in a native window, processing
 // pan/zoom and other interactions until the window is closed. It blocks and
@@ -115,8 +134,16 @@ func Show(ctx context.Context, src output.Source, opts ...Opt) error {
 		controller:   o.Controller,
 		cur:          fig,
 		state:        output.State{Scale: 1, Bounds: image.Rect(0, 0, o.Width, o.Height), Figure: fig},
+		showFPS:      o.ShowFPS,
 		rebuildDelay: o.RebuildDelay,
 		onRebuildErr: o.OnRebuildErr,
+	}
+
+	// Optional pprof HTTP server for live profiling.
+	var pprofServer *http.Server
+
+	if o.PprofAddr != "" {
+		pprofServer = startPprof(ctx, o.PprofAddr)
 	}
 
 	// Register input event handlers before Run() starts the main loop.
@@ -132,6 +159,10 @@ func Show(ctx context.Context, src output.Source, opts ...Opt) error {
 		if ws.cv != nil {
 			_ = ws.cv.Close()
 			ws.cv = nil
+		}
+
+		if pprofServer != nil {
+			_ = pprofServer.Close()
 		}
 	})
 
@@ -164,6 +195,11 @@ type windowState struct {
 
 	// Double-click detection.
 	lastClickTime time.Time
+
+	// FPS overlay.
+	showFPS      bool
+	lastDrawTime time.Time
+	fpsEMA       float64 // exponential moving average of FPS
 
 	// Async rebuild — active only when rebuildDelay > 0.
 	rebuildDelay time.Duration
@@ -297,6 +333,10 @@ func (ws *windowState) draw(dc *gogpu.Context) {
 		if drawErr := output.DrawViewport(ws.ctx, ws.cur, c, w, h, &ws.state); drawErr != nil {
 			ws.fail(drawErr)
 		}
+
+		if ws.showFPS {
+			ws.drawFPS(c, w)
+		}
 	}); err != nil {
 		ws.fail(fmt.Errorf("window: ggcanvas.Draw: %w", err))
 
@@ -418,4 +458,100 @@ func (ws *windowState) fail(err error) {
 	}
 
 	ws.app.Quit()
+}
+
+// drawFPS renders the FPS counter overlay in the top-right corner.
+func (ws *windowState) drawFPS(c canvas.Canvas, width int) {
+	now := time.Now()
+
+	if !ws.lastDrawTime.IsZero() {
+		dt := now.Sub(ws.lastDrawTime).Seconds()
+		if dt > 0 {
+			instantFPS := 1.0 / dt
+
+			const alpha = 0.1 // EMA smoothing factor.
+
+			if ws.fpsEMA == 0 {
+				ws.fpsEMA = instantFPS
+			} else {
+				ws.fpsEMA = alpha*instantFPS + (1-alpha)*ws.fpsEMA
+			}
+		}
+	}
+
+	ws.lastDrawTime = now
+
+	if ws.fpsEMA == 0 {
+		return // not enough data yet
+	}
+
+	text := fmt.Sprintf("%.0f FPS", ws.fpsEMA)
+
+	const fontSize = 11 //nolint:mnd // Small, unobtrusive overlay text.
+
+	c.Save()
+
+	defer c.Restore()
+
+	c.SetFontSize(fontSize)
+
+	tw, th := c.MeasureString(text)
+
+	const padX = 6.0 //nolint:mnd // Horizontal padding inside the FPS badge.
+
+	const padY = 3.0 //nolint:mnd // Vertical padding inside the FPS badge.
+
+	badgeW := tw + 2*padX
+	badgeH := th + 2*padY
+	bx := float64(width) - badgeW - padX
+	by := padY
+
+	// Semi-transparent dark background.
+	c.SetColor(color.NRGBA{R: 0, G: 0, B: 0, A: 140}) //nolint:mnd // 55% opaque black background.
+	c.DrawRectangle(bx, by, badgeW, badgeH)
+	c.Fill()
+
+	// White text, centered in badge.
+	c.SetColor(color.White)
+	c.DrawStringAnchored(text, bx+badgeW/2, by+badgeH/2, 0.5, 0.5) //nolint:mnd // Center anchor.
+}
+
+// startPprof starts an HTTP pprof server on addr and returns it for shutdown.
+// Uses a dedicated ServeMux so it does not affect [http.DefaultServeMux].
+func startPprof(ctx context.Context, addr string) *http.Server {
+	// Enable block and mutex profiling so /debug/pprof/block and
+	// /debug/pprof/mutex produce useful data. Rate=1 captures every
+	// event; this has negligible overhead for interactive plotting.
+	runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1) //nolint:mnd // Fraction=1 captures all mutex contention events.
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second, //nolint:mnd // Reasonable HTTP read-header timeout.
+	}
+
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
+	if err != nil {
+		slog.Error("pprof: listen failed", "addr", addr, "err", err)
+
+		return nil
+	}
+
+	slog.Info("pprof server started", "addr", "http://"+ln.Addr().String()+"/debug/pprof/")
+
+	go func() {
+		if serveErr := srv.Serve(ln); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			slog.Error("pprof: serve failed", "err", serveErr)
+		}
+	}()
+
+	return srv
 }

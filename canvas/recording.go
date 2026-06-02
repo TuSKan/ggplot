@@ -109,6 +109,15 @@ func (c *RecordingCanvas) FillPreserve() { c.rec.FillPreserve() }
 // Clip clips rendering to the current path.
 func (c *RecordingCanvas) Clip() { c.rec.Clip() }
 
+// ClipRect clips rendering to the axis-aligned rectangle (x, y, w, h).
+// Falls back to DrawRectangle+Clip since recording.Recorder does not
+// have a dedicated ClipRect. This is acceptable because RecordingCanvas
+// is used for SVG/PDF export, not interactive rendering.
+func (c *RecordingCanvas) ClipRect(x, y, w, h float64) {
+	c.rec.DrawRectangle(x, y, w, h)
+	c.rec.Clip()
+}
+
 // DrawCircle adds a circle path centered at (cx, cy) with radius r.
 func (c *RecordingCanvas) DrawCircle(cx, cy, r float64) { c.rec.DrawCircle(cx, cy, r) }
 

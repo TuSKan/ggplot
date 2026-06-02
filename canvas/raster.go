@@ -22,7 +22,16 @@ var (
 	fontResolver *fonts.Resolver
 	// Embedded fallback used when no system font is found.
 	embeddedSource *text.FontSource
+	// faceCache avoids re-resolving system fonts + constructing Face objects
+	// on every SetFontSize call. Key: faceCacheKey, Value: text.Face.
+	faceCache sync.Map
 )
+
+// faceCacheKey identifies a cached font face.
+type faceCacheKey struct {
+	size    float64
+	tabNums bool
+}
 
 func initFonts() {
 	fontOnce.Do(func() {
@@ -153,6 +162,15 @@ func (c *RasterCanvas) FillPreserve() { _ = c.ctx.FillPreserve() }
 // Clip clips rendering to the current path.
 func (c *RasterCanvas) Clip() { c.ctx.Clip() }
 
+// ClipRect clips rendering to the axis-aligned rectangle (x, y, w, h).
+// Uses gg.Context.ClipRect which pushes a rect onto the clip stack
+// without rasterizing a full-resolution anti-aliased clip mask.
+// Profile showed the generic Clip() path consuming ~75% of frame time
+// via MaskClipper.rasterizeScanlineAA — this bypasses that entirely.
+func (c *RasterCanvas) ClipRect(x, y, w, h float64) {
+	c.ctx.ClipRect(x, y, w, h)
+}
+
 // DrawCircle adds a circle path centered at (cx, cy) with radius r.
 func (c *RasterCanvas) DrawCircle(cx, cy, r float64) { c.ctx.DrawCircle(cx, cy, r) }
 
@@ -205,13 +223,29 @@ func (c *RasterCanvas) SetFontSize(size float64) {
 
 	c.fontSize = size
 
-	// Build face options (tabular nums if active).
+	if f := resolveFace(size, c.tabNums); f != nil {
+		c.ctx.SetFont(f)
+	}
+}
+
+// resolveFace returns a cached text.Face for the given size and feature set,
+// creating and caching one on the first call for each unique (size, tabNums).
+func resolveFace(size float64, tabNums bool) text.Face {
+	key := faceCacheKey{size: size, tabNums: tabNums}
+
+	if cached, ok := faceCache.Load(key); ok {
+		if f, ok := cached.(text.Face); ok {
+			return f
+		}
+	}
+
 	var opts []text.FaceOption
-	if c.tabNums {
+	if tabNums {
 		opts = append(opts, text.WithFeatures(text.TabularNums))
 	}
 
-	// Try system font resolver first (sans-serif family).
+	var face text.Face
+
 	if fontResolver != nil {
 		handle, err := fontResolver.LoadFace(fonts.FaceRequest{
 			Family:        "sans-serif",
@@ -222,17 +256,20 @@ func (c *RasterCanvas) SetFontSize(size float64) {
 		})
 		if err == nil && handle != nil {
 			if src := handle.FontSource(); src != nil {
-				c.ctx.SetFont(src.Face(size, opts...))
-
-				return
+				face = src.Face(size, opts...)
 			}
 		}
 	}
 
-	// Fallback to embedded Go Regular.
-	if embeddedSource != nil {
-		c.ctx.SetFont(embeddedSource.Face(size, opts...))
+	if face == nil && embeddedSource != nil {
+		face = embeddedSource.Face(size, opts...)
 	}
+
+	if face != nil {
+		faceCache.Store(key, face)
+	}
+
+	return face
 }
 
 // SetTabularNums enables or disables tabular (monospaced) digit widths.
@@ -257,8 +294,10 @@ func (c *RasterCanvas) MeasureString(s string) (float64, float64) {
 }
 
 // Clear fills the entire canvas with the given color.
+// Uses DrawRectangle+Fill instead of ctx.Clear() because the GPU accelerator
+// needs a draw command to update the surface — ctx.Clear() only writes to
+// the CPU pixmap and leaves the GPU surface stale.
 func (c *RasterCanvas) Clear(col color.Color) {
-	// Use explicit RGBA to avoid gg's color model conversion issues.
 	r, g, b, a := col.RGBA()
 	c.ctx.SetRGBA(
 		float64(r)/65535.0,
@@ -266,9 +305,6 @@ func (c *RasterCanvas) Clear(col color.Color) {
 		float64(b)/65535.0,
 		float64(a)/65535.0,
 	)
-	c.ctx.Clear()
-	// Also draw an opaque rectangle as a safety net (some gg versions
-	// don't fully clear with alpha-blended colors).
 	c.ctx.DrawRectangle(0, 0, float64(c.ctx.Width()), float64(c.ctx.Height()))
 	_ = c.ctx.Fill()
 }

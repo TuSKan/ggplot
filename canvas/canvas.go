@@ -66,6 +66,11 @@ type Canvas interface {
 	// Clip clips rendering to the current path. Call after constructing a path
 	// (e.g. DrawRectangle). Use Save/Restore to undo the clip.
 	Clip()
+	// ClipRect clips rendering to the axis-aligned rectangle (x, y, w, h).
+	// This is much faster than DrawRectangle+Clip for rectangular clip regions
+	// because the backend can use a GPU scissor rect instead of rasterizing
+	// a full-resolution clip mask.
+	ClipRect(x, y, w, h float64)
 
 	// --- Convenience primitives ---
 

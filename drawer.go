@@ -311,26 +311,62 @@ func drawPoints(dc DrawContext) {
 	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.3, 0.5, 0.8)
 	n := min(len(yVals), len(xVals))
 
+	// Batched rendering: accumulate same-color shapes into a single path,
+	// then flush with one Fill()/Stroke(). This reduces GPU draw commands
+	// from N (one per point) to ~K (one per color change). For a uniform
+	// color layer with 2000 points, 2000 Fill() calls → 1 Fill() call.
+	var (
+		batchR, batchG, batchB, batchA float64 // current batch color
+		batchShape                     string  // current batch shape
+		batchStroke                    bool    // current batch is stroked (not filled)
+		batchN                         int     // points accumulated in current batch
+	)
+
+	flushBatch := func() {
+		if batchN == 0 {
+			return
+		}
+
+		dc.Canvas.SetRGBA(batchR, batchG, batchB, batchA)
+
+		if batchStroke {
+			dc.Canvas.SetLineWidth(1.5) //nolint:mnd // Standard stroke-shape line width.
+			dc.Canvas.Stroke()
+		} else {
+			dc.Canvas.Fill()
+		}
+
+		batchN = 0
+	}
+
 	for i := range n {
 		nx := normalize(xVals[i], dc.XMin, dc.XMax)
 		ny := normalize(yVals[i], dc.YMin, dc.YMax)
 		px, py := orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
+
+		ptRadius := r
+		if i < len(sizeVals) && sizeMapper != nil {
+			ptRadius = sizeMapper(sizeVals[i])
+		}
+
+		// Cull points fully outside the clip region — avoids GPU draw
+		// commands for off-screen geometry during pan/zoom.
+		if px+ptRadius < 0 || px-ptRadius > dc.W || py+ptRadius < 0 || py-ptRadius > dc.H {
+			continue
+		}
 
 		ptAlpha := alpha
 		if i < len(alphaVals) && alphaMapper != nil {
 			ptAlpha = alphaMapper(alphaVals[i])
 		}
 
+		var ptR, ptG, ptB float64
+
 		if i < len(zVals) && dc.ContScale != nil {
 			gc := dc.ContScale.At(zVals[i])
-			dc.Canvas.SetRGBA(gc.R, gc.G, gc.B, ptAlpha)
+			ptR, ptG, ptB = gc.R, gc.G, gc.B
 		} else {
-			dc.Canvas.SetRGBA(cr, cg, cb, ptAlpha)
-		}
-
-		ptRadius := r
-		if i < len(sizeVals) && sizeMapper != nil {
-			ptRadius = sizeMapper(sizeVals[i])
+			ptR, ptG, ptB = cr, cg, cb
 		}
 
 		shapeName := dc.Params.Shape
@@ -346,15 +382,24 @@ func drawPoints(dc DrawContext) {
 			}
 		}
 
-		if canvas.IsStrokeShape(shapeName) {
-			dc.Canvas.SetLineWidth(1.5)
-			dc.Canvas.DrawShape(shapeName, px, py, ptRadius)
-			dc.Canvas.Stroke()
-		} else {
-			dc.Canvas.DrawShape(shapeName, px, py, ptRadius)
-			dc.Canvas.Fill()
+		isStroke := canvas.IsStrokeShape(shapeName)
+
+		// Flush batch when color, alpha, shape, or stroke/fill changes.
+		if batchN > 0 && (ptR != batchR || ptG != batchG || ptB != batchB ||
+			ptAlpha != batchA || shapeName != batchShape || isStroke != batchStroke) {
+			flushBatch()
 		}
+
+		batchR, batchG, batchB, batchA = ptR, ptG, ptB, ptAlpha
+		batchShape = shapeName
+		batchStroke = isStroke
+
+		dc.Canvas.DrawShape(shapeName, px, py, ptRadius)
+
+		batchN++
 	}
+
+	flushBatch()
 }
 
 func drawLine(dc DrawContext) {
@@ -770,6 +815,7 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 	const rugFrac = 0.02 // 2% of panel extent
 
 	// X rugs: tick marks along the bottom edge of the panel.
+	// Batched — accumulate all ticks into a single path, then stroke once.
 	if xVals, err := ds.Float64(xCol); err == nil {
 		cv.SetRGBA(cr, cg, cb, alpha)
 		cv.SetLineWidth(lw)
@@ -781,8 +827,9 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 
 			cv.MoveTo(px1, py1)
 			cv.LineTo(px2, py2)
-			cv.Stroke()
 		}
+
+		cv.Stroke()
 	}
 
 	// Y rugs: tick marks along the left edge of the panel.
@@ -797,8 +844,9 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 
 			cv.MoveTo(px1, py1)
 			cv.LineTo(px2, py2)
-			cv.Stroke()
 		}
+
+		cv.Stroke()
 	}
 }
 

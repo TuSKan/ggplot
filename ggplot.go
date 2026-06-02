@@ -2922,8 +2922,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 
 		cv.Save()
 		cv.Translate(pri.dataX, pri.dataY)
-		cv.DrawRectangle(0, 0, pri.cellW, pri.cellH)
-		cv.Clip()
+		cv.ClipRect(0, 0, pri.cellW, pri.cellH)
 
 		xMin, xMax := pri.xScale.Bounds()
 		yMin, yMax := pri.yScale.Bounds()
