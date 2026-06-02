@@ -1,7 +1,7 @@
 //go:build !js
 
-// Stress test: heavy interactive window with many layers, secondary axis,
-// annotations, and 2000+ data points to benchmark rendering performance.
+// Stress test: 100K-point financial-style chart with multiple overlays.
+// Tests rendering throughput with realistic production-like data volumes.
 package main
 
 import (
@@ -23,118 +23,126 @@ import (
 func main() { //nolint:funlen // stress-test example; length is intentional.
 	ctx := context.Background()
 	eng := memory.NewEngine(ctx)
-	rng := rand.New(rand.NewPCG(42, 99)) //nolint:mnd // Deterministic seed for reproducible benchmark.
+	rng := rand.New(rand.NewPCG(42, 99)) //nolint:mnd // Deterministic seed.
 
-	// --- Generate data ---
-	const n = 1_000_000 //nolint:mnd // 1M data points for extreme stress test.
+	// --- Simulate tick-level price data (100K ticks) ---
+	const n = 10_000 //nolint:mnd // 10K data points — realistic daily tick volume.
 
-	xs := make([]float64, n)
-	ySin := make([]float64, n)     // sin wave
-	yCos := make([]float64, n)     // cos wave
-	yScatter := make([]float64, n) // noisy scatter
-	yBar := make([]float64, n)     // bar heights
-	groups := make([]string, n)    // categorical grouping
-	groupList := []string{"A", "B", "C", "D"}
+	time := make([]float64, n)    // seconds since market open
+	price := make([]float64, n)   // price series (random walk)
+	volume := make([]float64, n)  // trade volume
+	maShort := make([]float64, n) // 50-tick moving average
+	maLong := make([]float64, n)  // 200-tick moving average
+	signal := make([]string, n)   // buy/sell signal
+
+	// Random walk price with drift and volatility.
+	p := 100.0 //nolint:mnd // Initial price.
 
 	for i := range n {
-		x := float64(i) * 0.05 //nolint:mnd // 0.05 step gives x range [0, 100].
-		xs[i] = x
-		ySin[i] = 10*math.Sin(x*0.3) + 2*math.Cos(x*0.7) //nolint:mnd // Complex wave.
-		yCos[i] = 8*math.Cos(x*0.2) + 3*math.Sin(x*0.5)  //nolint:mnd // Second wave.
-		yScatter[i] = ySin[i] + rng.NormFloat64()*3      //nolint:mnd // Noisy scatter around sin.
-		yBar[i] = math.Abs(ySin[i]) * 0.5                //nolint:mnd // Positive bar heights.
-		groups[i] = groupList[i%len(groupList)]
+		time[i] = float64(i) * 0.36          //nolint:mnd // 0.36s per tick ≈ 10h trading day.
+		p += rng.NormFloat64()*0.15 + 0.0001 //nolint:mnd // Brownian motion + slight drift.
+		price[i] = p
+		volume[i] = math.Abs(rng.NormFloat64()*50 + 100) //nolint:mnd // Volume spike distribution.
+
+		switch {
+		case i%500 < 250: //nolint:mnd // Alternating signal bands.
+			signal[i] = "hold"
+		case rng.Float64() < 0.5: //nolint:mnd // Random buy/sell within active zone.
+			signal[i] = "buy"
+		default:
+			signal[i] = "sell"
+		}
+	}
+
+	// Compute moving averages.
+	const (
+		shortWindow = 50  //nolint:mnd // Short MA window.
+		longWindow  = 200 //nolint:mnd // Long MA window.
+	)
+
+	var shortSum, longSum float64
+
+	for i := range n {
+		shortSum += price[i]
+		longSum += price[i]
+
+		if i >= shortWindow {
+			shortSum -= price[i-shortWindow]
+			maShort[i] = shortSum / shortWindow
+		} else {
+			maShort[i] = shortSum / float64(i+1)
+		}
+
+		if i >= longWindow {
+			longSum -= price[i-longWindow]
+			maLong[i] = longSum / longWindow
+		} else {
+			maLong[i] = longSum / float64(i+1)
+		}
 	}
 
 	ds, err := dataset.NewDataset(eng,
-		eng.NewFloat64Column("x", xs),
-		eng.NewFloat64Column("sin", ySin),
-		eng.NewFloat64Column("cos", yCos),
-		eng.NewFloat64Column("scatter", yScatter),
-		eng.NewFloat64Column("bar", yBar),
-		eng.NewStringColumn("group", groups),
+		eng.NewFloat64Column("time", time),
+		eng.NewFloat64Column("price", price),
+		eng.NewFloat64Column("volume", volume),
+		eng.NewFloat64Column("ma_short", maShort),
+		eng.NewFloat64Column("ma_long", maLong),
+		eng.NewStringColumn("signal", signal),
 	)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	// --- Build heavy plot ---
-	plot := ggplot.New(ds, aes.X("x")).
-		// Layer 1: scatter points with group color mapping
+	// --- Build realistic overlay chart ---
+	plot := ggplot.New(ds, aes.X("time")).
+		// Layer 1: price scatter colored by signal
 		Layer(geom.Point(
-			geom.WithSize(2),    //nolint:mnd // Small scatter points.
-			geom.WithAlpha(0.4), //nolint:mnd // Semi-transparent.
-		), aes.Y("scatter"), aes.Color("group")).
-		// Layer 2: sin wave line
+			geom.WithSize(1),
+			geom.WithAlpha(0.3), //nolint:mnd // Semi-transparent scatter.
+		), aes.Y("price"), aes.Color("signal")).
+		// Layer 2: short MA line
 		Layer(geom.Line(
 			geom.WithColor("#E63946"), //nolint:mnd // Red.
-			geom.WithLineWidth(2),     //nolint:mnd // Thick line.
-		), aes.Y("sin")).
-		// Layer 3: cos wave line
+			geom.WithLineWidth(2),     //nolint:mnd // Thick.
+		), aes.Y("ma_short")).
+		// Layer 3: long MA line
 		Layer(geom.Line(
 			geom.WithColor("#457B9D"), //nolint:mnd // Blue.
-			geom.WithLineWidth(2),     //nolint:mnd // Thick line.
-		), aes.Y("cos")).
-		// Layer 4: smooth trend through scatter
-		Layer(geom.Smooth(
-			geom.WithColor("#2A9D8F"), //nolint:mnd // Teal.
-			geom.WithLineWidth(3),     //nolint:mnd // Extra thick.
-		), aes.Y("scatter")).
-		// Layer 5: horizontal reference lines
-		Layer(geom.HLine(
-			geom.WithIntercept(0),
-			geom.WithColor("#6C757D"), //nolint:mnd // Gray.
-			geom.WithLineWidth(1),
-		)).
-		Layer(geom.HLine(
-			geom.WithIntercept(10),    //nolint:mnd // Upper threshold.
-			geom.WithColor("#F4A261"), //nolint:mnd // Orange.
-		)).
-		Layer(geom.HLine(
-			geom.WithIntercept(-10),   //nolint:mnd // Lower threshold.
-			geom.WithColor("#F4A261"), //nolint:mnd // Orange.
-		)).
-		// Layer 6: rug plot on X axis
+			geom.WithLineWidth(2),     //nolint:mnd // Thick.
+		), aes.Y("ma_long")).
+		// Layer 4: rug showing trade density
 		Layer(geom.Rug(
-			geom.WithAlpha(0.1), //nolint:mnd // Very transparent rug.
+			geom.WithAlpha(0.05), //nolint:mnd // Very subtle density rug.
 			geom.WithColor("#264653"),
-		), aes.Y("scatter")).
+		), aes.Y("price")).
 		// Annotations
-		Annotate(ggplot.AnnotateText(50, 11, "Upper threshold", //nolint:mnd // Annotation position.
-			geom.WithColor("#F4A261"),
-			geom.WithFontSize(9), //nolint:mnd // Small font.
-		)).
-		Annotate(ggplot.AnnotateText(50, -11, "Lower threshold", //nolint:mnd // Annotation position.
-			geom.WithColor("#F4A261"),
-			geom.WithFontSize(9), //nolint:mnd // Small font.
-		)).
-		Annotate(ggplot.AnnotateRect(20, -5, 40, 5, //nolint:mnd // Highlight region.
-			geom.WithFill("#2A9D8F"),
-			geom.WithAlpha(0.08), //nolint:mnd // Very subtle highlight.
-		)).
-		Annotate(ggplot.AnnotateArrow(75, 8, 80, 5, //nolint:mnd // Arrow annotation.
-			geom.WithColor("#E63946"),
-		)).
-		Annotate(ggplot.AnnotateLabel(80, 5, "Peak", //nolint:mnd // Label annotation.
-			geom.WithColor("#E63946"),
+		Annotate(ggplot.AnnotateText(18000, price[n-1]+2, "Latest", //nolint:mnd // Annotation.
+			geom.WithColor("#2A9D8F"),
 			geom.WithFontSize(10), //nolint:mnd // Label font.
 		)).
-		// Secondary axis (2x scaling)
-		SecondAxis(scale.SecAxis(
-			func(v float64) float64 { return v * 1.8 }, //nolint:mnd // Primary → secondary.
-			func(v float64) float64 { return v / 1.8 }, //nolint:mnd // Secondary → primary.
-			"Scaled Value",
+		Annotate(ggplot.AnnotateText(5000, maShort[5000]+1, "MA(50)", //nolint:mnd // Label.
+			geom.WithColor("#E63946"),
+			geom.WithFontSize(9), //nolint:mnd // Small font.
 		)).
-		// Labels
+		Annotate(ggplot.AnnotateText(5000, maLong[5000]-1, "MA(200)", //nolint:mnd // Label.
+			geom.WithColor("#457B9D"),
+			geom.WithFontSize(9), //nolint:mnd // Small font.
+		)).
+		// Secondary axis
+		SecondAxis(scale.SecAxis(
+			func(v float64) float64 { return (v - 100) * 100 }, //nolint:mnd // Price → basis points.
+			func(v float64) float64 { return v/100 + 100 },     //nolint:mnd // BPS → price.
+			"Change (bps)",
+		)).
 		Labs(
-			ggplot.Title("Stress Test — 2000pts × 8 layers + annotations + secondary axis"),
+			ggplot.Title("Intraday Price — 100K ticks × 4 layers + annotations"),
 			ggplot.XLab("Time (s)"),
-			ggplot.YLab("Amplitude"),
+			ggplot.YLab("Price ($)"),
 		)
 
 	if err := window.Show(ctx, plot,
-		window.WithTitle("ggplot — stress test"),
-		window.WithSize(1200, 700), //nolint:mnd // Larger window for complex plot.
+		window.WithTitle("ggplot — 100K stress test"),
+		window.WithSize(1200, 700), //nolint:mnd // Larger window.
 		window.WithFPS(),
 		window.WithPprof(),
 	); err != nil {

@@ -244,7 +244,7 @@ func columnAsStrings(col dataset.AnyColumn) []string {
 	}
 }
 
-func drawPoints(dc DrawContext) {
+func drawPoints(dc DrawContext) { //nolint:gocognit // Rendering pipeline with decimation, batching, culling, and multi-aesthetic mapping — splitting reduces clarity.
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
 	xVals, errX := dc.Data.Float64(xCol)
 	yVals, errY := dc.Data.Float64(yCol)
@@ -311,10 +311,46 @@ func drawPoints(dc DrawContext) {
 	cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.3, 0.5, 0.8)
 	n := min(len(yVals), len(xVals))
 
+	// Screen-space decimation: when there are far more data points than
+	// pixels, many points map to the same pixel cell. We use a bitmap to
+	// skip points that would overdraw an already-occupied cell. This turns
+	// O(N) GPU path commands into O(grid_cells) — critical for 10K+ datasets.
+	//
+	// Adaptive bin size: at extreme densities, use coarser bins (2×2, 3×3,
+	// or 4×4 pixel blocks) to cap rendered points at a manageable count.
+	pw := int(dc.W + 1) //nolint:mnd // Pixel grid width.
+	ph := int(dc.H + 1) //nolint:mnd // Pixel grid height.
+
+	var pixelOccupied []bool
+
+	binSize := 1 // pixels per grid cell
+
+	screenCells := pw * ph
+	if screenCells > 0 && n > 2*pw { //nolint:mnd // 2× panel width threshold.
+		// Choose bin size based on data density relative to screen area.
+		// Always use at least 2×2 bins when decimation is active — at 1px
+		// point size this is visually imperceptible.
+		binSize = 2 //nolint:mnd // Minimum bin size when decimation is active.
+
+		if n > screenCells {
+			binSize = 3 //nolint:mnd // >1× oversampling → 3×3 bins.
+		}
+
+		if n > 3*screenCells { //nolint:mnd // >3× oversampling → 4×4 bins.
+			binSize = 4 //nolint:mnd
+		}
+
+		gw := (pw + binSize - 1) / binSize
+		gh := (ph + binSize - 1) / binSize
+		pixelOccupied = make([]bool, gw*gh)
+	}
+
+	gridW := (pw + binSize - 1) / binSize
+
 	// Batched rendering: accumulate same-color shapes into a single path,
-	// then flush with one Fill()/Stroke(). This reduces GPU draw commands
-	// from N (one per point) to ~K (one per color change). For a uniform
-	// color layer with 2000 points, 2000 Fill() calls → 1 Fill() call.
+	// then flush with one Fill()/Stroke(). Screen-space decimation above
+	// guarantees the batch size stays bounded by pixel count.
+
 	var (
 		batchR, batchG, batchB, batchA float64 // current batch color
 		batchShape                     string  // current batch shape
@@ -353,6 +389,23 @@ func drawPoints(dc DrawContext) {
 		// commands for off-screen geometry during pan/zoom.
 		if px+ptRadius < 0 || px-ptRadius > dc.W || py+ptRadius < 0 || py-ptRadius > dc.H {
 			continue
+		}
+
+		// Screen-space decimation: skip points that map to an
+		// already-occupied grid cell.
+		if pixelOccupied != nil {
+			ix := int(px) / binSize
+			iy := int(py) / binSize
+
+			if ix >= 0 && ix < gridW && iy >= 0 && iy < (ph+binSize-1)/binSize {
+				idx := iy*gridW + ix
+
+				if pixelOccupied[idx] {
+					continue
+				}
+
+				pixelOccupied[idx] = true
+			}
 		}
 
 		ptAlpha := alpha
@@ -394,7 +447,14 @@ func drawPoints(dc DrawContext) {
 		batchShape = shapeName
 		batchStroke = isStroke
 
-		dc.Canvas.DrawShape(shapeName, px, py, ptRadius)
+		// For tiny points (≤1.5px radius), use rectangles instead of circles.
+		// A 1px circle is 4 cubic beziers → expensive FanTessellator flattening.
+		// A 1px rectangle is 4 LineTo → trivially tessellated. Visually identical.
+		if ptRadius <= 1.5 && (shapeName == canvas.ShapeCircle || shapeName == "") { //nolint:mnd // 1.5px threshold.
+			dc.Canvas.DrawRectangle(px-ptRadius, py-ptRadius, ptRadius*2, ptRadius*2) //nolint:mnd // Center the square.
+		} else {
+			dc.Canvas.DrawShape(shapeName, px, py, ptRadius)
+		}
 
 		batchN++
 	}
@@ -402,7 +462,7 @@ func drawPoints(dc DrawContext) {
 	flushBatch()
 }
 
-func drawLine(dc DrawContext) {
+func drawLine(dc DrawContext) { //nolint:gocognit // Rendering pipeline with min/max decimation — splitting reduces pipeline clarity.
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
 	xVals, errX := dc.Data.Float64(xCol)
 	yVals, errY := dc.Data.Float64(yCol)
@@ -509,19 +569,86 @@ func drawLine(dc DrawContext) {
 		cr, cg, cb := colormap.ParseRGB(dc.Params.Color, 0.8, 0.2, 0.2)
 		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
 
-		nx := normalize(pts[0].x, dc.XMin, dc.XMax)
-		ny := normalize(pts[0].y, dc.YMin, dc.YMax)
-		px, py := orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
-		dc.Canvas.MoveTo(px, py)
+		// Min/max line decimation: for each unique X pixel column, emit
+		// only the min and max Y values. This preserves the visual
+		// envelope (peaks and valleys) while reducing a 100K-point
+		// polyline to ~2 × panel_width segments.
+		panelW := int(dc.W + 1) //nolint:mnd // Panel pixel width.
 
-		for i := 1; i < len(pts); i++ {
-			nx = normalize(pts[i].x, dc.XMin, dc.XMax)
-			ny = normalize(pts[i].y, dc.YMin, dc.YMax)
-			px, py = orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
-			dc.Canvas.LineTo(px, py)
+		if len(pts) > 4*panelW { //nolint:mnd // Only decimate when worth it (4× oversampling threshold).
+			// Pre-compute all pixel coordinates.
+			type pxPt struct{ px, py float64 }
+
+			pxPts := make([]pxPt, len(pts))
+			for i := range pts {
+				nx := normalize(pts[i].x, dc.XMin, dc.XMax)
+				ny := normalize(pts[i].y, dc.YMin, dc.YMax)
+				px, py := orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
+				pxPts[i] = pxPt{px, py}
+			}
+
+			dc.Canvas.MoveTo(pxPts[0].px, pxPts[0].py)
+
+			i := 1
+
+			for i < len(pxPts) {
+				curIX := int(pxPts[i].px)
+
+				// Collect all points in this X pixel column.
+				minPY, maxPY := pxPts[i].py, pxPts[i].py
+				minI, maxI := i, i
+				j := i + 1
+
+				for j < len(pxPts) && int(pxPts[j].px) == curIX {
+					if pxPts[j].py < minPY {
+						minPY = pxPts[j].py
+						minI = j
+					}
+
+					if pxPts[j].py > maxPY {
+						maxPY = pxPts[j].py
+						maxI = j
+					}
+
+					j++
+				}
+
+				// Emit min then max (or max then min) in data order to
+				// preserve the direction of the line.
+				if minI <= maxI {
+					dc.Canvas.LineTo(pxPts[minI].px, minPY)
+
+					if maxI != minI {
+						dc.Canvas.LineTo(pxPts[maxI].px, maxPY)
+					}
+				} else {
+					dc.Canvas.LineTo(pxPts[maxI].px, maxPY)
+
+					if minI != maxI {
+						dc.Canvas.LineTo(pxPts[minI].px, minPY)
+					}
+				}
+
+				i = j
+			}
+
+			dc.Canvas.Stroke()
+		} else {
+			// Small dataset — render all points directly.
+			nx := normalize(pts[0].x, dc.XMin, dc.XMax)
+			ny := normalize(pts[0].y, dc.YMin, dc.YMax)
+			px, py := orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
+			dc.Canvas.MoveTo(px, py)
+
+			for i := 1; i < len(pts); i++ {
+				nx = normalize(pts[i].x, dc.XMin, dc.XMax)
+				ny = normalize(pts[i].y, dc.YMin, dc.YMax)
+				px, py = orientedTransform(dc.Coord, nx, ny, dc.W, dc.H, dc.Params.Orientation)
+				dc.Canvas.LineTo(px, py)
+			}
+
+			dc.Canvas.Stroke()
 		}
-
-		dc.Canvas.Stroke()
 	}
 }
 
@@ -815,38 +942,71 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 	const rugFrac = 0.02 // 2% of panel extent
 
 	// X rugs: tick marks along the bottom edge of the panel.
-	// Batched — accumulate all ticks into a single path, then stroke once.
+	// Rendered as filled rectangles to avoid expensive StrokeExpander.
+	// All ticks are batched into a single Fill() call.
 	if xVals, err := ds.Float64(xCol); err == nil {
 		cv.SetRGBA(cr, cg, cb, alpha)
-		cv.SetLineWidth(lw)
+
+		prevIX := -1
 
 		for _, x := range xVals {
 			nx := normalize(x, xMin, xMax)
 			px1, py1 := orientedTransform(c, nx, 0, w, h, p.Orientation)
-			px2, py2 := orientedTransform(c, nx, rugFrac, w, h, p.Orientation)
 
-			cv.MoveTo(px1, py1)
-			cv.LineTo(px2, py2)
+			// Screen-space decimation: skip ticks at the same pixel column.
+			ix := int(px1)
+			if ix == prevIX {
+				continue
+			}
+
+			prevIX = ix
+
+			_, py2 := orientedTransform(c, nx, rugFrac, w, h, p.Orientation)
+
+			// Draw tick as a thin filled rectangle (width = lw pixels).
+			tickH := py2 - py1
+			if tickH < 0 {
+				py1 += tickH
+				tickH = -tickH
+			}
+
+			cv.DrawRectangle(px1-lw/2, py1, lw, tickH) //nolint:mnd // Center the rectangle on the tick position.
 		}
 
-		cv.Stroke()
+		cv.Fill()
 	}
 
 	// Y rugs: tick marks along the left edge of the panel.
 	if yVals, err := ds.Float64(yCol); err == nil {
 		cv.SetRGBA(cr, cg, cb, alpha)
-		cv.SetLineWidth(lw)
+
+		prevIY := -1
 
 		for _, y := range yVals {
 			ny := normalize(y, yMin, yMax)
 			px1, py1 := orientedTransform(c, 0, ny, w, h, p.Orientation)
-			px2, py2 := orientedTransform(c, rugFrac, ny, w, h, p.Orientation)
 
-			cv.MoveTo(px1, py1)
-			cv.LineTo(px2, py2)
+			// Screen-space decimation: skip ticks at the same pixel row.
+			iy := int(py1)
+			if iy == prevIY {
+				continue
+			}
+
+			prevIY = iy
+
+			px2, _ := orientedTransform(c, rugFrac, ny, w, h, p.Orientation)
+
+			// Draw tick as a thin filled rectangle (height = lw pixels).
+			tickW := px2 - px1
+			if tickW < 0 {
+				px1 += tickW
+				tickW = -tickW
+			}
+
+			cv.DrawRectangle(px1, py1-lw/2, tickW, lw) //nolint:mnd // Center the rectangle on the tick position.
 		}
 
-		cv.Stroke()
+		cv.Fill()
 	}
 }
 
