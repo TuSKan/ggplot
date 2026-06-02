@@ -3,8 +3,8 @@
 // output.Session drives a Source (here a *ggplot.Plot) onto a LiveSurface,
 // running the build → draw → event loop and the fast-path / slow-path policy:
 //
-//   - fast path (ActionRedraw): re-render the current figure under a viewport
-//     transform — pan and zoom, no rebuild.
+//   - fast path (ActionRedraw): re-render the current figure with updated
+//     data-space viewport (pan/zoom via Zoomable) — no rebuild.
 //   - slow path (ActionRebuild): call Source.Build again when an interaction
 //     crosses the trained data extent (scales retrain, stats recompute).
 //     WithRebuildDelay makes this asynchronous and debounced.
@@ -49,9 +49,9 @@ func main() {
 	surf := newFilmstrip(720, 450, dir)
 
 	// A controller turns each event into a Session action. This one adds
-	// "rebuild on the 'r' key" on top of the built-in pan/zoom policy. The base
-	// controller is created once (it holds drag state across events).
-	base := output.DefaultController()
+	// "rebuild on the 'r' key" on top of the data-space pan/zoom policy. The
+	// base controller is created once (it holds drag state across events).
+	base := output.DataSpaceController()
 	ctrl := output.ControllerFunc(func(ev output.Event, st *output.State) output.Action {
 		if ev.Kind == output.EventKey && ev.Key == "r" {
 			return output.ActionRebuild

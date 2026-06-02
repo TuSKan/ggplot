@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"image"
 	"time"
-
-	"github.com/TuSKan/ggplot/canvas"
 )
 
 // Action is the decision a [Controller] returns for an [Event]: what the
@@ -39,20 +37,13 @@ type State struct {
 	// each event is dispatched.
 	Bounds image.Rectangle
 
-	// OffsetX, OffsetY, and Scale define the viewport affine transform applied
-	// on the fast path: device = offset + scale * figure. Scale 0 is treated
-	// as 1.
-	OffsetX float64
-	OffsetY float64
-	Scale   float64
-
 	// Figure is the current figure being displayed (read-only for controllers
 	// that need the trained extent, e.g. to decide redraw vs. rebuild).
 	Figure Figure
 }
 
 // Controller decides, per event, what the [Session] does next. The default
-// controller provides pan (pointer drag) and wheel-zoom; swap it via
+// controller is [DataSpaceController] (data-space pan/zoom); swap it via
 // [WithController] for linked brushing, custom gestures, etc.
 type Controller interface {
 	OnEvent(ev Event, st *State) Action
@@ -139,13 +130,12 @@ func WithRebuildError(fn func(error)) SessionOpt {
 }
 
 // NewSession creates a session that drives src onto surf. With no options it
-// uses the default pan/zoom controller.
+// uses [DataSpaceController] for data-space pan/zoom.
 func NewSession(src Source, surf LiveSurface, opts ...SessionOpt) *Session {
 	s := &Session{
 		src:        src,
 		surf:       surf,
-		controller: &defaultController{},
-		state:      State{Scale: 1},
+		controller: DataSpaceController(),
 		results:    make(chan rebuildResult, 1),
 	}
 
@@ -265,14 +255,7 @@ func (s *Session) dispatch(ctx context.Context, ev Event) (bool, error) {
 }
 
 func (s *Session) render(ctx context.Context) error {
-	v := &viewportFigure{
-		fig:     s.cur,
-		offsetX: s.state.OffsetX,
-		offsetY: s.state.OffsetY,
-		scale:   s.state.Scale,
-	}
-
-	if err := Render(ctx, v, s.surf); err != nil {
+	if err := Render(ctx, s.cur, s.surf); err != nil {
 		return fmt.Errorf("session: render: %w", err)
 	}
 
@@ -285,10 +268,7 @@ func (s *Session) rebuild(ctx context.Context) error {
 		return fmt.Errorf("session: rebuild: %w", err)
 	}
 
-	// The rebuilt figure reflects the new data extent, so the viewport
-	// transform resets to identity.
 	s.cur = fig
-	s.state.OffsetX, s.state.OffsetY, s.state.Scale = 0, 0, 1
 
 	return s.render(ctx)
 }
@@ -352,7 +332,6 @@ func (s *Session) finishBuild(ctx context.Context, res rebuildResult) error {
 		}
 	default:
 		s.cur = res.fig
-		s.state.OffsetX, s.state.OffsetY, s.state.Scale = 0, 0, 1
 		s.state.Figure = res.fig
 
 		if err := s.render(ctx); err != nil {
@@ -385,117 +364,4 @@ func (s *Session) export(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// viewportFigure wraps a Figure with a viewport affine transform applied on the
-// fast path. It implements [Figure].
-type viewportFigure struct {
-	fig              Figure
-	offsetX, offsetY float64
-	scale            float64
-}
-
-func (v *viewportFigure) Draw(ctx context.Context, dst canvas.Canvas, width, height int) error {
-	return drawViewport(ctx, v.fig, dst, width, height, v.offsetX, v.offsetY, v.scale)
-}
-
-// drawViewport draws fig onto dst under the given viewport affine transform
-// (device = offset + scale * figure). It is the shared fast-path primitive.
-func drawViewport(ctx context.Context, fig Figure, dst canvas.Canvas, width, height int, offsetX, offsetY, scale float64) error {
-	if scale == 0 {
-		scale = 1
-	}
-
-	if offsetX != 0 || offsetY != 0 || scale != 1 {
-		dst.Save()
-		dst.Translate(offsetX, offsetY)
-		dst.ScaleXY(scale, scale)
-
-		defer dst.Restore()
-	}
-
-	if err := fig.Draw(ctx, dst, width, height); err != nil {
-		return fmt.Errorf("output: viewport draw: %w", err)
-	}
-
-	return nil
-}
-
-// DrawViewport draws fig onto dst under the viewport affine transform held in
-// st. It is the shared fast-path primitive used by [Session] and by live
-// surface backends (e.g. output/window) that own their own frame loop.
-func DrawViewport(ctx context.Context, fig Figure, dst canvas.Canvas, width, height int, st *State) error {
-	return drawViewport(ctx, fig, dst, width, height, st.OffsetX, st.OffsetY, st.Scale)
-}
-
-// DefaultController returns a fresh pan + wheel-zoom controller — the one
-// [NewSession] uses when no controller is supplied. Live backends reuse it so
-// interaction behaves identically across the window and browser targets.
-func DefaultController() Controller { return &defaultController{} }
-
-// zoomStep is the per-scroll-notch zoom fraction for the default controller.
-const zoomStep = 0.1
-
-// defaultController provides pan (pointer drag) and wheel-zoom around the
-// cursor. Hovering and key presses are ignored.
-type defaultController struct {
-	dragging     bool
-	lastX, lastY float64
-}
-
-var _ Controller = (*defaultController)(nil)
-
-func (c *defaultController) OnEvent(ev Event, st *State) Action {
-	switch ev.Kind {
-	case EventPointerDown:
-		c.dragging = true
-		c.lastX, c.lastY = ev.X, ev.Y
-
-		return ActionIgnore
-	case EventPointerUp:
-		c.dragging = false
-
-		return ActionIgnore
-	case EventPointerMove:
-		if !c.dragging {
-			return ActionIgnore
-		}
-
-		st.OffsetX += ev.X - c.lastX
-		st.OffsetY += ev.Y - c.lastY
-		c.lastX, c.lastY = ev.X, ev.Y
-
-		return ActionRedraw
-	case EventScroll:
-		c.zoom(ev, st)
-
-		return ActionRedraw
-	case EventResize:
-		return ActionRedraw
-	case EventKey:
-		return ActionIgnore
-	case EventDoubleClick:
-		return ActionIgnore
-	case EventClose:
-		return ActionClose
-	}
-
-	return ActionIgnore
-}
-
-// zoom adjusts the viewport scale around the cursor so the world point under
-// the cursor stays fixed.
-func (c *defaultController) zoom(ev Event, st *State) {
-	f := 1 + zoomStep
-	if ev.DY < 0 {
-		f = 1 / (1 + zoomStep)
-	}
-
-	if st.Scale == 0 {
-		st.Scale = 1
-	}
-
-	st.OffsetX = ev.X*(1-f) + f*st.OffsetX
-	st.OffsetY = ev.Y*(1-f) + f*st.OffsetY
-	st.Scale *= f
 }

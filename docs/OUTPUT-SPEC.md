@@ -5,8 +5,8 @@
 > and an interactive browser canvas — built on the existing
 > `Plot → Build → Figure.Draw` pipeline.
 
-Status: specification, ready to implement. Target: `github.com/TuSKan/ggplot`,
-`go 1.26.2`. Place at `docs/OUTPUT-SPEC.md`.
+Status: Phases 1–5 implemented. Phase 6 (`output/web`, WASM) is remaining
+work. Target: `github.com/TuSKan/ggplot`, `go 1.26.2`.
 
 ---
 
@@ -153,6 +153,38 @@ type Source interface {
 type Sizer interface {
     PreferredSize(width int) (w, h int)
 }
+
+// Measurable is an optional Figure extension that exposes per-panel pixel
+// geometry and data-space bounds after a Draw call. Controllers use it to
+// convert pixel mouse positions to data coordinates for data-space pan/zoom.
+type Measurable interface {
+    PanelInfos() []PanelInfo
+}
+
+// PanelInfo describes the pixel geometry and data-space bounds of one panel.
+type PanelInfo struct {
+    Index      int              // zero-based panel index
+    Bounds     image.Rectangle  // data-area rectangle in figure pixel coords
+    XRange     [2]float64       // current (possibly zoomed) X data-space bounds
+    YRange     [2]float64       // current (possibly zoomed) Y data-space bounds
+    OrigXRange [2]float64       // full trained X bounds (for reset)
+    OrigYRange [2]float64       // full trained Y bounds (for reset)
+}
+
+// Zoomable is an optional Figure extension that supports O(1) viewport changes
+// without rebuilding the figure from source. The controller mutates scale
+// bounds directly on the built figure, then triggers ActionRedraw — no data
+// iteration, no stat recomputation, no memory allocation.
+type Zoomable interface {
+    SetPanelViewport(panelIndex int, xlim, ylim [2]*float64)
+    ResetViewport()
+}
+
+// Imager is implemented by surfaces that publish an in-memory image (the
+// "image" surface). Image returns the frame published by the last Commit.
+type Imager interface {
+    Image() image.Image
+}
 ```
 
 ### 5.2 The destination
@@ -224,6 +256,7 @@ const (
     EventScroll
     EventKey
     EventClose
+    EventDoubleClick // double-click / double-tap for viewport reset
 )
 
 // Event is the platform-neutral input event. output/window translates OS
@@ -278,11 +311,23 @@ the surface exposes `Image() image.Image`. No GPU, no window — pure Go.
 - Presentation is zero-copy via `ggcanvas.Render` onto the swapchain texture.
 - Interaction reuses the platform-neutral `Controller` / `State` policy from
   the `output` core. gogpu input callbacks are translated to `output.Event`s
-  and dispatched through the same controller.
+  and dispatched through the same `DataSpaceController` (§8).
+- **Default controller:** `window.Show` defaults to `DataSpaceController()` —
+  data-space pan/zoom with per-panel hit-testing and double-click reset.
 - `WithRebuildDelay` enables async, debounced rebuilds: rapid rebuild requests
   coalesce, and the build runs in a background goroutine while the last good
   figure keeps drawing. `WithRebuildError` sets a handler for non-fatal
   background build errors.
+- **Diagnostic options:**
+  - `WithFPS()` — enables an FPS counter overlay (EMA-smoothed) in the
+    top-right corner.
+  - `WithPprof()` — starts a pprof HTTP server on `localhost:6060` for live
+    CPU/memory profiling during interaction.
+- **HiDPI workaround:** On Windows HiDPI, gogpu's scroll event coordinates
+  are in physical pixels while panel geometry is in logical pixels. The window
+  normalizes scroll coordinates by dividing by the scale factor.
+- **Double-click detection:** Two clicks within 400ms are coalesced into an
+  `EventDoubleClick` (viewport reset via `Zoomable.ResetViewport`).
 - Requires `gogpu` ≥ v0.40.
 
 ### 6.4 `output/web` — browser, WASM
@@ -356,38 +401,73 @@ invisible to ggplot's users — selection is by import. This is the agreed hybri
 
 ## 8. Layer C — `Session` and `Controller` (live surfaces only)
 
+### 8.1 Core types
+
 ```go
+// State is the mutable interaction state shared between the Session and its
+// Controller. The controller reads events and mutates the viewport via
+// Zoomable; the session reads the state to render.
+type State struct {
+    Bounds image.Rectangle  // surface's current logical drawing size
+    Figure Figure           // current figure (read-only for controllers)
+}
+
+// Controller decides, per event, what the Session does next. The default
+// is DataSpaceController (data-space pan/zoom); swap it via WithController
+// for linked brushing, custom gestures, etc.
+type Controller interface {
+    OnEvent(ev Event, st *State) Action
+}
+
+// ControllerFunc adapts a plain function to the Controller interface.
+type ControllerFunc func(ev Event, st *State) Action
+
+type Action uint8
+
+const (
+    ActionIgnore Action = iota
+    ActionRedraw   // fast path — redraw current Figure (viewport updated via Zoomable)
+    ActionRebuild  // slow path — Source.Build again (data extent changed)
+    ActionExport   // run a static Surface against the current frame
+    ActionClose
+)
+
 // Session drives a Source onto a LiveSurface: build once, draw, then re-render
 // on events. It owns the fast-path / slow-path policy.
 type Session struct { /* unexported */ }
 
 func NewSession(src Source, surf LiveSurface, opt ...SessionOpt) *Session
 func (s *Session) Run(ctx context.Context) error  // event loop until surface closes
-
-// Controller decides, per event, what the Session does next. The default
-// implementation provides pan / wheel-zoom / hover. Swap it for linked
-// brushing, custom gestures, etc.
-type Controller interface {
-    OnEvent(ev Event, st *State) Action
-}
-
-type Action uint8
-
-const (
-    ActionIgnore Action = iota
-    ActionRedraw   // fast path — redraw current Figure with a new viewport
-    ActionRebuild  // slow path — Source.Build again (data extent changed)
-    ActionExport   // run a static Surface against the current frame
-    ActionClose
-)
 ```
 
-**Fast path vs. slow path.** A `*Built` is valid only for the data extent it was
-built against — `Build` trains scales and runs stats. So the `Session`
-classifies every interaction:
+### 8.2 Data-space interaction model
 
-- `ActionRedraw` — viewport stays within trained scale ranges. Apply an affine
-  transform, call `output.Render` once. GPU-bound; 60 fps.
+Interaction operates in **data space**, not canvas space. The controller
+mutates scale bounds directly on the built `*Figure` via the `Zoomable`
+interface — O(1) per event, no data iteration, no stat recomputation.
+Axes remain at fixed screen positions; only the data visible within the
+panel changes. Tick labels regenerate on the next `Draw` call.
+
+```go
+// DataSpaceController provides data-space pan (drag) and zoom (scroll wheel)
+// that operates on scale bounds rather than a canvas-level affine transform.
+// For faceted plots, zoom/pan applies only to the panel under the cursor.
+// Double-click resets the viewport via Zoomable.ResetViewport.
+func DataSpaceController() Controller
+```
+
+The controller queries `Measurable.PanelInfos()` for per-panel pixel→data
+coordinate mapping, then calls `Zoomable.SetPanelViewport()` to shift the
+scale bounds. For non-`Measurable` figures, it assumes a single panel at
+index 0. For non-`Zoomable` figures, pan/zoom is silently a no-op.
+
+### 8.3 Fast path vs. slow path
+
+A `*Built` is valid only for the data extent it was built against — `Build`
+trains scales and runs stats. So the `Session` classifies every interaction:
+
+- `ActionRedraw` — the `DataSpaceController` has updated the viewport via
+  `Zoomable.SetPanelViewport`. Call `output.Render` once. GPU-bound.
 - `ActionRebuild` — viewport crosses the trained data bounds, or a brush changes
   a stat input. `Session` calls `Source.Build(ctx)` again, off the event
   goroutine, debounced; the last good `Figure` keeps drawing until the new one
@@ -396,6 +476,20 @@ classifies every interaction:
 
 This policy lives in `Session` (pure Go), so desktop and browser inherit it
 identically and it is testable headless with a scripted fake `LiveSurface`.
+
+### 8.4 Async rebuild
+
+`WithRebuildDelay(d)` makes rebuilds asynchronous and debounced:
+
+1. Rapid `ActionRebuild` triggers within `d` coalesce into a single background
+   `Source.Build`.
+2. The last good figure stays on screen while the build runs.
+3. If a new rebuild request arrives during an in-flight build, it sets a `dirty`
+   flag and is replayed when the current build finishes.
+4. `WithRebuildError(fn)` receives non-fatal errors from background builds; the
+   session continues with the last good figure.
+5. On session shutdown, pending async builds are cancelled via `context`
+   cancellation.
 
 Interaction is deliberately absent from the `Surface` contract — a PNG export
 never links an event loop.
@@ -484,15 +578,15 @@ web.Mount(ctx, plot, "plot-container")
 
 Each phase ships independently; the existing public API is preserved throughout.
 
-> **Status:** Phases 1–5 are implemented (unreleased). Phase 4 also has async/debounced rebuild (`Session.WithRebuildDelay`/`WithRebuildError`) and a runnable headless example (`examples/session/`); Phase 5 ships `window.Show` with `WithRebuildDelay`/`WithRebuildError` for async builds, and `examples/window/`. `Built.Save` and `Built.WriteTo` have been removed — all output goes through the `output` layer. Phase 6 (`output/web`, wasm) is the remaining work.
+> **Status:** Phases 1–5 are implemented (unreleased). Phase 4 also has async/debounced rebuild (`WithRebuildDelay`/`WithRebuildError`), data-space interaction (`DataSpaceController`, `Measurable`, `Zoomable`, `PanelInfo`), and a runnable headless example (`examples/session/`). Phase 5 ships `window.Show` with `WithRebuildDelay`/`WithRebuildError` for async builds, `WithFPS`/`WithPprof` diagnostic options, HiDPI scroll normalization, double-click viewport reset, and `examples/window/`. The affine viewport model (`State.OffsetX/OffsetY/Scale`, `DefaultController`, `DrawViewport`) has been removed — all interaction uses the data-space model via `Zoomable`. `Built.Save` and `Built.WriteTo` have been removed — all output goes through the `output` layer. Phase 6 (`output/web`, WASM) is the remaining work.
 
 | Phase | Deliverable | Risk |
 |---|---|---|
-| **1** | Rename `GGCanvas → RasterCanvas` (§9). Mechanical; gated by golden tests. | Low |
-| **2** | `output` core: `Figure`, `Source`, `Sizer`, `Surface`, `LiveSurface`, `Event`, `Render`, registry. `Built` implements `Figure`+`Sizer`; `Build` returns `Figure`. | Low |
-| **3** | `output/file` + `output/image`. `Plot.Save`/`Encode`/`Image` become façades over `Render`. | Low |
-| **4** | `output/session`: `Session`, `Controller`, fast/slow path, headless fake `LiveSurface` tests. | Med |
-| **5** | `output/window` + `window.Show` — `ggcanvas` zero-copy desktop. | Med — `gogpu`/`gpucontext` API. |
+| **1** ✅ | Rename `GGCanvas → RasterCanvas` (§9). Mechanical; gated by golden tests. | Low |
+| **2** ✅ | `output` core: `Figure`, `Source`, `Sizer`, `Measurable`, `Zoomable`, `PanelInfo`, `Imager`, `Surface`, `LiveSurface`, `Event`, `Render`, registry. `Built` implements `Figure`+`Sizer`+`Measurable`+`Zoomable`; `Build` returns `Figure`. | Low |
+| **3** ✅ | `output/file` + `output/image`. `Plot.Save`/`Encode`/`Image` become façades over `Render`. | Low |
+| **4** ✅ | `output/session`: `Session`, `Controller`, `DataSpaceController`, `ControllerFunc`, fast/slow path, async rebuild, headless `LiveSurface` tests. | Med |
+| **5** ✅ | `output/window` + `window.Show` — `ggcanvas` zero-copy desktop, `WithFPS`, `WithPprof`, HiDPI workaround, double-click reset. | Med |
 | **6** | Bump `wgpu` ≥ 0.28; `output/web` + `web.Mount`; `cmd/ggplot-wasm`. Requires the `gg` fork to compile for `js/wasm`. | Med — see §12. |
 
 ---
@@ -512,3 +606,32 @@ Each phase ships independently; the existing public API is preserved throughout.
 - **Resource lifecycle** — every live `Surface` and `Session` owns its GPU
   resources and releases them on `Close()`; `context` cancellation tears down.
   A borrowed `RasterCanvas` (`RasterFromContext`) is never closed by its borrower.
+
+---
+
+## 13. Rendering performance optimizations
+
+Interactive rendering at high point counts (100K–1M) required several
+optimizations in the drawing layer (`drawer.go`). These are transparent to
+the output layer but were enabled by the interactive window use case.
+
+| Optimization | Technique | Effect |
+|---|---|---|
+| **Batched Fill** | Accumulate same-color shapes into one `Fill()` call | Eliminates per-shape GPU submit overhead |
+| **Pixel occupancy decimation** | Bitmap tracks which screen cells are occupied; skip duplicate points | O(N) → O(visible pixels) for dense scatters |
+| **Adaptive grid coarsening** | Bin sizes 2×2, 3×3, 4×4 scale with oversampling ratio | Caps total GPU geometry at ~screen resolution |
+| **Min/max line decimation** | Per-pixel-column min/max Y envelope | 100K LineTo → ~2K for dense time series |
+| **Rectangle for tiny points** | `DrawRectangle` for radius ≤ 1.5px instead of `DrawCircle` | 16× fewer GPU triangles (4 `LineTo` vs 4 `CubicTo`) |
+| **Filled rug rectangles** | `Fill` instead of `Stroke` for rug marks | Avoids `StrokeExpander` CPU cost |
+| **Viewport culling** | Skip off-screen geometry during pan/zoom | Only visible points reach the GPU |
+
+Stress test benchmarks (`examples/stress/`):
+
+| Scenario | Points | Target FPS |
+|---|---|---|
+| scatter | 50K × 4 groups | ≥ 25 |
+| line | 10 × 100K | ≥ 25 |
+| composite | 100K multi-layer | ≥ 20 |
+| dense | 500K cluster | ~ 15 |
+| million | 1M spiral | ~ 11 |
+

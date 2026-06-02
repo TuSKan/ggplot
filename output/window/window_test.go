@@ -15,7 +15,7 @@ func TestOptionsApply(t *testing.T) {
 
 	var o window.Options
 
-	ctrl := output.DefaultController()
+	ctrl := output.DataSpaceController()
 	for _, opt := range []window.Opt{
 		window.WithTitle("My Plot"),
 		window.WithSize(1024, 768),
@@ -40,7 +40,7 @@ func TestOptionsApply(t *testing.T) {
 func TestWithControllerNilIgnored(t *testing.T) {
 	t.Parallel()
 
-	o := window.Options{Controller: output.DefaultController()}
+	o := window.Options{Controller: output.DataSpaceController()}
 	window.WithController(nil)(&o)
 
 	if o.Controller == nil {

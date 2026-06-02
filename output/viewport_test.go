@@ -116,7 +116,6 @@ func TestDataSpaceController_Zoom(t *testing.T) {
 
 	st := &State{
 		Bounds: image.Rect(0, 0, 500, 400),
-		Scale:  1,
 		Figure: fig,
 	}
 
@@ -158,7 +157,6 @@ func TestDataSpaceController_Pan(t *testing.T) {
 
 	st := &State{
 		Bounds: image.Rect(0, 0, 500, 400),
-		Scale:  1,
 		Figure: fig,
 	}
 
@@ -200,7 +198,6 @@ func TestDataSpaceController_DoubleClick_Reset(t *testing.T) {
 
 	st := &State{
 		Bounds: image.Rect(0, 0, 500, 400),
-		Scale:  1,
 		Figure: fig,
 	}
 
@@ -230,7 +227,6 @@ func TestDataSpaceController_ClickOutsidePanel(t *testing.T) {
 
 	st := &State{
 		Bounds: image.Rect(0, 0, 500, 400),
-		Scale:  1,
 		Figure: fig,
 	}
 
@@ -259,7 +255,6 @@ func TestDataSpaceController_ScrollOutsidePanel(t *testing.T) {
 
 	st := &State{
 		Bounds: image.Rect(0, 0, 500, 400),
-		Scale:  1,
 		Figure: fig,
 	}
 

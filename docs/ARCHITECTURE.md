@@ -399,9 +399,11 @@ destination. One `Surface` abstraction serves four destinations:
 `Surface` uses an `Acquire`/`Commit` frame model; `LiveSurface` adds an event stream for the
 interactive (window, web) targets. `output.Render(ctx, fig, surf)` presents one frame — the
 entire static story. `Session` + `Controller` drive the interactive loop with a **fast path**
-(redraw the current `Figure` under a new viewport transform) and a **slow path** (rebuild from
-the `Source` when an interaction crosses the trained data extent — scales retrain, stats
-recompute).
+(redraw the current `Figure` with updated data-space viewport via `Zoomable` — O(1), no rebuild)
+and a **slow path** (rebuild from the `Source` when an interaction crosses the trained data
+extent — scales retrain, stats recompute). The default `DataSpaceController` provides data-space
+pan (drag) and zoom (scroll wheel) that mutates scale bounds directly on the built figure via
+`Measurable` + `Zoomable` interfaces; axes stay at fixed screen positions.
 
 Platform selection is by **blank import**: each platform subpackage's `init()` registers its
 surface, and `output.NewSurface(ctx, "window", …)` resolves it — no build tags appear in user

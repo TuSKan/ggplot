@@ -133,7 +133,7 @@ func Show(ctx context.Context, src output.Source, opts ...Opt) error {
 		app:          app,
 		controller:   o.Controller,
 		cur:          fig,
-		state:        output.State{Scale: 1, Bounds: image.Rect(0, 0, o.Width, o.Height), Figure: fig},
+		state:        output.State{Bounds: image.Rect(0, 0, o.Width, o.Height), Figure: fig},
 		showFPS:      o.ShowFPS,
 		rebuildDelay: o.RebuildDelay,
 		onRebuildErr: o.OnRebuildErr,
@@ -292,7 +292,6 @@ func (ws *windowState) draw(dc *gogpu.Context) {
 	if ws.pendingFig != nil {
 		ws.cur = ws.pendingFig
 		ws.pendingFig = nil
-		ws.state.OffsetX, ws.state.OffsetY, ws.state.Scale = 0, 0, 1
 	}
 	ws.mu.Unlock()
 
@@ -330,7 +329,7 @@ func (ws *windowState) draw(dc *gogpu.Context) {
 		c := canvas.RasterFromContext(cc)
 		c.Clear(color.White)
 
-		if drawErr := output.DrawViewport(ws.ctx, ws.cur, c, w, h, &ws.state); drawErr != nil {
+		if drawErr := ws.cur.Draw(ws.ctx, c, w, h); drawErr != nil {
 			ws.fail(drawErr)
 		}
 
@@ -383,7 +382,6 @@ func (ws *windowState) rebuildSync() {
 	}
 
 	ws.cur = fig
-	ws.state.OffsetX, ws.state.OffsetY, ws.state.Scale = 0, 0, 1
 }
 
 // scheduleRebuild arms a debounced async rebuild. Rapid calls coalesce: if a
