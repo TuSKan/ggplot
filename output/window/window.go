@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"runtime"
 	"sync"
 	"time"
 
@@ -81,7 +82,17 @@ func WithRebuildError(fn func(error)) Opt {
 // Show builds src into a figure and presents it in a native window, processing
 // pan/zoom and other interactions until the window is closed. It blocks and
 // must be called from the main goroutine.
+//
+// Show automatically pins the calling goroutine to its OS thread
+// (runtime.LockOSThread) because Win32 and Cocoa require the window event
+// loop to run on the thread that created the window.
 func Show(ctx context.Context, src output.Source, opts ...Opt) error {
+	// Pin this goroutine to one OS thread for the lifetime of the window.
+	// Win32/Cocoa dispatch window messages only on the thread that created
+	// the window; Go's scheduler would otherwise migrate this goroutine
+	// between OS threads, breaking the event pump.
+	runtime.LockOSThread()
+
 	o := Options{Title: "ggplot", Width: defaultWidth, Height: defaultHeight, Controller: output.DataSpaceController()}
 	for _, opt := range opts {
 		opt(&o)

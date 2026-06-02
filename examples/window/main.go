@@ -30,10 +30,6 @@ import (
 )
 
 func main() {
-	// Pin the main goroutine to the main OS thread for the whole program;
-	// native windowing (Win32/Cocoa) requires window creation on it, and
-	// window.Show must be called from this goroutine.
-	runtime.LockOSThread()
 
 	ctx := context.Background()
 	eng := memory.NewEngine(ctx)
