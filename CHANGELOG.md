@@ -17,6 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`Built` implements `Measurable` + `Zoomable`** — panel geometry is cached during `Draw()` and exposed via `PanelInfos()`. Scale bounds are mutated directly via `SetPanelViewport()` with mutex-protected thread safety.
 - **Per-panel zoom for faceted plots** — zoom/pan applies only to the panel under the cursor.
 
+#### Fixed
+- **Scroll-wheel zoom fails on HiDPI displays** — gogpu's `WM_MOUSEWHEEL` handler converts screen→client coordinates but does not divide by the DPI scale factor, while pointer events do. This mismatch causes scroll X,Y to be in physical pixels while panel geometry is in logical pixels, so `ContainsPixel` hit-testing fails for most cursor positions at ≥125% scaling. `output/window` now normalises scroll coordinates to logical DIP before dispatching.
+
 ### Output Layer (Phases 1–5 of OUTPUT-SPEC.md)
 
 #### Changed (Breaking)

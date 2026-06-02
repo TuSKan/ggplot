@@ -195,12 +195,27 @@ func (ws *windowState) registerEvents(app *gogpu.App) {
 
 	// Use detailed ScrollEvent when available (provides cursor position at
 	// scroll time). Fall back to basic OnScroll + tracked cursor position.
+	//
+	// WORKAROUND: On Windows HiDPI, gogpu's WM_MOUSEWHEEL handler converts
+	// screen→client coordinates via ScreenToClient but does NOT divide by
+	// the DPI scale factor. Pointer events (WM_MOUSEMOVE etc.) DO divide by
+	// scale in createPointerEvent. This mismatch means scroll event X,Y are
+	// in physical pixels while panel geometry (from dc.Width()/dc.Height(),
+	// which returns logical) is in logical pixels. Without correction, the
+	// cursor appears outside the panel bounds on HiDPI and hit-testing fails.
+	// We normalise scroll coordinates to logical here.
 	if ses, ok := es.(gpucontext.ScrollEventSource); ok {
 		ses.OnScrollEvent(func(ev gpucontext.ScrollEvent) {
+			sx, sy := ev.X, ev.Y
+			if s := app.ScaleFactor(); s > 1 {
+				sx /= s
+				sy /= s
+			}
+
 			ws.dispatch(output.Event{
 				Kind: output.EventScroll,
-				X:    ev.X,
-				Y:    ev.Y,
+				X:    sx,
+				Y:    sy,
 				DX:   ev.DeltaX,
 				DY:   ev.DeltaY,
 			})
