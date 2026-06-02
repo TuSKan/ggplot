@@ -240,7 +240,7 @@ For non-integer continuous tick values, current `%.4g` is fine. The year case is
 
 ### S3. Auto-compute plot height from width and y-scale type [IMPLEMENTED ✅]
 
-**Status:** When `height ≤ 0` is passed to `Plot.Save`, `Built.Save`, `Plot.WriteTo`, or `Built.WriteTo`, the height is automatically inferred:
+**Status:** When `height ≤ 0` is passed to `file.Save` or `file.Encode` (`output/file`), the height is automatically inferred:
   - Continuous Y: `width / φ` (golden ratio ≈ 1.618)
   - Discrete Y: `18px × categories + 100px padding`, clamped to `[240, width]`
 

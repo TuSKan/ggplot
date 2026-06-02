@@ -16,6 +16,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -161,7 +162,7 @@ func main() {
 		Theme("minimal")
 
 	out := filepath.Join(dir, "annotate.png")
-	if err := p.Save(context.Background(), out, 1000, 550); err != nil { //nolint:mnd // Wider canvas for rich example.
+	if err := file.Save(context.Background(), p, out, 1000, 550); err != nil { //nolint:mnd // Wider canvas for rich example.
 		log.Fatalln(err)
 	}
 

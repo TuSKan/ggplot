@@ -18,6 +18,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -58,7 +59,7 @@ func main() {
 		Theme("minimal")
 
 	out := filepath.Join(dir, "sqrt_y.png")
-	if err := p.Save(context.Background(), out, 800, 400); err != nil { //nolint:mnd // Canvas size.
+	if err := file.Save(context.Background(), p, out, 800, 400); err != nil { //nolint:mnd // Canvas size.
 		log.Fatalln(err)
 	}
 
@@ -77,7 +78,7 @@ func main() {
 		Theme("minimal")
 
 	out2 := filepath.Join(dir, "log10_x.png")
-	if err := p2.Save(context.Background(), out2, 800, 400); err != nil { //nolint:mnd // Canvas size.
+	if err := file.Save(context.Background(), p2, out2, 800, 400); err != nil { //nolint:mnd // Canvas size.
 		log.Fatalln(err)
 	}
 

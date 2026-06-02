@@ -16,6 +16,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -67,7 +68,7 @@ func main() {
 			ggplot.YLab("Value"),
 		)
 
-	if err := p.Save(context.Background(), filepath.Join(dir, "jitter_point.png"), 800, 500); err != nil {
+	if err := file.Save(context.Background(), p, filepath.Join(dir, "jitter_point.png"), 800, 500); err != nil {
 		log.Fatalln(err)
 	}
 

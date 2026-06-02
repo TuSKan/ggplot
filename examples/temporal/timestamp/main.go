@@ -14,6 +14,8 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -61,7 +63,7 @@ func main() {
 	_, filename, _, _ := runtime.Caller(0)
 
 	out := filepath.Join(filepath.Dir(filename), "timestamp.png")
-	if err := p.Save(context.Background(), out, 900, 550, ggplot.WithCPU()); err != nil {
+	if err := file.Save(context.Background(), p, out, 900, 550, output.WithCPU(true)); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -102,7 +104,7 @@ func main() {
 		Theme("dark_background")
 
 	out2 := filepath.Join(filepath.Dir(filename), "timestamp_intraday.png")
-	if err := p2.Save(context.Background(), out2, 900, 550, ggplot.WithCPU()); err != nil {
+	if err := file.Save(context.Background(), p2, out2, 900, 550, output.WithCPU(true)); err != nil {
 		log.Fatalln(err)
 	}
 

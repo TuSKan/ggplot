@@ -20,6 +20,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -71,7 +72,7 @@ func wideFormat(dir string) {
 		)
 
 	out := filepath.Join(dir, "multiline_wide.png")
-	if err := p.Save(context.Background(), out, 900, 600); err != nil {
+	if err := file.Save(context.Background(), p, out, 900, 600); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -119,7 +120,7 @@ func longFormat(dir string) {
 		)
 
 	out := filepath.Join(dir, "multiline.png")
-	if err := p.Save(context.Background(), out, 900, 600); err != nil {
+	if err := file.Save(context.Background(), p, out, 900, 600); err != nil {
 		log.Fatalln(err)
 	}
 

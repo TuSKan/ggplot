@@ -17,6 +17,8 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 var updateGoldens = flag.Bool("update-goldens", false, "overwrite golden files with current output")
@@ -98,7 +100,7 @@ func renderPNG(t *testing.T, p *ggplot.Plot, w, h int) []byte {
 
 	var buf bytes.Buffer
 
-	_, err := p.Encode(context.Background(), &buf, "png", w, h, ggplot.WithCPU())
+	_, err := file.Encode(context.Background(), p, &buf, "png", w, h, output.WithCPU(true))
 	if err != nil {
 		t.Fatalf("render PNG: %v", err)
 	}

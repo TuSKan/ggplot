@@ -13,6 +13,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -56,7 +57,7 @@ func sizeMapping(dir string) {
 		)
 
 	outPath := filepath.Join(dir, "size_mapping_area.png")
-	if err := p.Save(context.Background(), outPath, 700, 500); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 700, 500); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -96,7 +97,7 @@ func shapeMapping(dir string) {
 		)
 
 	outPath := filepath.Join(dir, "shape_mapping.png")
-	if err := p.Save(context.Background(), outPath, 700, 500); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 700, 500); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -132,7 +133,7 @@ func linetypeMapping(dir string) {
 		)
 
 	outPath := filepath.Join(dir, "linetype_mapping.png")
-	if err := p.Save(context.Background(), outPath, 700, 500); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 700, 500); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -173,7 +174,7 @@ func alphaMapping(dir string) {
 		)
 
 	outPath := filepath.Join(dir, "alpha_mapping.png")
-	if err := p.Save(context.Background(), outPath, 700, 500); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 700, 500); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -212,7 +213,7 @@ func identityMapping(dir string) {
 		)
 
 	outPath := filepath.Join(dir, "identity_scale_mapping.png")
-	if err := p.Save(context.Background(), outPath, 700, 500); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 700, 500); err != nil {
 		log.Fatalln(err)
 	}
 

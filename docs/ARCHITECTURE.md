@@ -375,7 +375,7 @@ compositing. `RasterCanvas` was previously named `GGCanvas` (and its file `gg.go
 > Done: the `GGCanvas → RasterCanvas` rename (Phase 1); the `output` core —
 > `Figure`, `Source`, `Sizer`, `Surface`, `LiveSurface`, `Imager`, `Event`, `Render`, and the
 > blank-import registry (Phase 2); the `output/file` and `output/image` surfaces with
-> `Plot.Save`/`Encode`/`Image` and `Built.RenderTo` as façades over `Render` (Phase 3); the
+> `file.Save`/`file.Encode` and `image.Render` as the primary API (Phase 3); the
 > `Session`/`Controller` interaction loop with fast-path viewport redraw and slow-path rebuild,
 > tested headless with a scripted `LiveSurface`, plus async/debounced rebuild via
 > `WithRebuildDelay`/`WithRebuildError` and a runnable headless example (`examples/session/`)
@@ -407,9 +407,11 @@ pan (drag) and zoom (scroll wheel) that mutates scale bounds directly on the bui
 
 Platform selection is by **blank import**: each platform subpackage's `init()` registers its
 surface, and `output.NewSurface(ctx, "window", …)` resolves it — no build tags appear in user
-code. Build constraints are confined to the platform leaf files. `Plot.Save` / `Encode` /
-`Image` are façades over `Render`; `window.Show` / `web.Mount` drive a `Session`. The full
-design — interfaces, the four surfaces, migration phasing — is in
+code. Build constraints are confined to the platform leaf files. `file.Save` / `file.Encode`
+(`output/file`) and `image.Render` (`output/image`) are the primary output API;
+`window.Show` / `web.Mount` drive a `Session`. `Plot` has no output methods — all
+rendering goes through the surface packages. The full design — interfaces, the four
+surfaces, migration phasing — is in
 [**OUTPUT-SPEC.md**](OUTPUT-SPEC.md).
 
 ---

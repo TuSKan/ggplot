@@ -34,7 +34,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"io"
 	"maps"
 	"math"
 	"slices"
@@ -550,35 +549,6 @@ func YLab(text string) LabOpt { return func(l *Labels) { l.Y = text } }
 // Caption sets the plot caption.
 func Caption(text string) LabOpt { return func(l *Labels) { l.Caption = text } }
 
-// RenderOpt configures rendering output (scale, DPI, etc.).
-type RenderOpt func(*renderConfig)
-
-type renderConfig struct {
-	scale float64
-	cpu   bool // force pure-CPU rasterization (no GPU)
-}
-
-func defaultRenderConfig() renderConfig {
-	return renderConfig{scale: 1.0}
-}
-
-// WithScale sets the DPI scale factor for rendering.
-// scale=2.0 produces retina-resolution output (2× pixel density).
-func WithScale(s float64) RenderOpt {
-	return func(c *renderConfig) {
-		if s > 0 {
-			c.scale = s
-		}
-	}
-}
-
-// WithCPU forces pure-CPU analytic rasterization, bypassing the GPU
-// accelerator. This produces deterministic output across multiple
-// renders in a single process and is useful for golden/snapshot tests.
-func WithCPU() RenderOpt {
-	return func(c *renderConfig) { c.cpu = true }
-}
-
 // SecondAxis adds a secondary Y-axis derived from the primary Y-axis via a
 // transform pair. The secondary axis is rendered on the right side of the
 // plot with its own tick labels and optional axis title.
@@ -595,145 +565,6 @@ func (p *Plot) SecondAxis(spec scale.SecAxisSpec) *Plot {
 	cloned.spec.SecondAxis = &spec
 
 	return cloned
-}
-
-// Save renders the plot to a file at the given dimensions, routed through
-// [output.Render] and the "file" surface. If height ≤ 0, it is inferred from
-// width via [Built.PreferredSize]. The output format is inferred from the file
-// extension:
-//
-//	.png — raster PNG (default)
-//	.svg — SVG 1.1 vector
-//	.pdf — PDF 1.4 vector
-//
-// Options: [WithScale] for HiDPI output, [WithCPU] to force the CPU rasterizer.
-func (p *Plot) Save(ctx context.Context, filename string, width, height int, opts ...RenderOpt) error {
-	fig, h, cfg, err := p.figureForOutput(ctx, width, height, opts)
-	if err != nil {
-		return err
-	}
-
-	surf, err := output.NewSurface(ctx, "file",
-		output.WithPath(filename),
-		output.WithSize(width, h),
-		output.WithScale(cfg.scale),
-		output.WithCPU(cfg.cpu),
-	)
-	if err != nil {
-		return Errorf(PhaseRender, -1, "surface", err, "create file surface")
-	}
-	defer func() { _ = surf.Close() }()
-
-	if err := output.Render(ctx, fig, surf); err != nil {
-		return Errorf(PhaseRender, -1, "render", err, "render to %s", filename)
-	}
-
-	return nil
-}
-
-// Encode renders the plot and writes the encoded bytes to dst in the given
-// format ("png" (default), "svg", "pdf"), routed through [output.Render] and
-// the "file" surface. If height ≤ 0, it is inferred from width. Returns the
-// number of bytes written.
-func (p *Plot) Encode(ctx context.Context, dst io.Writer, format string, width, height int, opts ...RenderOpt) (int64, error) {
-	fig, h, cfg, err := p.figureForOutput(ctx, width, height, opts)
-	if err != nil {
-		return 0, err
-	}
-
-	surf, err := output.NewSurface(ctx, "file",
-		output.WithWriter(dst),
-		output.WithFormat(format),
-		output.WithSize(width, h),
-		output.WithScale(cfg.scale),
-		output.WithCPU(cfg.cpu),
-	)
-	if err != nil {
-		return 0, Errorf(PhaseRender, -1, "surface", err, "create file surface")
-	}
-	defer func() { _ = surf.Close() }()
-
-	if err := output.Render(ctx, fig, surf); err != nil {
-		return 0, Errorf(PhaseRender, -1, "render", err, "encode %s", format)
-	}
-
-	if bw, ok := surf.(interface{ BytesWritten() int64 }); ok {
-		return bw.BytesWritten(), nil
-	}
-
-	return 0, nil
-}
-
-// WriteTo renders the plot and writes the output to w in the given format.
-//
-// Deprecated: use [Plot.Encode], which has an identical signature.
-func (p *Plot) WriteTo(ctx context.Context, w io.Writer, format string, width, height int, opts ...RenderOpt) (int64, error) {
-	return p.Encode(ctx, w, format, width, height, opts...)
-}
-
-// Image renders the plot into an in-memory image at the given dimensions,
-// routed through [output.Render] and the "image" surface (always CPU
-// rasterized for deterministic, headless-safe output). If height ≤ 0, it is
-// inferred from width.
-func (p *Plot) Image(ctx context.Context, width, height int, opts ...RenderOpt) (image.Image, error) {
-	fig, h, cfg, err := p.figureForOutput(ctx, width, height, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	surf, err := output.NewSurface(ctx, "image",
-		output.WithSize(width, h),
-		output.WithScale(cfg.scale),
-	)
-	if err != nil {
-		return nil, Errorf(PhaseRender, -1, "surface", err, "create image surface")
-	}
-	defer func() { _ = surf.Close() }()
-
-	if err := output.Render(ctx, fig, surf); err != nil {
-		return nil, Errorf(PhaseRender, -1, "render", err, "render to image")
-	}
-
-	im, ok := surf.(output.Imager)
-	if !ok {
-		return nil, Errorf(PhaseRender, -1, "image", output.ErrNoImage, "image surface produced no image")
-	}
-
-	return im.Image(), nil
-}
-
-// figureForOutput builds the plot, resolves a non-positive height via the
-// figure's [output.Sizer], and resolves render options. Shared by the static
-// output façades (Save, Encode, Image).
-func (p *Plot) figureForOutput(ctx context.Context, width, height int, opts []RenderOpt) (output.Figure, int, renderConfig, error) {
-	b, err := p.build(ctx)
-	if err != nil {
-		return nil, 0, renderConfig{}, Errorf(PhaseRender, -1, "build", err, "build failed")
-	}
-
-	if height <= 0 {
-		_, height = b.PreferredSize(width)
-	}
-
-	cfg := defaultRenderConfig()
-	for _, o := range opts {
-		o(&cfg)
-	}
-
-	return b, height, cfg, nil
-}
-
-// --- Built convenience methods ---
-
-// RenderTo draws the built plot onto an arbitrary [output.Surface] — the escape
-// hatch for custom destinations. It is equivalent to [output.Render] with this
-// Built as the figure.
-func (b *Built) RenderTo(ctx context.Context, surf output.Surface) error {
-	if err := output.Render(ctx, b, surf); err != nil {
-		return Errorf(PhaseRender, -1, "render", err, "render to surface")
-	}
-
-	return nil
 }
 
 // DrawCanvas creates a new [canvas.RasterCanvas] and draws the built plot onto it.
@@ -1088,7 +919,7 @@ func (p *Plot) Build(ctx context.Context) (output.Figure, error) {
 }
 
 // build runs the grammar pipeline and returns the concrete [*Built]. Internal
-// callers (Save, WriteTo, Image) use this to reach Built's full method set; the
+// callers (Save, Encode, Image) use this to reach Built's full method set; the
 // exported [Plot.Build] widens the return type to [output.Figure].
 func (p *Plot) build(ctx context.Context) (*Built, error) {
 	if err := ctx.Err(); err != nil {

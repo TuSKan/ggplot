@@ -11,6 +11,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 	"github.com/TuSKan/ggplot/theme"
 )
 
@@ -65,7 +66,7 @@ func plotAttractor(dir, filename, title string, seg SegmentData) {
 		)
 
 	out := filepath.Join(dir, filename)
-	if err := p.Save(context.Background(), out, 900, 900); err != nil { //nolint:mnd // Example output size.
+	if err := file.Save(context.Background(), p, out, 900, 900); err != nil { //nolint:mnd // Example output size.
 		log.Fatalln(err)
 	}
 

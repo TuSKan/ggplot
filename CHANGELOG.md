@@ -25,7 +25,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed (Breaking)
 - **`canvas.GGCanvas` renamed to `canvas.RasterCanvas`** (Phase 1). Constructors renamed: `NewGGCanvas` → `NewRasterCanvas`, `NewGGCanvasCPU` → `NewRasterCanvasCPU`, `FromGGContext` → `RasterFromContext`. The file `canvas/gg.go` is now `canvas/raster.go`. No behavioral change.
 - **`Plot.Build` now returns `output.Figure`** (concretely a `*Built`) instead of `*Built` directly. Introspection is via a type assertion: `fig, _ := p.Build(ctx); b := fig.(*ggplot.Built)`. `*Built` stays exported with its full method set.
-- **Removed `Built.Save` and `Built.WriteTo`** — these bypassed the output layer with duplicated encoding logic. Use `Plot.Save`, `Plot.Encode`, or `output.Render` + a surface instead.
+- **Removed `Built.Save` and `Built.WriteTo`** — these bypassed the output layer with duplicated encoding logic. Use `file.Save`, `file.Encode`, or `output.Render` + a surface instead.
+- **Removed `Plot.Save`, `Plot.Encode`, `Plot.Image`, `Plot.WriteTo`** — all output façades have been moved to dedicated surface packages. Use `file.Save`/`file.Encode` (`output/file`) and `image.Render` (`output/image`) instead.
 
 #### Added
 - **`output` package — the unified destination layer** (Phase 2). One `Surface` model for file, in-memory image, desktop window, and browser canvas:
@@ -36,10 +37,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Blank-import surface registry: `Register`, `NewSurface`, `NewLiveSurface`, `SurfaceOptions`, options (`WithSize`, `WithPath`, `WithWriter`, `WithFormat`, `WithScale`, `WithCPU`).
   - Sentinels: `ErrUnknownSurface`, `ErrSurfaceConsumed`, `ErrNotLive`, `ErrUnsupportedFormat`, `ErrNoImage`.
 - **`output/file` and `output/image` surfaces** (Phase 3) — single-shot surfaces registered via blank import. File encodes PNG/SVG/PDF to a path or `io.Writer`; image publishes an in-memory `image.Image` (CPU-rasterized).
-- **`Plot.Image(ctx, w, h, opts...)`** — render to an in-memory `image.Image` (new).
-- **`Plot.Encode(ctx, dst, format, w, h, opts...)`** — write encoded bytes to an `io.Writer` (replaces `WriteTo`).
-- **`Built.RenderTo(ctx, output.Surface)`** — escape hatch to render onto any custom surface.
-- `Plot.Save`, `Encode`, and `Image` are now façades over `output.Render` + the built-in surfaces (auto-registered, so callers need no blank import).
+- **`file.Save(ctx, src, path, w, h, opts...)`** (`output/file`) — save to a file (PNG/SVG/PDF), format inferred from extension.
+- **`file.Encode(ctx, src, dst, format, w, h, opts...)`** (`output/file`) — write encoded bytes to an `io.Writer`.
+- **`image.Render(ctx, src, w, h, opts...)`** (`output/image`) — render to an in-memory `image.Image` (CPU-rasterized).
+- All output functions accept an `output.Source` (i.e. `*Plot`) — no façade methods on `Plot`.
 - **`output.Session` / `Controller` interaction loop** (Phase 4) — drives a `Source` onto a `LiveSurface`: build once, draw, then re-render on `Event`s. `Action` (`Ignore`/`Redraw`/`Rebuild`/`Export`/`Close`) is the per-event decision; `State` carries `Bounds` and `Figure` for the controller. Fast path (`ActionRedraw`) re-renders the current figure with updated data-space viewport (via `Zoomable`); slow path (`ActionRebuild`) calls `Source.Build` again. `ControllerFunc` adapter and `DataSpaceController()` (data-space pan/zoom, per-panel hit-testing, double-click reset); `NewSession`, `WithController`, `WithExportSurface`, `Session.Run(ctx)`.
 - **`output.Session` async/debounced rebuild** — `WithRebuildDelay(d)` makes `ActionRebuild` non-blocking: rapid triggers within `d` coalesce into a single background `Source.Build`, the last good figure keeps drawing while it computes, and the result swaps in when ready. Pending rebuilds flush on event-channel close and are cancelled on `Close`/context cancellation. `WithRebuildError(fn)` handles non-fatal background-build errors. Default (no delay) stays synchronous.
 - **`output/window` — native desktop GPU window** (Phase 5, `//go:build !js`). `window.Show(ctx, src, opts...)` opens a `gogpu` window and presents the figure zero-copy through `gg/integration/ggcanvas` (`Render` onto the swapchain surface). Reuses the Phase-4 `Controller`/`State` policy driven from gogpu's frame and input callbacks rather than `Session.Run` (gogpu owns the run loop). Options: `WithTitle`, `WithSize`, `WithController`, `WithRebuildDelay`, `WithRebuildError`, `WithFPS`, `WithPprof`. Default controller is `DataSpaceController()`. *(`output/web` (Phase 6) is still pending.)*
@@ -63,14 +64,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Rotated text rendered upright in SVG/PDF** (axis titles, facet strips, slanted tick labels). The recorder bakes only the anchor *position*, not the glyph *orientation* — but it does record the active transform. The backends now track the CTM (without applying it to baked geometry) and recover the rotation for text only: SVG emits `transform="rotate(deg x y)"`, PDF bakes the rotation into the text matrix `Tm`. New regression tests in `canvas/export_test.go`.
 - **`output/file`: `Commit` now propagates file close errors** instead of silently swallowing them. A filesystem error on `Close()` (e.g. disk full during buffered flush) is no longer lost.
 - **`output/window`: `window.Show` now supports async/debounced rebuilds** via `WithRebuildDelay` and `WithRebuildError`, preventing UI freezes when `Source.Build` is slow (e.g. BigQuery-backed datasets). Rapid rebuild requests coalesce; the build runs in a background goroutine while the last good figure keeps drawing.
-- Added example `examples/output/` exercising `Save`/`Image`/`Encode`, `output.NewSurface`+`Render`, and `Built.RenderTo`.
+- Added example `examples/output/` exercising `file.Save`/`image.Render`/`file.Encode`, `output.NewSurface`+`Render`.
 - Added example `examples/window/` — a runnable `window.Show` program (interactive pan/zoom desktop window); needs a display/GPU, so it is not run in CI.
 - Added example `examples/session/` — the `output.Session` loop driven headless: a frame-capturing `LiveSurface` scripts pan/zoom/rebuild events through a real `Session` (with `WithRebuildDelay`) and writes each frame to a PNG; runs without a display.
 
 > Known limitation: vector text renders at a single default size because the recording playback hands the backend a nil font face and drops the recorded font size; fixable in the gg recording layer (forward `FontSize`/face through `Backend.DrawText`).
 
-#### Deprecated
-- **`Plot.WriteTo`** — use `Plot.Encode` (identical signature).
+- **`Plot.WriteTo`** — removed. Use `file.Encode` (`output/file`).
+- **`Plot.Save`** — removed. Use `file.Save` (`output/file`).
+- **`Plot.Encode`** — removed. Use `file.Encode` (`output/file`).
+- **`Plot.Image`** — removed. Use `image.Render` (`output/image`).
+- **`Built.RenderTo`** — removed. Use `output.Render` directly.
 
 ## [0.0.9] — 2026-05-28
 

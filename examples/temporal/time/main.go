@@ -14,6 +14,8 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 const (
@@ -67,7 +69,7 @@ func main() {
 		Theme("bmh")
 
 	out := filepath.Join(dir, "time.png")
-	if err := p.Save(context.Background(), out, 900, 550, ggplot.WithCPU()); err != nil {
+	if err := file.Save(context.Background(), p, out, 900, 550, output.WithCPU(true)); err != nil {
 		log.Fatalln(err)
 	}
 

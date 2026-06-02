@@ -21,6 +21,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -84,7 +85,7 @@ func stepExample(dir string) {
 		Theme("minimal")
 
 	out := filepath.Join(dir, "step_signals.png")
-	if err := p.Save(context.Background(), out, 900, 500); err != nil {
+	if err := file.Save(context.Background(), p, out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -135,7 +136,7 @@ func limitsExample(dir string) {
 		Theme("bw")
 
 	out := filepath.Join(dir, "axis_limits.png")
-	if err := p.Save(context.Background(), out, 900, 500); err != nil {
+	if err := file.Save(context.Background(), p, out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -164,7 +165,7 @@ func flipExample(dir string) {
 		Theme("classic")
 
 	out := filepath.Join(dir, "coord_flip.png")
-	if err := p.Save(context.Background(), out, 700, 500); err != nil {
+	if err := file.Save(context.Background(), p, out, 700, 500); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -211,7 +212,7 @@ func rugExample(dir string) {
 		)
 
 	out := filepath.Join(dir, "rug_scatter.png")
-	if err := p.Save(context.Background(), out, 800, 600); err != nil {
+	if err := file.Save(context.Background(), p, out, 800, 600); err != nil {
 		log.Fatalln(err)
 	}
 

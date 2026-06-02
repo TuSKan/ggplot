@@ -16,6 +16,8 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -108,7 +110,7 @@ func main() {
 
 	out := filepath.Join(dir, "nyt_excess_deaths.png")
 	// Save the plot with WithCPU() to ensure deterministic rendering in CI environment.
-	if err := p.Save(context.Background(), out, 1000, 600, ggplot.WithCPU()); err != nil { //nolint:mnd // Output aspect ratio.
+	if err := file.Save(context.Background(), p, out, 1000, 600, output.WithCPU(true)); err != nil { //nolint:mnd // Output aspect ratio.
 		log.Fatalln(err)
 	}
 

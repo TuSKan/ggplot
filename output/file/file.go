@@ -1,8 +1,9 @@
 // Package file provides a [output.Surface] that encodes a single frame to disk
-// (or any io.Writer) as PNG, SVG, or PDF. Blank-import it to register the
-// "file" surface:
+// (or any io.Writer) as PNG, SVG, or PDF.
 //
-//	import _ "github.com/TuSKan/ggplot/output/file"
+// Convenience functions [Save] and [Encode] build a [output.Source] and render
+// it in one call. For lower-level control, blank-import this package and use
+// [output.NewSurface]("file", ...) + [output.Render].
 package file
 
 import (
@@ -192,9 +193,94 @@ func (s *fileSurface) Close() error {
 	return nil
 }
 
-// BytesWritten reports the number of bytes encoded by the last Commit. The
-// façade [ggplot.Plot.Encode] reads it.
+// BytesWritten reports the number of bytes encoded by the last Commit.
 func (s *fileSurface) BytesWritten() int64 { return s.written }
+
+// ---------------------------------------------------------------------------
+// Public convenience functions
+// ---------------------------------------------------------------------------
+
+// Save builds src and renders to a file at the given dimensions. The output
+// format is inferred from the file extension (.png, .svg, .pdf). If height ≤ 0
+// and the built figure implements [output.Sizer], it is inferred from width.
+//
+// Options: [output.WithScale] for HiDPI output, [output.WithCPU] to force the
+// CPU rasterizer.
+func Save(ctx context.Context, src output.Source, filename string, width, height int, opts ...output.SurfaceOpt) error {
+	fig, h, err := buildAndResolve(ctx, src, width, height)
+	if err != nil {
+		return err
+	}
+
+	sopts := append([]output.SurfaceOpt{
+		output.WithPath(filename),
+		output.WithSize(width, h),
+	}, opts...)
+
+	surf, err := newFileSurface(ctx, output.BuildOptions(sopts...))
+	if err != nil {
+		return fmt.Errorf("file.Save: %w", err)
+	}
+	defer func() { _ = surf.Close() }()
+
+	if err := output.Render(ctx, fig, surf); err != nil {
+		return fmt.Errorf("file.Save: %w", err)
+	}
+
+	return nil
+}
+
+// Encode builds src and writes encoded bytes to dst in the given format
+// ("png" (default), "svg", "pdf"). If height ≤ 0 and the built figure
+// implements [output.Sizer], it is inferred from width. Returns the number of
+// bytes written.
+func Encode(ctx context.Context, src output.Source, dst io.Writer, format string, width, height int, opts ...output.SurfaceOpt) (int64, error) {
+	fig, h, err := buildAndResolve(ctx, src, width, height)
+	if err != nil {
+		return 0, err
+	}
+
+	sopts := append([]output.SurfaceOpt{
+		output.WithWriter(dst),
+		output.WithFormat(format),
+		output.WithSize(width, h),
+	}, opts...)
+
+	surf, err := newFileSurface(ctx, output.BuildOptions(sopts...))
+	if err != nil {
+		return 0, fmt.Errorf("file.Encode: %w", err)
+	}
+	defer func() { _ = surf.Close() }()
+
+	if err := output.Render(ctx, fig, surf); err != nil {
+		return 0, fmt.Errorf("file.Encode: %w", err)
+	}
+
+	fs := surf.(*fileSurface) //nolint:forcetypeassert,errcheck // we just created it above.
+
+	return fs.BytesWritten(), nil
+}
+
+// buildAndResolve builds the source and resolves a non-positive height via
+// [output.Sizer]. This is the shared preamble for [Save] and [Encode].
+func buildAndResolve(ctx context.Context, src output.Source, width, height int) (output.Figure, int, error) {
+	fig, err := src.Build(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("build: %w", err)
+	}
+
+	if height <= 0 {
+		if sizer, ok := fig.(output.Sizer); ok {
+			_, height = sizer.PreferredSize(width)
+		}
+	}
+
+	if height <= 0 {
+		height = width // fallback: square
+	}
+
+	return fig, height, nil
+}
 
 // countWriter counts bytes written through it.
 type countWriter struct {

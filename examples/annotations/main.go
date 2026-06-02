@@ -13,6 +13,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -72,7 +73,7 @@ func referenceLines(dir string) {
 		Theme("minimal")
 
 	out := filepath.Join(dir, "annotations.png")
-	if err := p.Save(context.Background(), out, 900, 500); err != nil {
+	if err := file.Save(context.Background(), p, out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -105,7 +106,7 @@ func textLabels(dir string) {
 		Theme("minimal")
 
 	out := filepath.Join(dir, "text_labels.png")
-	if err := p.Save(context.Background(), out, 900, 500); err != nil {
+	if err := file.Save(context.Background(), p, out, 900, 500); err != nil {
 		log.Fatalln(err)
 	}
 

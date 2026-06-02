@@ -18,13 +18,14 @@ import (
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
 	ctx := context.Background()
 	eng := memory.NewEngine(ctx)
-	_, file, _, _ := runtime.Caller(0)
-	dir := filepath.Dir(file)
+	_, srcFile, _, _ := runtime.Caller(0)
+	dir := filepath.Dir(srcFile)
 
 	// Build a small iris-like dataset with species, petal, sepal, and region.
 	n := 60 //nolint:mnd // small demo dataset.
@@ -61,7 +62,7 @@ func main() {
 		FacetWrap("species", facet.WithLabeller(facet.LabelBoth()), facet.NCols(3)).
 		Labs(ggplot.Title("FacetWrap + LabelBoth"), ggplot.XLab("Sepal Length"), ggplot.YLab("Petal Length")).
 		Theme("minimal")
-	p1.Save(ctx, filepath.Join(dir, "01_facet_wrap_labelboth.png"), 900, 350) //nolint:errcheck,mnd // demo.
+	file.Save(ctx, p1, filepath.Join(dir, "01_facet_wrap_labelboth.png"), 900, 350) //nolint:errcheck,mnd // demo.
 
 	// ---------- 2. FacetGrid + Margins ----------
 	log.Println("02_facet_grid_margins.png")
@@ -75,7 +76,7 @@ func main() {
 		).
 		Labs(ggplot.Title("FacetGrid + Margins"), ggplot.XLab("Sepal Length"), ggplot.YLab("Petal Length")).
 		Theme("minimal")
-	p2.Save(ctx, filepath.Join(dir, "02_facet_grid_margins.png"), 900, 700) //nolint:errcheck,mnd // demo.
+	file.Save(ctx, p2, filepath.Join(dir, "02_facet_grid_margins.png"), 900, 700) //nolint:errcheck,mnd // demo.
 
 	// ---------- 3. FacetWrap + Drop=false ----------
 	log.Println("03_facet_wrap_nodrop.png")
@@ -85,7 +86,7 @@ func main() {
 		FacetWrap("species", facet.WithDrop(false), facet.NCols(3)).
 		Labs(ggplot.Title("FacetWrap — Drop=false"), ggplot.XLab("Sepal"), ggplot.YLab("Petal")).
 		Theme("minimal")
-	p3.Save(ctx, filepath.Join(dir, "03_facet_wrap_nodrop.png"), 900, 350) //nolint:errcheck,mnd // demo.
+	file.Save(ctx, p3, filepath.Join(dir, "03_facet_wrap_nodrop.png"), 900, 350) //nolint:errcheck,mnd // demo.
 
 	// ---------- 4. FacetGrid + LabelValue (default) ----------
 	log.Println("04_facet_grid_default.png")
@@ -95,7 +96,7 @@ func main() {
 		FacetGrid("species", "region").
 		Labs(ggplot.Title("FacetGrid — Default Labels"), ggplot.XLab("Sepal"), ggplot.YLab("Petal")).
 		Theme("minimal")
-	p4.Save(ctx, filepath.Join(dir, "04_facet_grid_default.png"), 700, 500) //nolint:errcheck,mnd // demo.
+	file.Save(ctx, p4, filepath.Join(dir, "04_facet_grid_default.png"), 700, 500) //nolint:errcheck,mnd // demo.
 
 	log.Println("All 4 facet examples generated.")
 }

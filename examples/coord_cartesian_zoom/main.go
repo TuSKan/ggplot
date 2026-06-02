@@ -15,6 +15,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -56,7 +57,7 @@ func main() {
 		Theme("minimal")
 
 	out := filepath.Join(dir, "full.png")
-	if err := full.Save(context.Background(), out, 800, 400); err != nil { //nolint:mnd // Canvas size.
+	if err := file.Save(context.Background(), full, out, 800, 400); err != nil { //nolint:mnd // Canvas size.
 		log.Fatalln(err)
 	}
 
@@ -78,7 +79,7 @@ func main() {
 		Theme("minimal")
 
 	out2 := filepath.Join(dir, "zoomed.png")
-	if err := zoomed.Save(context.Background(), out2, 800, 400); err != nil { //nolint:mnd // Canvas size.
+	if err := file.Save(context.Background(), zoomed, out2, 800, 400); err != nil { //nolint:mnd // Canvas size.
 		log.Fatalln(err)
 	}
 

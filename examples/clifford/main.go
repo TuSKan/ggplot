@@ -18,6 +18,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -70,7 +71,7 @@ func main() {
 		Theme("dark")
 
 	out := filepath.Join(dir, "clifford.png")
-	if err := p.Save(context.Background(), out, 900, 900); err != nil {
+	if err := file.Save(context.Background(), p, out, 900, 900); err != nil {
 		log.Fatalln(err)
 	}
 

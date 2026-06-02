@@ -22,6 +22,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 	"github.com/TuSKan/ggplot/theme"
 )
 
@@ -84,7 +85,7 @@ func cieLABGradient(dir string) {
 		)
 
 	outPath := filepath.Join(dir, "cielab_gradient.png")
-	if err := p.Save(context.Background(), outPath, 700, 600); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 700, 600); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -137,7 +138,7 @@ func divergingGradient(dir string) {
 		)
 
 	outPath := filepath.Join(dir, "diverging_gradient.png")
-	if err := p.Save(context.Background(), outPath, 700, 600); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 700, 600); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -192,7 +193,7 @@ func multiStopGradient(dir string) {
 		)
 
 	outPath := filepath.Join(dir, "multistop_gradient.png")
-	if err := p.Save(context.Background(), outPath, 700, 600); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 700, 600); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -241,7 +242,7 @@ func themeAwareAutoSelection(dir string) {
 			)
 
 		outPath := filepath.Join(dir, "theme_auto_"+string(th)+".png")
-		if err := p.Save(context.Background(), outPath, 700, 500); err != nil {
+		if err := file.Save(context.Background(), p, outPath, 700, 500); err != nil {
 			log.Fatalln(err)
 		}
 
@@ -292,7 +293,7 @@ func legendKeyGlyphs(dir string) {
 		)
 
 	outPath := filepath.Join(dir, "legend_key_glyphs.png")
-	if err := p.Save(context.Background(), outPath, 800, 550); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 800, 550); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -341,7 +342,7 @@ func guideCustomization(dir string) {
 		)
 
 	outPath := filepath.Join(dir, "guide_customization.png")
-	if err := p.Save(context.Background(), outPath, 700, 600); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 700, 600); err != nil {
 		log.Fatalln(err)
 	}
 

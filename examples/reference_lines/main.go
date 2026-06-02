@@ -15,6 +15,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 	"github.com/TuSKan/ggplot/scale"
 )
 
@@ -30,7 +31,7 @@ func main() {
 
 func save(p *ggplot.Plot, dir, name string, w, h int) {
 	out := filepath.Join(dir, name+".png")
-	if err := p.Save(context.Background(), out, w, h); err != nil {
+	if err := file.Save(context.Background(), p, out, w, h); err != nil {
 		log.Fatalln(err)
 	}
 

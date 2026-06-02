@@ -25,8 +25,8 @@ with a single abstraction. Four destinations, one model:
 Goals: (1) one `Surface` abstraction for all four; (2) `*Built` and `*Plot`
 satisfy the new interfaces with near-zero change; (3) core `output` is pure Go
 — WebGPU and windowing reachable only through subpackages; (4) platform
-selection by **blank import**, not by build tags in user code; (5) the existing
-public API (`Plot.Save`, `WriteTo`) is preserved as façades.
+public API is via the surface packages: `file.Save`/`file.Encode` (`output/file`)
+and `image.Render` (`output/image`). `Plot` has no output methods.
 
 ---
 
@@ -516,20 +516,19 @@ and the panel sub-canvas in `Built.Draw` (~line 2098). No behavioral change.
 The file `canvas/gg.go` may be renamed to `canvas/raster.go` for consistency.
 
 `Built.Save` and `Built.WriteTo` have been removed — all output goes through
-`Plot.Save` / `Plot.Encode` / `output.Render`.
+`file.Save` / `file.Encode` (`output/file`) / `image.Render` (`output/image`) / `output.Render`.
 
 ---
 
 ## 10. ggplot-facing API
 
 ```go
-// --- static, on *Plot ---
-func (p *Plot) Save(ctx context.Context, filename string, w, h int, opt ...RenderOpt) error
-func (p *Plot) Encode(ctx context.Context, dst io.Writer, format string, w, h int, opt ...RenderOpt) (int64, error)
-func (p *Plot) Image(ctx context.Context, w, h int, opt ...RenderOpt) (image.Image, error)
+// --- static, package-level functions (output/file) ---
+func file.Save(ctx context.Context, src output.Source, filename string, w, h int, opt ...output.BuildOption) error
+func file.Encode(ctx context.Context, src output.Source, dst io.Writer, format string, w, h int, opt ...output.BuildOption) (int64, error)
 
-// --- escape hatch: any custom Surface, on *Built ---
-func (b *Built) RenderTo(ctx context.Context, surf output.Surface) error
+// --- static, package-level function (output/image) ---
+func image.Render(ctx context.Context, src output.Source, w, h int, opt ...output.BuildOption) (image.Image, error)
 
 // --- build now returns the Figure interface (decision #6, option B) ---
 func (p *Plot) Build(ctx context.Context) (output.Figure, error)  // concretely a *Built
@@ -539,11 +538,12 @@ func window.Show(ctx context.Context, src output.Source, opt ...window.Opt) erro
 func web.Mount(ctx context.Context, src output.Source, containerID string, opt ...MountOpt) error // //go:build js
 ```
 
-**Removed:** `Built.Save` and `Built.WriteTo` — these bypassed the output layer
-with duplicated encoding logic. Use `Plot.Save`, `Plot.Encode`, or
-`output.Render` + a surface instead.
+**Removed:** `Plot.Save`, `Plot.Encode`, `Plot.Image`, `Plot.WriteTo`,
+`Built.Save`, `Built.WriteTo`, `Built.RenderTo` — all output is now handled by
+the dedicated surface packages. Use `file.Save`, `file.Encode`, `image.Render`,
+or `output.Render` + a surface instead.
 
-`Save`, `Encode`, `Image`, `RenderTo`, `window.Show`, `web.Mount` all depend on
+`file.Save`, `file.Encode`, `image.Render`, `window.Show`, `web.Mount` all depend on
 `Figure` + optional `Sizer` — never on the concrete `*Built`. Only user-facing
 introspection asserts to `*ggplot.Built`:
 
@@ -584,7 +584,7 @@ Each phase ships independently; the existing public API is preserved throughout.
 |---|---|---|
 | **1** ✅ | Rename `GGCanvas → RasterCanvas` (§9). Mechanical; gated by golden tests. | Low |
 | **2** ✅ | `output` core: `Figure`, `Source`, `Sizer`, `Measurable`, `Zoomable`, `PanelInfo`, `Imager`, `Surface`, `LiveSurface`, `Event`, `Render`, registry. `Built` implements `Figure`+`Sizer`+`Measurable`+`Zoomable`; `Build` returns `Figure`. | Low |
-| **3** ✅ | `output/file` + `output/image`. `Plot.Save`/`Encode`/`Image` become façades over `Render`. | Low |
+| **3** ✅ | `output/file` + `output/image`. `file.Save`/`file.Encode` and `image.Render` are the primary output API. `Plot` has no output methods. | Low |
 | **4** ✅ | `output/session`: `Session`, `Controller`, `DataSpaceController`, `ControllerFunc`, fast/slow path, async rebuild, headless `LiveSurface` tests. | Med |
 | **5** ✅ | `output/window` + `window.Show` — `ggcanvas` zero-copy desktop, `WithFPS`, `WithPprof`, HiDPI workaround, double-click reset. | Med |
 | **6** | Bump `wgpu` ≥ 0.28; `output/web` + `web.Mount`; `cmd/ggplot-wasm`. Requires the `gg` fork to compile for `js/wasm`. | Med — see §12. |

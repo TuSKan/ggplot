@@ -93,6 +93,13 @@ func WithCPU(cpu bool) SurfaceOpt {
 	return func(o *SurfaceOptions) { o.CPU = cpu }
 }
 
+// BuildOptions applies the given options and returns the resolved
+// [SurfaceOptions]. Surface packages use this to build options from variadic
+// [SurfaceOpt] slices.
+func BuildOptions(opts ...SurfaceOpt) SurfaceOptions {
+	return resolveOptions(opts...)
+}
+
 func resolveOptions(opts ...SurfaceOpt) SurfaceOptions {
 	o := SurfaceOptions{Scale: 1}
 	for _, opt := range opts {

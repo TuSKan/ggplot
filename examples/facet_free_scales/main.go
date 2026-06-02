@@ -18,14 +18,15 @@ import (
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 	"github.com/TuSKan/ggplot/theme"
 )
 
 func main() {
 	ctx := context.Background()
 	eng := memory.NewEngine(ctx)
-	_, file, _, _ := runtime.Caller(0)
-	dir := filepath.Dir(file)
+	_, srcFile, _, _ := runtime.Caller(0)
+	dir := filepath.Dir(srcFile)
 
 	// Deterministic RNG.
 	rng := rand.New(rand.NewPCG(42, 99)) //nolint:mnd // Deterministic seed for example.
@@ -58,55 +59,55 @@ func main() {
 	}
 
 	// 1. Shared scales (default) — all panels same Y range.
-	err = ggplot.New(ds, aes.X("x"), aes.Y("y")).
+	p1 := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("steelblue"))).
 		FacetWrap("species").
 		Labs(ggplot.Title("Shared Scales (Default)")).
-		Theme("default").
-		Save(ctx, filepath.Join(dir, "01_shared_scales.png"), 900, 300) //nolint:mnd // Example.
-	if err != nil {
+		Theme("default")
+
+	if err := file.Save(ctx, p1, filepath.Join(dir, "01_shared_scales.png"), 900, 300); err != nil { //nolint:mnd // Example.
 		panic(err)
 	}
 
 	log.Println("01_shared_scales.png")
 
 	// 2. FreeY — each panel has its own Y range.
-	err = ggplot.New(ds, aes.X("x"), aes.Y("y")).
+	p2 := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("coral"))).
 		FacetWrap("species", facet.FreeY()).
 		Labs(ggplot.Title("Free Y Scales")).
-		Theme("default").
-		Save(ctx, filepath.Join(dir, "02_free_y.png"), 900, 300) //nolint:mnd // Example.
-	if err != nil {
+		Theme("default")
+
+	if err := file.Save(ctx, p2, filepath.Join(dir, "02_free_y.png"), 900, 300); err != nil { //nolint:mnd // Example.
 		panic(err)
 	}
 
 	log.Println("02_free_y.png")
 
 	// 3. FreeXY — both axes independent.
-	err = ggplot.New(ds, aes.X("x"), aes.Y("y")).
+	p3 := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("seagreen"))).
 		FacetWrap("species", facet.FreeXY()).
 		Labs(ggplot.Title("Free X & Y Scales")).
-		Theme("default").
-		Save(ctx, filepath.Join(dir, "03_free_xy.png"), 900, 300) //nolint:mnd // Example.
-	if err != nil {
+		Theme("default")
+
+	if err := file.Save(ctx, p3, filepath.Join(dir, "03_free_xy.png"), 900, 300); err != nil { //nolint:mnd // Example.
 		panic(err)
 	}
 
 	log.Println("03_free_xy.png")
 
 	// 4. Theme override — custom strip text color.
-	err = ggplot.New(ds, aes.X("x"), aes.Y("y")).
+	p4 := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("orchid"))).
 		FacetWrap("species", facet.FreeY()).
 		Labs(ggplot.Title("Custom Strip Styling")).
 		Theme("default").
 		ThemeOverride(
 			theme.StripTextOverride(theme.ElementText{Bold: true, Size: 13}), //nolint:mnd // Custom size.
-		).
-		Save(ctx, filepath.Join(dir, "04_strip_style.png"), 900, 300) //nolint:mnd // Example.
-	if err != nil {
+		)
+
+	if err := file.Save(ctx, p4, filepath.Join(dir, "04_strip_style.png"), 900, 300); err != nil { //nolint:mnd // Example.
 		panic(err)
 	}
 

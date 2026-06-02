@@ -17,13 +17,14 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
 	ctx := context.Background()
 	eng := memory.NewEngine(ctx)
-	_, file, _, _ := runtime.Caller(0)
-	dir := filepath.Dir(file)
+	_, srcFile, _, _ := runtime.Caller(0)
+	dir := filepath.Dir(srcFile)
 
 	// ---------- shared data generators ----------
 
@@ -59,7 +60,7 @@ func main() {
 		)).
 		Labs(ggplot.Title("Horizontal Bar"), ggplot.XLab("Language"), ggplot.YLab("Score")).
 		Theme("minimal")
-	pBar.Save(ctx, filepath.Join(dir, "01_horizontal_bar.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pBar, filepath.Join(dir, "01_horizontal_bar.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 2. Horizontal Histogram ----------
 	log.Println("02_horizontal_histogram.png")
@@ -81,7 +82,7 @@ func main() {
 		)).
 		Labs(ggplot.Title("Horizontal Histogram"), ggplot.XLab("Value"), ggplot.YLab("Count")).
 		Theme("minimal")
-	pHist.Save(ctx, filepath.Join(dir, "02_horizontal_histogram.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pHist, filepath.Join(dir, "02_horizontal_histogram.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 3. Horizontal Points (scatter) ----------
 	log.Println("03_horizontal_scatter.png")
@@ -96,7 +97,7 @@ func main() {
 		CoordFlip().
 		Labs(ggplot.Title("Flipped Scatter")).
 		Theme("minimal")
-	pPt.Save(ctx, filepath.Join(dir, "03_horizontal_scatter.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pPt, filepath.Join(dir, "03_horizontal_scatter.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 4. Horizontal Line ----------
 	log.Println("04_horizontal_line.png")
@@ -111,7 +112,7 @@ func main() {
 		CoordFlip().
 		Labs(ggplot.Title("Flipped Line")).
 		Theme("minimal")
-	pLine.Save(ctx, filepath.Join(dir, "04_horizontal_line.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pLine, filepath.Join(dir, "04_horizontal_line.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 5. Horizontal Multi-Line (color groups) ----------
 	log.Println("05_horizontal_multiline.png")
@@ -142,7 +143,7 @@ func main() {
 		CoordFlip().
 		Labs(ggplot.Title("Flipped Multi-Line"), ggplot.XLab("Time"), ggplot.YLab("Value")).
 		Theme("minimal")
-	pML.Save(ctx, filepath.Join(dir, "05_horizontal_multiline.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pML, filepath.Join(dir, "05_horizontal_multiline.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 6. Horizontal Step ----------
 	log.Println("06_horizontal_step.png")
@@ -164,7 +165,7 @@ func main() {
 		CoordFlip().
 		Labs(ggplot.Title("Flipped Step")).
 		Theme("minimal")
-	pStep.Save(ctx, filepath.Join(dir, "06_horizontal_step.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pStep, filepath.Join(dir, "06_horizontal_step.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 7. Horizontal Area ----------
 	log.Println("07_horizontal_area.png")
@@ -188,7 +189,7 @@ func main() {
 		)).
 		Labs(ggplot.Title("Horizontal Area")).
 		Theme("minimal")
-	pArea.Save(ctx, filepath.Join(dir, "07_horizontal_area.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pArea, filepath.Join(dir, "07_horizontal_area.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 8. Horizontal Density ----------
 	log.Println("08_horizontal_density.png")
@@ -210,7 +211,7 @@ func main() {
 		)).
 		Labs(ggplot.Title("Horizontal Density")).
 		Theme("minimal")
-	pDens.Save(ctx, filepath.Join(dir, "08_horizontal_density.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pDens, filepath.Join(dir, "08_horizontal_density.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 9. Horizontal Boxplot ----------
 	log.Println("09_horizontal_boxplot.png")
@@ -239,7 +240,7 @@ func main() {
 		)).
 		Labs(ggplot.Title("Horizontal Boxplot"), ggplot.XLab("Group"), ggplot.YLab("Score")).
 		Theme("minimal")
-	pBox.Save(ctx, filepath.Join(dir, "09_horizontal_boxplot.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pBox, filepath.Join(dir, "09_horizontal_boxplot.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 10. Horizontal Smooth (LOESS) ----------
 	log.Println("10_horizontal_smooth.png")
@@ -263,7 +264,7 @@ func main() {
 		CoordFlip().
 		Labs(ggplot.Title("Flipped Smooth (LOESS)")).
 		Theme("minimal")
-	pSm.Save(ctx, filepath.Join(dir, "10_horizontal_smooth.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pSm, filepath.Join(dir, "10_horizontal_smooth.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 11. Flipped HLine / VLine ----------
 	log.Println("11_flipped_reflines.png")
@@ -279,7 +280,7 @@ func main() {
 		CoordFlip().
 		Labs(ggplot.Title("Flipped Reference Lines")).
 		Theme("minimal")
-	pRef.Save(ctx, filepath.Join(dir, "11_flipped_reflines.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pRef, filepath.Join(dir, "11_flipped_reflines.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	// ---------- 12. Flipped Rug ----------
 	log.Println("12_flipped_rug.png")
@@ -303,7 +304,7 @@ func main() {
 		CoordFlip().
 		Labs(ggplot.Title("Flipped Scatter + Rug")).
 		Theme("minimal")
-	pRug.Save(ctx, filepath.Join(dir, "12_flipped_rug.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
+	file.Save(ctx, pRug, filepath.Join(dir, "12_flipped_rug.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
 	log.Println("All 12 orientation examples generated.")
 }

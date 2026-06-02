@@ -15,7 +15,7 @@ const (
 	PhaseBuild Phase = iota
 	// PhaseDraw is the Built.Draw phase (rendering to canvas).
 	PhaseDraw
-	// PhaseRender is the Save/WriteTo phase (format dispatch, I/O).
+	// PhaseRender is the Save/Encode/Image phase (format dispatch, I/O).
 	PhaseRender
 )
 

@@ -15,6 +15,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -55,13 +56,13 @@ func main() {
 	p2 := p1.AxisLabelRows(3).
 		Labs(ggplot.Title("AxisLabelRows(3) — 3-row stagger"))
 
-	if err := p1.Save(context.Background(), filepath.Join(dir, "axis_label_rows_auto.png"), 800, 500); err != nil {
+	if err := file.Save(context.Background(), p1, filepath.Join(dir, "axis_label_rows_auto.png"), 800, 500); err != nil {
 		log.Fatalln(err)
 	}
 
 	fmt.Println("saved axis_label_rows_auto.png")
 
-	if err := p2.Save(context.Background(), filepath.Join(dir, "axis_label_rows_3.png"), 800, 500); err != nil {
+	if err := file.Save(context.Background(), p2, filepath.Join(dir, "axis_label_rows_3.png"), 800, 500); err != nil {
 		log.Fatalln(err)
 	}
 

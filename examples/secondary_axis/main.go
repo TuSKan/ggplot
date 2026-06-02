@@ -15,14 +15,15 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 	"github.com/TuSKan/ggplot/scale"
 )
 
 func main() {
 	ctx := context.Background()
 	eng := memory.NewEngine(ctx)
-	_, file, _, _ := runtime.Caller(0)
-	dir := filepath.Dir(file)
+	_, srcFile, _, _ := runtime.Caller(0)
+	dir := filepath.Dir(srcFile)
 
 	// Temperature data (°C).
 	n := 24 //nolint:mnd // 24 hours.
@@ -43,7 +44,7 @@ func main() {
 	}
 
 	// 1. Celsius primary + Fahrenheit secondary.
-	err = ggplot.New(ds, aes.X("hour"), aes.Y("temp_c")).
+	p1 := ggplot.New(ds, aes.X("hour"), aes.Y("temp_c")).
 		Layer(geom.Line(geom.WithColor("steelblue"), geom.WithLineWidth(2))). //nolint:mnd // Line styling.
 		Layer(geom.Point(geom.WithColor("steelblue"))).
 		Labs(
@@ -56,16 +57,16 @@ func main() {
 			func(f float64) float64 { return (f - 32) * 5 / 9 }, //nolint:mnd // °F → °C.
 			"Temperature (°F)",
 		)).
-		Theme("default").
-		Save(ctx, filepath.Join(dir, "01_secondary_axis_temp.png"), 800, 500) //nolint:mnd // example output.
-	if err != nil {
+		Theme("default")
+
+	if err := file.Save(ctx, p1, filepath.Join(dir, "01_secondary_axis_temp.png"), 800, 500); err != nil { //nolint:mnd // example output.
 		panic(err)
 	}
 
 	log.Println("01_secondary_axis_temp.png")
 
 	// 2. DupAxis — mirror the same axis on the right.
-	err = ggplot.New(ds, aes.X("hour"), aes.Y("temp_c")).
+	p2 := ggplot.New(ds, aes.X("hour"), aes.Y("temp_c")).
 		Layer(geom.Line(geom.WithColor("coral"), geom.WithLineWidth(2))). //nolint:mnd // Line styling.
 		Labs(
 			ggplot.Title("Temperature — Duplicated Axis"),
@@ -73,9 +74,9 @@ func main() {
 			ggplot.YLab("Temperature (°C)"),
 		).
 		SecondAxis(scale.DupAxis("Temperature (°C)")).
-		Theme("dark").
-		Save(ctx, filepath.Join(dir, "02_dup_axis.png"), 800, 500) //nolint:mnd // example output.
-	if err != nil {
+		Theme("dark")
+
+	if err := file.Save(ctx, p2, filepath.Join(dir, "02_dup_axis.png"), 800, 500); err != nil { //nolint:mnd // example output.
 		panic(err)
 	}
 

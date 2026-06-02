@@ -1,7 +1,9 @@
 // Package image provides a [output.Surface] that renders a single frame into an
-// in-memory image.Image. Blank-import it to register the "image" surface:
+// in-memory image.Image.
 //
-//	import _ "github.com/TuSKan/ggplot/output/image"
+// The [Render] convenience function builds a [output.Source] and returns the
+// image in one call. For lower-level control, blank-import this package and use
+// [output.NewSurface]("image", ...) + [output.Render].
 package image
 
 import (
@@ -82,5 +84,47 @@ func (s *imageSurface) Close() error {
 }
 
 // Image returns the rendered frame published by the last Commit, or nil if no
-// frame has been committed. The façade [ggplot.Plot.Image] reads it.
+// frame has been committed.
 func (s *imageSurface) Image() stdimage.Image { return s.img }
+
+// ---------------------------------------------------------------------------
+// Public convenience function
+// ---------------------------------------------------------------------------
+
+// Render builds src and renders to an in-memory [stdimage.Image] (always CPU
+// rasterized for deterministic, headless-safe output). If height ≤ 0 and the
+// built figure implements [output.Sizer], it is inferred from width.
+func Render(ctx context.Context, src output.Source, width, height int, opts ...output.SurfaceOpt) (stdimage.Image, error) {
+	fig, err := src.Build(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("image.Render: build: %w", err)
+	}
+
+	if height <= 0 {
+		if sizer, ok := fig.(output.Sizer); ok {
+			_, height = sizer.PreferredSize(width)
+		}
+	}
+
+	if height <= 0 {
+		height = width // fallback: square
+	}
+
+	sopts := append([]output.SurfaceOpt{
+		output.WithSize(width, height),
+	}, opts...)
+
+	surf, err := newImageSurface(ctx, output.BuildOptions(sopts...))
+	if err != nil {
+		return nil, fmt.Errorf("image.Render: %w", err)
+	}
+	defer func() { _ = surf.Close() }()
+
+	if err := output.Render(ctx, fig, surf); err != nil {
+		return nil, fmt.Errorf("image.Render: %w", err)
+	}
+
+	is := surf.(*imageSurface) //nolint:forcetypeassert,errcheck // we just created it above.
+
+	return is.Image(), nil
+}

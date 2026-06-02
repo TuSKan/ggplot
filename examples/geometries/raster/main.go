@@ -18,6 +18,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -63,7 +64,7 @@ func main() {
 		)
 
 	_, filename, _, _ := runtime.Caller(0)
-	if err := p.Save(context.Background(), filepath.Join(filepath.Dir(filename), "raster.png"), 800, 600); err != nil {
+	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "raster.png"), 800, 600); err != nil {
 		log.Fatalln(err)
 	}
 

@@ -19,6 +19,8 @@ import (
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/facet"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
+	oimg "github.com/TuSKan/ggplot/output/image"
 )
 
 // drawPlot is a test helper: Build() then draw onto a fresh RasterCanvas via
@@ -410,7 +412,7 @@ func TestPlot_Save_PNG(t *testing.T) {
 		Labs(ggplot.Title("Test Plot"))
 
 	outPath := filepath.Join(t.TempDir(), "test.png")
-	if err := p.Save(context.Background(), outPath, 400, 300); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 400, 300); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 
@@ -440,7 +442,7 @@ func TestPlot_Save_Histogram(t *testing.T) {
 		Layer(geom.Histogram(geom.WithBins(20))).
 		Labs(ggplot.Title("Histogram Test"))
 
-	if err := p.Save(context.Background(), outPath, 800, 600); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 800, 600); err != nil {
 		t.Fatalf("Histogram Save failed: %v", err)
 	}
 
@@ -495,7 +497,7 @@ func TestPlot_Save_AllGeomTypes(t *testing.T) {
 			}
 
 			outPath := filepath.Join(t.TempDir(), tc.name+".png")
-			if err := p.Save(context.Background(), outPath, 400, 300); err != nil {
+			if err := file.Save(context.Background(), p, outPath, 400, 300); err != nil {
 				t.Fatalf("Save %s failed: %v", tc.name, err)
 			}
 
@@ -951,7 +953,7 @@ func TestSave_ColorMapping(t *testing.T) {
 	dir := t.TempDir()
 
 	path := filepath.Join(dir, "color_mapping.png")
-	if err := p.Save(context.Background(), path, 600, 400); err != nil {
+	if err := file.Save(context.Background(), p, path, 600, 400); err != nil {
 		t.Fatalf("Save color mapping failed: %v", err)
 	}
 
@@ -974,7 +976,7 @@ func TestSave_XLimYLim(t *testing.T) {
 	dir := t.TempDir()
 
 	path := filepath.Join(dir, "xlim_ylim.png")
-	if err := p.Save(context.Background(), path, 600, 400); err != nil {
+	if err := file.Save(context.Background(), p, path, 600, 400); err != nil {
 		t.Fatalf("Save XLim/YLim failed: %v", err)
 	}
 
@@ -995,7 +997,7 @@ func TestSave_StepWithLegend(t *testing.T) {
 	dir := t.TempDir()
 
 	path := filepath.Join(dir, "step.png")
-	if err := p.Save(context.Background(), path, 600, 400); err != nil {
+	if err := file.Save(context.Background(), p, path, 600, 400); err != nil {
 		t.Fatalf("Save step failed: %v", err)
 	}
 
@@ -1244,7 +1246,7 @@ func TestSave_SVG(t *testing.T) { //nolint:dupl // type-specialized code path.
 		Layer(geom.Line())
 
 	outPath := filepath.Join(t.TempDir(), "test_output.svg")
-	if err := p.Save(context.Background(), outPath, 400, 300); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 400, 300); err != nil {
 		t.Fatalf("SVG Save failed: %v", err)
 	}
 
@@ -1279,7 +1281,7 @@ func TestSave_PDF(t *testing.T) { //nolint:dupl // type-specialized code path.
 		Layer(geom.Line())
 
 	outPath := filepath.Join(t.TempDir(), "test_output.pdf")
-	if err := p.Save(context.Background(), outPath, 400, 300); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 400, 300); err != nil {
 		t.Fatalf("PDF Save failed: %v", err)
 	}
 
@@ -1302,7 +1304,7 @@ func TestSave_PDF(t *testing.T) { //nolint:dupl // type-specialized code path.
 	}
 }
 
-func TestWriteTo_SVG(t *testing.T) { //nolint:dupl // type-specialized code path.
+func TestEncode_SVG(t *testing.T) { //nolint:dupl // type-specialized code path.
 	t.Parallel()
 
 	ds, _ := dataset.NewDataset(
@@ -1315,21 +1317,21 @@ func TestWriteTo_SVG(t *testing.T) { //nolint:dupl // type-specialized code path
 
 	var buf bytes.Buffer
 
-	n, err := p.WriteTo(context.Background(), &buf, "svg", 300, 200)
+	n, err := file.Encode(context.Background(), p, &buf, "svg", 300, 200)
 	if err != nil {
-		t.Fatalf("WriteTo SVG failed: %v", err)
+		t.Fatalf("Encode SVG failed: %v", err)
 	}
 
 	if n == 0 {
-		t.Error("WriteTo SVG wrote 0 bytes")
+		t.Error("Encode SVG wrote 0 bytes")
 	}
 
 	if !strings.Contains(buf.String(), "<svg") {
-		t.Error("WriteTo SVG output missing <svg> element")
+		t.Error("Encode SVG output missing <svg> element")
 	}
 }
 
-func TestWriteTo_PDF(t *testing.T) { //nolint:dupl // type-specialized code path.
+func TestEncode_PDF(t *testing.T) { //nolint:dupl // type-specialized code path.
 	t.Parallel()
 
 	ds, _ := dataset.NewDataset(
@@ -1342,17 +1344,17 @@ func TestWriteTo_PDF(t *testing.T) { //nolint:dupl // type-specialized code path
 
 	var buf bytes.Buffer
 
-	n, err := p.WriteTo(context.Background(), &buf, "pdf", 300, 200)
+	n, err := file.Encode(context.Background(), p, &buf, "pdf", 300, 200)
 	if err != nil {
-		t.Fatalf("WriteTo PDF failed: %v", err)
+		t.Fatalf("Encode PDF failed: %v", err)
 	}
 
 	if n == 0 {
-		t.Error("WriteTo PDF wrote 0 bytes")
+		t.Error("Encode PDF wrote 0 bytes")
 	}
 
 	if !strings.HasPrefix(buf.String(), "%PDF-") {
-		t.Error("WriteTo PDF output missing %PDF- header")
+		t.Error("Encode PDF output missing %PDF- header")
 	}
 }
 
@@ -1490,7 +1492,7 @@ func TestAxisLabelRows_RotatedLabels_Save(t *testing.T) {
 		Labs(ggplot.Title("Rotated Labels Test"))
 
 	outPath := filepath.Join(t.TempDir(), "rotated.png")
-	if err := p.Save(context.Background(), outPath, 400, 300); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 400, 300); err != nil {
 		t.Fatalf("Save with rotated labels failed: %v", err)
 	}
 
@@ -1643,7 +1645,7 @@ func TestRender_Raster_Save_PNG(t *testing.T) {
 		Labs(ggplot.Title("Raster Save Test"))
 
 	outPath := filepath.Join(t.TempDir(), "raster.png")
-	if err := p.Save(context.Background(), outPath, 400, 400); err != nil {
+	if err := file.Save(context.Background(), p, outPath, 400, 400); err != nil {
 		t.Fatalf("Raster Save failed: %v", err)
 	}
 
@@ -1710,8 +1712,8 @@ func TestRender_JitterPoint_Deterministic(t *testing.T) {
 
 	var buf1, buf2 bytes.Buffer
 
-	_, err1 := p1.WriteTo(context.Background(), &buf1, "png", 200, 200)
-	_, err2 := p2.WriteTo(context.Background(), &buf2, "png", 200, 200)
+	_, err1 := file.Encode(context.Background(), p1, &buf1, "png", 200, 200)
+	_, err2 := file.Encode(context.Background(), p2, &buf2, "png", 200, 200)
 
 	if err1 != nil || err2 != nil {
 		t.Fatalf("render failed: %v / %v", err1, err2)
@@ -1740,7 +1742,7 @@ func TestAnnotation_Text(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	_, err := file.Encode(context.Background(), p, &buf, "png", 200, 200)
 	if err != nil {
 		t.Fatalf("render with text annotation failed: %v", err)
 	}
@@ -1764,7 +1766,7 @@ func TestAnnotation_Rect(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	_, err := file.Encode(context.Background(), p, &buf, "png", 200, 200)
 	if err != nil {
 		t.Fatalf("render with rect annotation failed: %v", err)
 	}
@@ -1788,7 +1790,7 @@ func TestAnnotation_Segment(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	_, err := file.Encode(context.Background(), p, &buf, "png", 200, 200)
 	if err != nil {
 		t.Fatalf("render with segment annotation failed: %v", err)
 	}
@@ -1812,7 +1814,7 @@ func TestAnnotation_Arrow(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	_, err := file.Encode(context.Background(), p, &buf, "png", 200, 200)
 	if err != nil {
 		t.Fatalf("render with arrow annotation failed: %v", err)
 	}
@@ -1837,7 +1839,7 @@ func TestAnnotation_Label(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	_, err := file.Encode(context.Background(), p, &buf, "png", 200, 200)
 	if err != nil {
 		t.Fatalf("render with label annotation failed: %v", err)
 	}
@@ -1864,7 +1866,7 @@ func TestAnnotation_Combined(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	_, err := p.WriteTo(context.Background(), &buf, "png", 200, 200)
+	_, err := file.Encode(context.Background(), p, &buf, "png", 200, 200)
 	if err != nil {
 		t.Fatalf("render with combined annotations failed: %v", err)
 	}
@@ -1886,7 +1888,7 @@ func TestAnnotation_Save_PNG(t *testing.T) {
 		Annotate(ggplot.AnnotateArrow(1, 1, 3, 6))
 
 	out := filepath.Join(t.TempDir(), "annotated.png")
-	if err := p.Save(context.Background(), out, 400, 300); err != nil {
+	if err := file.Save(context.Background(), p, out, 400, 300); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 
@@ -1979,7 +1981,7 @@ func TestCoordCartesianZoom_Save_PNG(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "zoom.png")
 
-	if err := p.Save(context.Background(), out, 400, 300); err != nil { //nolint:mnd // Test canvas.
+	if err := file.Save(context.Background(), p, out, 400, 300); err != nil { //nolint:mnd // Test canvas.
 		t.Fatalf("Save: %v", err)
 	}
 
@@ -2047,7 +2049,7 @@ func TestCoordFixed_Save_PNG(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "fixed.png")
 
-	if err := p.Save(context.Background(), out, 600, 300); err != nil { //nolint:mnd // Wide canvas.
+	if err := file.Save(context.Background(), p, out, 600, 300); err != nil { //nolint:mnd // Wide canvas.
 		t.Fatalf("Save: %v", err)
 	}
 
@@ -2097,7 +2099,7 @@ func TestCoordFixed_CustomRatio(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "ratio2.png")
 
-	if err := p.Save(context.Background(), out, 600, 600); err != nil { //nolint:mnd // Square canvas.
+	if err := file.Save(context.Background(), p, out, 600, 600); err != nil { //nolint:mnd // Square canvas.
 		t.Fatalf("Save: %v", err)
 	}
 
@@ -2165,19 +2167,20 @@ func TestCoordCartesianZoom_CoordInterface(t *testing.T) {
 	}
 }
 
-// --- Output façades (Image / Encode over the output layer) ---
+// --- Output facades (oimg.Render / file.Encode over the output layer) ---
 
-func TestPlotImage(t *testing.T) {
+func TestOutputImage(t *testing.T) {
 	t.Parallel()
 
 	eng := memory.NewEngine(context.Background())
 	ds := testLineDataset(eng)
 
-	img, err := ggplot.New(ds, aes.X("x"), aes.Y("y")).
-		Layer(geom.Point()).
-		Image(context.Background(), 200, 150)
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point())
+
+	img, err := oimg.Render(context.Background(), p, 200, 150)
 	if err != nil {
-		t.Fatalf("Image: %v", err)
+		t.Fatalf("oimg.Render: %v", err)
 	}
 
 	if img == nil {
@@ -2189,18 +2192,19 @@ func TestPlotImage(t *testing.T) {
 	}
 }
 
-func TestPlotImageAutoHeight(t *testing.T) {
+func TestOutputImageAutoHeight(t *testing.T) {
 	t.Parallel()
 
 	eng := memory.NewEngine(context.Background())
 	ds := testLineDataset(eng)
 
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point())
+
 	// height <= 0 -> inferred from width via the figure's Sizer.
-	img, err := ggplot.New(ds, aes.X("x"), aes.Y("y")).
-		Layer(geom.Point()).
-		Image(context.Background(), 300, 0)
+	img, err := oimg.Render(context.Background(), p, 300, 0)
 	if err != nil {
-		t.Fatalf("Image: %v", err)
+		t.Fatalf("oimg.Render: %v", err)
 	}
 
 	if b := img.Bounds(); b.Dx() != 300 || b.Dy() <= 0 || b.Dy() >= 300 {
@@ -2208,19 +2212,20 @@ func TestPlotImageAutoHeight(t *testing.T) {
 	}
 }
 
-func TestPlotEncodePNG(t *testing.T) {
+func TestOutputEncodePNG(t *testing.T) {
 	t.Parallel()
 
 	eng := memory.NewEngine(context.Background())
 	ds := testLineDataset(eng)
 
+	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
+		Layer(geom.Point())
+
 	var buf bytes.Buffer
 
-	n, err := ggplot.New(ds, aes.X("x"), aes.Y("y")).
-		Layer(geom.Point()).
-		Encode(context.Background(), &buf, "png", 200, 150)
+	n, err := file.Encode(context.Background(), p, &buf, "png", 200, 150)
 	if err != nil {
-		t.Fatalf("Encode: %v", err)
+		t.Fatalf("file.Encode: %v", err)
 	}
 
 	if n == 0 || buf.Len() == 0 {

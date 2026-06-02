@@ -18,6 +18,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 	"github.com/TuSKan/ggplot/theme"
 )
 
@@ -74,7 +75,7 @@ func main() {
 			)
 
 		outPath := filepath.Join(dir, "theme_"+string(name)+".png")
-		if err := p.Save(context.Background(), outPath, 800, 600); err != nil {
+		if err := file.Save(context.Background(), p, outPath, 800, 600); err != nil {
 			log.Fatalf("theme %q: %v", name, err)
 		}
 

@@ -12,6 +12,8 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -32,7 +34,7 @@ func main() {
 		Labs(ggplot.Title("Text Labels"))
 
 	_, filename, _, _ := runtime.Caller(0)
-	if err := p.Save(context.Background(), filepath.Join(filepath.Dir(filename), "text.png"), 800, 600, ggplot.WithCPU()); err != nil {
+	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "text.png"), 800, 600, output.WithCPU(true)); err != nil {
 		log.Fatalln(err)
 	}
 }

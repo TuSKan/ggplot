@@ -12,6 +12,7 @@ import (
 	"github.com/TuSKan/ggplot/dataset"
 	"github.com/TuSKan/ggplot/dataset/memory"
 	"github.com/TuSKan/ggplot/geom"
+	"github.com/TuSKan/ggplot/output/file"
 )
 
 func main() {
@@ -43,11 +44,11 @@ func save(p *ggplot.Plot, dir, name string, w, h int) {
 	outPNG := filepath.Join(dir, name+".png")
 	outSVG := filepath.Join(dir, name+".svg")
 
-	if err := p.Save(context.Background(), outPNG, w, h); err != nil {
+	if err := file.Save(context.Background(), p, outPNG, w, h); err != nil {
 		log.Fatalln(err)
 	}
 
-	if err := p.Save(context.Background(), outSVG, w, h); err != nil {
+	if err := file.Save(context.Background(), p, outSVG, w, h); err != nil {
 		log.Fatalln(err)
 	}
 
