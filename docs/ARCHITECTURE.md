@@ -367,6 +367,14 @@ interface every `Figure` draws through, decoupled from any specific backend:
   output. `RasterFromContext` borrows an externally-owned `gg.Context` — used by the desktop
   window surface for a zero-copy handoff; the borrower must not `Close()` it.
 - **`RecordingCanvas`** — records draw operations for replay into true vector SVG/PDF.
+  Carries a **metadata side-channel** (`pendingMeta` / `metadataMap` / `drawOpCount`) for
+  SVG tooltips, links, and ARIA labels. `SetMetadata(meta)` stores pending metadata;
+  `consumeMetadata()` (called by `Fill`, `Stroke`, `FillPreserve`, `DrawStringAnchored`)
+  records it at the current `drawOpCount` and increments the counter. The SVG backend
+  maintains its own `drawOpCount` via `emitDrawOp()`. **Critical invariant:** every
+  recorder call that produces a draw-op during SVG playback (Fill, Stroke, FillPreserve,
+  DrawString, Clear) must have a matching `consumeMetadata()` in `RecordingCanvas`, or the
+  metadata indices will desync.
 
 `ggplot.WithCPU()` forces the CPU rasterizer. `DrawImage` enables parallel sub-canvas
 compositing. `RasterCanvas` was previously named `GGCanvas` (and its file `gg.go` → `raster.go`).

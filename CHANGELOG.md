@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`canvas.SetMetadata(meta)`**: New Canvas interface method for per-primitive metadata. Backends that don't support metadata (PNG) silently discard it.
 - **`canvas.ExportSVGWithMeta`**: SVG export with metadata side-channel for tooltip/link/ARIA emission.
 
+#### Fixed
+- **SVG metadata applied to wrong elements**: `RecordingCanvas.Clear()` called the recorder's `Clear()` and `Fill()` directly, producing two draw ops during SVG playback without incrementing the metadata draw-op counter. This shifted all subsequent metadata indices by two, causing tooltips and links to land on the wrong SVG elements (e.g. axis labels instead of bars). Fixed by adding `consumeMetadata()` calls to keep the counter synchronized with the SVG backend.
+
 ### Discrete Scales
 
 #### Added
