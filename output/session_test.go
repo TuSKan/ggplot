@@ -469,12 +469,8 @@ func TestSessionExportNilFactory(t *testing.T) {
 func TestSessionAsyncDirtyReplay(t *testing.T) {
 	t.Parallel()
 
-	// Source where only async rebuilds are slow (initial build is fast).
-	src := &failSource{delay: 100 * time.Millisecond}
-	// Override: initial build should be fast. We handle this by making the
-	// failSource delay only apply after the initial build. Already the case:
-	// delay applies to ALL builds, including initial. So we wait for the
-	// initial build to finish before sending events.
+	// Source where all builds are slow.
+	src := &failSource{delay: 50 * time.Millisecond}
 	surf := newFakeLive(80, 60)
 
 	ctrl := output.ControllerFunc(func(ev output.Event, _ *output.State) output.Action {
@@ -493,7 +489,7 @@ func TestSessionAsyncDirtyReplay(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- sess.Run(context.Background()) }()
 
-	// Wait for the initial build (100ms) + render to complete, so Run is
+	// Wait for the initial build (50ms) + render to complete, so Run is
 	// actively reading from the event channel.
 	time.Sleep(200 * time.Millisecond)
 
@@ -501,16 +497,15 @@ func TestSessionAsyncDirtyReplay(t *testing.T) {
 	surf.events <- output.Event{Kind: output.EventKey}
 
 	// Wait past the debounce (10ms) so the build goroutine starts, but well
-	// within the 100ms build time so the build is still in-flight.
-	time.Sleep(50 * time.Millisecond)
+	// within the 50ms build time so the build is still in-flight.
+	time.Sleep(30 * time.Millisecond)
 
 	// Second rebuild while the first build is in-flight → sets dirty flag.
 	surf.events <- output.Event{Kind: output.EventKey}
 
-	// Wait for the timer (10ms debounce) + startBuild (sees building=true, sets
-	// dirty) + first build to finish (remaining ~50ms) + dirty replay timer
-	// (10ms) + replay build (100ms).
-	time.Sleep(400 * time.Millisecond)
+	// Wait for: first build to finish (remaining ~20ms) + dirty replay
+	// debounce (10ms) + replay build (50ms) + margin.
+	time.Sleep(500 * time.Millisecond)
 
 	close(surf.events)
 	waitRun(t, done, nil)

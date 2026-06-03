@@ -19,7 +19,7 @@ layout geometry. `Figure.Draw()` — implemented by `Built.Draw` — renders dat
 chrome onto a `canvas.Canvas`. The **output layer** then carries a `Figure` to a destination
 `Surface`: a file, an in-memory image, a desktop GPU window, or a browser canvas. Build and
 Draw execute **panel-parallel** via `errgroup` for multi-panel faceted plots. The output
-layer is specified in [**OUTPUT-SPEC.md**](OUTPUT-SPEC.md).
+layer is specified in packages `output/file`, `output/image`, `output/window`, and `output/web`.
 
 All data flows through the `dataset.Table` abstraction, which provides a columnar,
 iterator-based interface. Three engine backends implement it: native Go slices
@@ -109,7 +109,7 @@ github.com/TuSKan/ggplot
 │   ├── recording.go     #   RecordingCanvas (records ops; replayed to vector; metadata side-channel)
 │   └── export_*.go      #   SVG (responsive, metadata-aware) / PDF vector backends (replay a Recording)
 │
-├── output/              # Output layer — destinations for a Figure. See docs/OUTPUT-SPEC.md
+├── output/              # Output layer — destinations for a Figure
 │   ├── output.go        #   Figure, Source, Sizer, Surface, LiveSurface, Event, Render
 │   ├── viewport.go      #   PanelInfo, Measurable, Zoomable — data-space viewport interfaces
 │   ├── controller_dataspace.go # DataSpaceController — data-space pan/zoom (default for window)
