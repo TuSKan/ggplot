@@ -78,5 +78,3 @@ require (
 )
 
 replace github.com/gogpu/gg => github.com/TuSKan/gogpugg v0.0.0-20260603040614-f055f29eb01c
-
-replace github.com/gogpu/wgpu => ./_vendor/wgpu
