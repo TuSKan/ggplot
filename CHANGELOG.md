@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Browser WASM Surface (Phase 6 of OUTPUT-SPEC.md)
+
+#### Added
+- **`output/web` package** — new browser surface for presenting ggplot figures in WebAssembly. `web.Mount(ctx, src, "container-id")` creates a `<canvas>` element inside a named container, renders via CPU rasterizer (`canvas.NewRasterCanvasCPU`), and drives an interactive event loop through `output.Session`.
+- **CPU raster mode (default)** — renders to an `image.RGBA` via the CPU rasterizer, then transfers pixels to a Canvas2D context via `putImageData`. Works in all browsers, no WebGPU required.
+- **SVG mode (`web.WithSVG()`)** — renders via `RecordingCanvas` → `ExportSVGWithMeta` → `innerHTML`. Preserves metadata channels: tooltips (`<title>`), clickable links (`<a href>`), and ARIA labels. Resolution-independent vector output.
+- **GPU mode (`web.WithGPU()`)** — WebGPU-accelerated rendering via `gogpu.App` + `ggcanvas`. Delegates the event loop to `gogpu`, renders via `gg.Context` (GPU SDF shapes, MSDF text), and presents zero-copy to the browser's WebGPU surface. Requires Chrome 113+/Edge 113+ or Firefox with WebGPU flag.
+- **Mode selector toolbar** — embedded `index.html` includes radio buttons for Raster (CPU), SVG, and GPU (WebGPU) modes. Switching modes cancels the current mount, clears the DOM container, and re-mounts with the new options. Go reads mode from `window.ggplotRenderMode` and listens for changes via `window.ggplotSetMode` callback.
+- **DOM event integration** — pointer events (down/up/move with capture), wheel/scroll, double-click detection (400ms threshold), and `ResizeObserver` for container resize — all translated to `output.Event` and fed through `output.Session`/`output.Controller`.
+- **Dev server (`web.Serve`)** — embedded `index.html` (via `go:embed`) + HTTP server serving `wasm_exec.js` from GOROOT and a pre-built `.wasm` binary. Native-only build (`//go:build !js`).
+- **Example (`examples/web`)** — interactive scatter plot with clustered data, tooltips, and pan/zoom. Includes a native dev server (`examples/web/serve`). Supports live mode switching between all three render backends.
+
+#### Changed
+- **`gogpu` bumped to v0.41.0** — fixes `SetAppName` interface mismatch on the browser platform (`browserPlatform` now implements `PlatformManager`). This unblocks `gogpu.App` for WASM, enabling the GPU-accelerated rendering path via `wgpu` browser WebGPU backend + `ggcanvas`.
+
+#### Fixed
+- **Surface Close race** — removed `close(events)` from `rasterSurface.Close()` and `svgSurface.Close()`. Session exits via context cancellation, not channel close. Prevents send-on-closed-channel panic during mode switching.
+- **ResizeObserver callback cleanup** — `releaseCallbacks` now guards against zero-value `js.Value` targets (ResizeObserver callbacks lack a DOM target for `removeEventListener`).
+
 ### SVG Output
 
 #### Added

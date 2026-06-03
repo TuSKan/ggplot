@@ -15,7 +15,7 @@
 *.out
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+_vendor/
 
 # Go workspace file
 go.work
@@ -36,6 +36,7 @@ go.work.sum
 *.log
 *.zip
 *.pprof
+*.wasm
 
 !assets/*
 !testdata/golden/**/*.png

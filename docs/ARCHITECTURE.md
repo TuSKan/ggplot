@@ -392,7 +392,12 @@ compositing. `RasterCanvas` was previously named `GGCanvas` (and its file `gg.go
 > (Phase 4); `output/window` (`//go:build !js`) — `window.Show` opening a `gogpu` window with
 > zero-copy `ggcanvas` presentation, reusing the Phase-4 `Controller`/`State`, with a runnable
 > example (`examples/window/`); runtime-verified on a desktop GPU (Phase 5). `Plot.Build` now
-> returns `output.Figure` (concretely `*Built`). Still pending: `output/web` (Phase 6, wasm).
+> returns `output.Figure` (concretely `*Built`). `output/web` (`//go:build js && wasm`) —
+> `web.Mount` presenting figures in the browser via CPU rasterizer + Canvas2D `putImageData`
+> (default) or SVG `innerHTML` (`WithSVG()`). Shares the `Session`/`Controller` event loop.
+> DOM events (pointer, wheel, resize via `ResizeObserver`, double-click) are translated to
+> `output.Event`. Includes embedded HTML host page, dev server (`web.Serve`), and a runnable
+> example (`examples/web/`) (Phase 6).
 > Note `window.Show` drives gogpu's callback loop directly (gogpu owns the run loop) rather than
 > calling `Session.Run`.
 
@@ -404,7 +409,7 @@ destination. One `Surface` abstraction serves four destinations:
 | `FileSurface` | `output/file` | PNG / SVG / PDF on disk |
 | `BufferSurface` | `output/image` | in-memory `image.Image` |
 | `WindowSurface` | `output/window` (`!js`) | desktop GPU window — zero-copy via `gg/integration/ggcanvas` |
-| `CanvasSurface` | `output/web` (`js && wasm`) | browser `<canvas>` over the `wgpu` browser backend |
+| `CanvasSurface` | `output/web` (`js && wasm`) | browser `<canvas>` via CPU raster + `putImageData`, or SVG via `innerHTML` |
 
 `Surface` uses an `Acquire`/`Commit` frame model; `LiveSurface` adds an event stream for the
 interactive (window, web) targets. `output.Render(ctx, fig, surf)` presents one frame — the

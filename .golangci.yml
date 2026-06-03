@@ -74,8 +74,10 @@ linters:
       check-blank: false
 
     gomoddirectives:
+      replace-local: true
       replace-allow-list:
         - github.com/gogpu/gg
+        - github.com/gogpu/wgpu
 
   exclusions:
     rules:

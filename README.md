@@ -305,6 +305,17 @@ sess := output.NewSession(plot, surface,
 _ = sess.Run(ctx) // runs until the surface's events close. See examples/session.
 ```
 
+For browser output, the same `Session` loop is driven by DOM events over WebAssembly. Build with `GOOS=js GOARCH=wasm`:
+
+```go
+import "github.com/TuSKan/ggplot/output/web"
+
+// Mounts into a <div id="plot-container">. CPU rasterizer + Canvas2D putImageData (default).
+// Drag to pan, scroll to zoom — same DataSpaceController as the desktop window.
+// WithSVG() for vector output with native tooltips/links/ARIA from metadata channels.
+_ = web.Mount(ctx, plot, "plot-container")
+```
+
 ---
 
 ## Why `ggplot`?

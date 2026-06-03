@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ggplot</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 24px 16px;
+        }
+
+        /* --- Toolbar --- */
+        #toolbar {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 10px 20px;
+            margin-bottom: 12px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            font-size: 13px;
+            color: #333;
+        }
+        #toolbar .label {
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 11px;
+        }
+        #toolbar .mode-option {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 4px 10px;
+            border-radius: 6px;
+            transition: background 0.15s;
+        }
+        #toolbar .mode-option:hover { background: #f0f2f5; }
+        #toolbar .mode-option.active {
+            background: #e8f0fe;
+            color: #1a73e8;
+            font-weight: 500;
+        }
+        #toolbar .mode-option input[type="radio"] {
+            accent-color: #1a73e8;
+        }
+        #toolbar .mode-option.disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        #toolbar .mode-option.disabled:hover { background: transparent; }
+        #toolbar .badge {
+            font-size: 9px;
+            background: #e8e8e8;
+            color: #888;
+            padding: 1px 5px;
+            border-radius: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        #toolbar .separator {
+            width: 1px;
+            height: 20px;
+            background: #ddd;
+        }
+        #toolbar #status {
+            font-size: 11px;
+            color: #999;
+        }
+        #toolbar #fps {
+            font-size: 11px;
+            font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+            color: #4caf50;
+            min-width: 50px;
+            text-align: right;
+        }
+
+        /* --- Plot --- */
+        #plot-container {
+            width: 900px;
+            max-width: 95vw;
+            aspect-ratio: 4 / 3;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        #plot-container canvas, #plot-container svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <span class="label">Render</span>
+        <label class="mode-option active" id="opt-raster">
+            <input type="radio" name="mode" value="raster" checked>
+            Raster (CPU)
+        </label>
+        <label class="mode-option" id="opt-svg">
+            <input type="radio" name="mode" value="svg">
+            SVG
+        </label>
+        <span class="separator"></span>
+        <label class="mode-option" id="opt-gpu">
+            <input type="radio" name="mode" value="gpu">
+            GPU (WebGPU) <span class="badge">experimental</span>
+        </label>
+        <span class="separator"></span>
+        <span id="fps"></span>
+        <span class="separator"></span>
+        <span id="status">Loading WASM…</span>
+    </div>
+    <div id="plot-container"></div>
+
+    <script src="wasm_exec.js"></script>
+    <script>
+        if (!WebAssembly.instantiateStreaming) {
+            WebAssembly.instantiateStreaming = async (resp, importObject) => {
+                const source = await (await resp).arrayBuffer();
+                return await WebAssembly.instantiate(source, importObject);
+            };
+        }
+
+        // Expose the selected rendering mode to Go via a global.
+        window.ggplotRenderMode = "raster";
+
+        // Listen for radio button changes.
+        document.querySelectorAll('input[name="mode"]').forEach(radio => {
+            radio.addEventListener("change", () => {
+                window.ggplotRenderMode = radio.value;
+
+                // Update active styling.
+                document.querySelectorAll(".mode-option").forEach(el =>
+                    el.classList.remove("active"));
+                radio.closest(".mode-option").classList.add("active");
+
+                // Notify Go via the registered callback (if available).
+                if (window.ggplotSetMode) {
+                    window.ggplotSetMode(radio.value);
+                }
+            });
+        });
+
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject)
+            .then(result => {
+                document.getElementById("status").textContent = "";
+                go.run(result.instance);
+            })
+            .catch(err => {
+                document.getElementById("status").textContent = "Error";
+                document.getElementById("plot-container").textContent =
+                    "Failed to load WASM: " + err.message;
+            });
+    </script>
+</body>
+</html>
