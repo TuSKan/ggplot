@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### SVG Output
+
+#### Added
+- **Responsive SVG**: Root `<svg>` element now includes `style="max-width:100%;height:auto"` for automatic responsive scaling in web pages.
+- **SVG metadata channels**: New `aes.Title`, `aes.Href`, `aes.AriaLabel` aesthetics. In SVG output, `Title` emits `<title>` child elements for hover tooltips, `Href` wraps primitives in `<a href="...">` for clickable links, `AriaLabel` adds `aria-label` attributes for screen readers. PNG and PDF output ignore these aesthetics.
+- **Pipeline-level metadata wiring**: Metadata channels are resolved in `drawLayer()` and automatically flow through `DrawContext.SetRowMetadata(i)` into every geometry drawer — no manual canvas-level calls needed. Per-row geoms (bars, points, tiles, segments, text, errorbar, rug, crossbar, linerange, pointrange, curve, dotplot) emit individual metadata per primitive. Group geoms (line, step, area, polygon, ribbon, violin) emit group-level metadata. Point batching is disabled when metadata is mapped to ensure per-point SVG elements.
+- **`canvas.SetMetadata(meta)`**: New Canvas interface method for per-primitive metadata. Backends that don't support metadata (PNG) silently discard it.
+- **`canvas.ExportSVGWithMeta`**: SVG export with metadata side-channel for tooltip/link/ARIA emission.
+
+### Discrete Scales
+
+#### Added
+- **Band padding API**: `scale.WithPaddingInner(f)` and `scale.WithPaddingOuter(f)` control bar gap and edge spacing on discrete scales. `DiscreteScale.BandWidth()` returns the derived bar width fraction.
+
+## [0.0.10] — 2026-06-02
+
 ### Data-Space Interactive Pan/Zoom
 
 #### Added

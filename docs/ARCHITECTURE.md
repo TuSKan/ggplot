@@ -37,13 +37,15 @@ github.com/TuSKan/ggplot
 │
 ├── ggplot.go            # Plot builder API, Build/Draw pipeline orchestrator
 ├── errors.go            # Typed error envelope: *Error{Phase, Layer, Stage, Cause}
-├── drawer.go            # Geometry drawing: drawPoint, drawLine, drawBar, drawBoxplot, drawRaster, drawAnnotation*, …
+├── drawer.go            # Geometry drawing: DrawContext (canvas, data, aesthetics, metadata),
+│                        #   SetRowMetadata(i), drawPoint, drawLine, drawBar, drawBoxplot, drawRaster, drawAnnotation*, …
 ├── annotate.go          # Annotation API: AnnotateText, AnnotateRect, AnnotateSegment, AnnotateArrow, AnnotateLabel
 ├── spec.go              # PlotSpec, Labels, AxisGuide, RenderOpt, WithCPU()
 ├── util.go              # Shared helpers (normalize, resolveColor, …)
 │
 ├── aes/                 # Aesthetic mapping constructors: X(), Y(), Color(), Fill(), Size(),
-│                        #   Label(), XEnd(), YEnd(), YMin(), YMax(), Group(), …
+│                        #   Label(), XEnd(), YEnd(), YMin(), YMax(), Group(),
+│                        #   Title(), Href(), AriaLabel() — SVG metadata channels, …
 ├── geom/                # Geometry layer definitions, options, position adjustments
 │   ├── geom.go          #   Point, Line, Step, Bar, Col, Histogram, Area, Density, Rug,
 │   │                    #   HLine, VLine, Text, BoxPlot, Smooth, Tile, Segment, ErrorBar,
@@ -102,10 +104,10 @@ github.com/TuSKan/ggplot
 │                        #   discrete/continuous/manual/cyclic scales
 │
 ├── canvas/              # Drawing seam — the path-level Canvas API and its backends
-│   ├── canvas.go        #   Canvas interface: MoveTo, LineTo, Stroke, Fill, DrawImage, …
-│   ├── raster.go        #   RasterCanvas (gg-backed; GPU or CPU rasterizer)   [was gg.go]
-│   ├── recording.go     #   RecordingCanvas (records ops; replayed to vector)
-│   └── export_*.go      #   SVG / PDF vector backends (replay a Recording)
+│   ├── canvas.go        #   Canvas interface: MoveTo, LineTo, Stroke, Fill, DrawImage, SetMetadata, …
+│   ├── raster.go        #   RasterCanvas (gg-backed; GPU or CPU rasterizer)
+│   ├── recording.go     #   RecordingCanvas (records ops; replayed to vector; metadata side-channel)
+│   └── export_*.go      #   SVG (responsive, metadata-aware) / PDF vector backends (replay a Recording)
 │
 ├── output/              # Output layer — destinations for a Figure. See docs/OUTPUT-SPEC.md
 │   ├── output.go        #   Figure, Source, Sizer, Surface, LiveSurface, Event, Render

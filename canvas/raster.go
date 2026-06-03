@@ -358,5 +358,8 @@ func (c *RasterCanvas) Close() error {
 	return errors.Join(err)
 }
 
+// SetMetadata is a no-op for raster output — PNG has no metadata output path.
+func (c *RasterCanvas) SetMetadata(_ map[string]string) {}
+
 // Compile-time check.
 var _ Canvas = (*RasterCanvas)(nil)

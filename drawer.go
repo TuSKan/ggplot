@@ -47,6 +47,54 @@ type DrawContext struct {
 	ShapeScale    scale.Scale
 	LinetypeCol   string
 	LinetypeScale scale.Scale
+
+	// Metadata channels (SVG tooltips, links, ARIA labels).
+	// Pre-resolved string slices — nil when the channel is unmapped.
+	titleVals     []string
+	hrefVals      []string
+	ariaLabelVals []string
+}
+
+// SetRowMetadata sets per-primitive SVG metadata (title, href, aria-label)
+// for data row i. Call this before each canvas Fill/Stroke that corresponds
+// to a data row. When no metadata channels are mapped, this is a no-op.
+func (dc *DrawContext) SetRowMetadata(i int) {
+	if dc.titleVals == nil && dc.hrefVals == nil && dc.ariaLabelVals == nil {
+		return
+	}
+
+	meta := make(map[string]string, 3) //nolint:mnd // At most 3 metadata keys.
+
+	if i < len(dc.titleVals) && dc.titleVals[i] != "" {
+		meta["title"] = dc.titleVals[i]
+	}
+
+	if i < len(dc.hrefVals) && dc.hrefVals[i] != "" {
+		meta["href"] = dc.hrefVals[i]
+	}
+
+	if i < len(dc.ariaLabelVals) && dc.ariaLabelVals[i] != "" {
+		meta["aria_label"] = dc.ariaLabelVals[i]
+	}
+
+	if len(meta) > 0 {
+		dc.Canvas.SetMetadata(meta)
+	}
+}
+
+// HasMetadata reports whether any metadata channels are mapped.
+func (dc *DrawContext) HasMetadata() bool {
+	return dc.titleVals != nil || dc.hrefVals != nil || dc.ariaLabelVals != nil
+}
+
+// rowMetaFn returns a callback for inner draw functions that don't receive
+// DrawContext. Returns nil when no metadata channels are mapped (zero cost).
+func (dc *DrawContext) rowMetaFn() func(int) {
+	if !dc.HasMetadata() {
+		return nil
+	}
+
+	return dc.SetRowMetadata
 }
 
 // Drawer renders a geometry type onto the canvas. Implementations are
@@ -124,7 +172,7 @@ func drawLayer(
 		return // unknown geom type — silently skip (validated at construction)
 	}
 
-	d.Draw(DrawContext{
+	dc := DrawContext{
 		Canvas:        cv,
 		Coord:         c,
 		Data:          rl.Data,
@@ -147,7 +195,30 @@ func drawLayer(
 		ShapeScale:    rl.ShapeScale,
 		LinetypeCol:   rl.LinetypeCol,
 		LinetypeScale: rl.LinetypeScale,
-	})
+	}
+
+	// Resolve metadata channels: title, href, aria_label.
+	// These are passthrough aesthetics — not trained on scales, just string
+	// columns carried through the pipeline for SVG metadata emission.
+	if col, ok := rl.Mapping["title"]; ok && col != "" {
+		if c, err := rl.Data.Column(col); err == nil {
+			dc.titleVals = columnAsStrings(c)
+		}
+	}
+
+	if col, ok := rl.Mapping["href"]; ok && col != "" {
+		if c, err := rl.Data.Column(col); err == nil {
+			dc.hrefVals = columnAsStrings(c)
+		}
+	}
+
+	if col, ok := rl.Mapping["aria_label"]; ok && col != "" {
+		if c, err := rl.Data.Column(col); err == nil {
+			dc.ariaLabelVals = columnAsStrings(c)
+		}
+	}
+
+	d.Draw(dc)
 }
 
 // --- Drawer adapters: bridge DrawContext to existing draw functions ---
@@ -161,35 +232,41 @@ func drawLineFn(dc DrawContext) {
 }
 
 func drawStepFn(dc DrawContext) {
+	// Step line is a single polyline per group — set group-level metadata.
+	dc.SetRowMetadata(0)
+
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
 	drawStep(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
 }
 
 func drawBarsFn(dc DrawContext) {
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
-	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, 0)
+	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, 0, dc.rowMetaFn())
 }
 
 func drawHistogramFn(dc DrawContext) {
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
 	// Half-pixel inset per side → 1px total gap between adjacent bins,
 	// matching Observable Plot's continuous-bar default.
-	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, 0.5)
+	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, 0.5, dc.rowMetaFn())
 }
 
 func drawRectFn(dc DrawContext) {
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
-	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, dc.Params.Inset)
+	drawBars(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, dc.Params.Inset, dc.rowMetaFn())
 }
 
 func drawAreaFn(dc DrawContext) {
+	// Area is a single filled polygon per group — set group-level metadata.
+	dc.SetRowMetadata(0)
+
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
 	drawArea(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
 }
 
 func drawRugFn(dc DrawContext) {
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
-	drawRug(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+	drawRug(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.rowMetaFn())
 }
 
 func drawHLineFn(dc DrawContext) {
@@ -206,11 +283,11 @@ func drawABLineFn(dc DrawContext) {
 
 func drawTextFn(dc DrawContext) {
 	xCol, yCol := dc.Mapping["x"], dc.Mapping["y"]
-	drawText(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.Mapping, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params)
+	drawText(dc.Canvas, dc.Coord, dc.Data, xCol, yCol, dc.Mapping, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.rowMetaFn())
 }
 
 func drawBoxplotFn(dc DrawContext) {
-	drawBoxplot(dc.Canvas, dc.Coord, dc.Data, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme)
+	drawBoxplot(dc.Canvas, dc.Coord, dc.Data, dc.W, dc.H, dc.XMin, dc.XMax, dc.YMin, dc.YMax, dc.Params, dc.Theme, dc.rowMetaFn())
 }
 
 func columnAsStrings(col dataset.AnyColumn) []string {
@@ -375,6 +452,8 @@ func drawPoints(dc DrawContext) { //nolint:gocognit // Rendering pipeline with d
 		batchN = 0
 	}
 
+	hasMeta := dc.HasMetadata()
+
 	for i := range n {
 		nx := normalize(xVals[i], dc.XMin, dc.XMax)
 		ny := normalize(yVals[i], dc.YMin, dc.YMax)
@@ -392,8 +471,9 @@ func drawPoints(dc DrawContext) { //nolint:gocognit // Rendering pipeline with d
 		}
 
 		// Screen-space decimation: skip points that map to an
-		// already-occupied grid cell.
-		if pixelOccupied != nil {
+		// already-occupied grid cell. Disabled when metadata is
+		// present — every data row needs its own SVG primitive.
+		if pixelOccupied != nil && !hasMeta {
 			ix := int(px) / binSize
 			iy := int(py) / binSize
 
@@ -437,9 +517,14 @@ func drawPoints(dc DrawContext) { //nolint:gocognit // Rendering pipeline with d
 
 		isStroke := canvas.IsStrokeShape(shapeName)
 
-		// Flush batch when color, alpha, shape, or stroke/fill changes.
-		if batchN > 0 && (ptR != batchR || ptG != batchG || ptB != batchB ||
+		// When metadata is present, each point must be its own fill/stroke
+		// so it gets individual SVG metadata. Flush before every point.
+		if hasMeta {
+			flushBatch()
+			dc.SetRowMetadata(i)
+		} else if batchN > 0 && (ptR != batchR || ptG != batchG || ptB != batchB ||
 			ptAlpha != batchA || shapeName != batchShape || isStroke != batchStroke) {
+			// Flush batch when color, alpha, shape, or stroke/fill changes.
 			flushBatch()
 		}
 
@@ -480,6 +565,9 @@ func drawLine(dc DrawContext) { //nolint:gocognit // Rendering pipeline with min
 	if alpha <= 0 {
 		alpha = 1.0
 	}
+
+	// Line is a single polyline per group — set group-level metadata.
+	dc.SetRowMetadata(0)
 
 	// Collect all points.
 	type linePt struct{ x, y float64 }
@@ -652,7 +740,7 @@ func drawLine(dc DrawContext) { //nolint:gocognit // Rendering pipeline with min
 	}
 }
 
-func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, th theme.Theme, barInsetPx float64) {
+func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, th theme.Theme, barInsetPx float64, metaFn func(int)) { //nolint:gocognit // Bar rendering pipeline with orientation, stacking, inset, and per-bar metadata — splitting reduces clarity.
 	// Collect all points first so we can compute spacing.
 	type barPt struct{ x, y, ymin float64 }
 
@@ -746,7 +834,7 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 
 	fr, fg, fb := colormap.ParseRGB(p.Fill, 0.2, 0.4, 0.8)
 
-	for _, pt := range pts {
+	for i, pt := range pts {
 		nx := normalize(pt.x, xMin, xMax)
 		ny := normalize(pt.y, yMin, yMax)
 		baseNy := normalize(pt.ymin, yMin, yMax)
@@ -790,6 +878,10 @@ func drawBars(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 			if rh < 0.5 { //nolint:mnd // Never collapse a bar to less than half a pixel.
 				rh = 0.5
 			}
+		}
+
+		if metaFn != nil {
+			metaFn(i)
 		}
 
 		cv.SetRGBA(fr, fg, fb, alpha)
@@ -926,7 +1018,7 @@ func drawStep(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 	cv.Stroke()
 }
 
-func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
+func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, metaFn func(int)) {
 	lw := p.LineWidth
 	if lw <= 0 {
 		lw = 0.5
@@ -949,7 +1041,7 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 
 		prevIX := -1
 
-		for _, x := range xVals {
+		for i, x := range xVals {
 			nx := normalize(x, xMin, xMax)
 			px1, py1 := orientedTransform(c, nx, 0, w, h, p.Orientation)
 
@@ -970,10 +1062,18 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 				tickH = -tickH
 			}
 
-			cv.DrawRectangle(px1-lw/2, py1, lw, tickH) //nolint:mnd // Center the rectangle on the tick position.
+			if metaFn != nil {
+				metaFn(i)
+				cv.DrawRectangle(px1-lw/2, py1, lw, tickH) //nolint:mnd // Center the rectangle on the tick position.
+				cv.Fill()
+			} else {
+				cv.DrawRectangle(px1-lw/2, py1, lw, tickH) //nolint:mnd // Center the rectangle on the tick position.
+			}
 		}
 
-		cv.Fill()
+		if metaFn == nil {
+			cv.Fill()
+		}
 	}
 
 	// Y rugs: tick marks along the left edge of the panel.
@@ -982,7 +1082,7 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 
 		prevIY := -1
 
-		for _, y := range yVals {
+		for i, y := range yVals {
 			ny := normalize(y, yMin, yMax)
 			px1, py1 := orientedTransform(c, 0, ny, w, h, p.Orientation)
 
@@ -1003,10 +1103,18 @@ func drawRug(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol str
 				tickW = -tickW
 			}
 
-			cv.DrawRectangle(px1, py1-lw/2, tickW, lw) //nolint:mnd // Center the rectangle on the tick position.
+			if metaFn != nil {
+				metaFn(i)
+				cv.DrawRectangle(px1, py1-lw/2, tickW, lw) //nolint:mnd // Center the rectangle on the tick position.
+				cv.Fill()
+			} else {
+				cv.DrawRectangle(px1, py1-lw/2, tickW, lw) //nolint:mnd // Center the rectangle on the tick position.
+			}
 		}
 
-		cv.Fill()
+		if metaFn == nil {
+			cv.Fill()
+		}
 	}
 }
 
@@ -1149,7 +1257,7 @@ func drawABLine(cv canvas.Canvas, c coord.Coord, w, h, xMin, xMax, yMin, yMax fl
 	cv.Stroke()
 }
 
-func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, mapping AesMap, w, h, xMin, xMax, yMin, yMax float64, p geom.Params) {
+func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol string, mapping AesMap, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, metaFn func(int)) {
 	xVals, errX := ds.Float64(xCol)
 
 	yVals, errY := ds.Float64(yCol)
@@ -1200,12 +1308,16 @@ func drawText(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, xCol, yCol st
 			lbl = fmt.Sprintf("%.4g", yVals[i])
 		}
 
+		if metaFn != nil {
+			metaFn(i)
+		}
+
 		cv.SetRGBA(cr, cg, cb, alpha)
 		cv.DrawStringAnchored(lbl, px, py-fontSize-4, 0.5, 1.0)
 	}
 }
 
-func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, _ theme.Theme) {
+func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin, xMax, yMin, yMax float64, p geom.Params, _ theme.Theme, metaFn func(int)) {
 	// Read stat_boxplot output columns.
 	xVals, errX := ds.Float64("x")
 	lowerVals, errL := ds.Float64("lower")
@@ -1272,6 +1384,10 @@ func drawBoxplot(cv canvas.Canvas, c coord.Coord, ds dataset.Dataset, w, h, xMin
 		// Use orientedTransform for all pixel positions.
 		// For vertical: cx = category center (x-axis), py* = value positions (y-axis)
 		// For horizontal: cx = category center (y-axis), px* = value positions (x-axis)
+		if metaFn != nil {
+			metaFn(i)
+		}
+
 		if p.Orientation == geom.Horizontal {
 			// Horizontal boxplot: category on Y axis, values on X axis.
 			_, cy := orientedTransform(c, nx, 0.5, w, h, p.Orientation)
@@ -1460,6 +1576,8 @@ func drawTileFn(dc DrawContext) {
 			dc.Canvas.SetRGBA(fr, fg, fb, alpha)
 		}
 
+		dc.SetRowMetadata(i)
+
 		dc.Canvas.DrawRectangle(rx, ry, rw, rh)
 		dc.Canvas.Fill()
 	}
@@ -1544,6 +1662,8 @@ func drawSegmentFn(dc DrawContext) {
 		px0, py0 := dc.Coord.Transform(nx0, ny0, dc.W, dc.H)
 		px1, py1 := dc.Coord.Transform(nx1, ny1, dc.W, dc.H)
 
+		dc.SetRowMetadata(i)
+
 		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
 		dc.Canvas.MoveTo(px0, py0)
 		dc.Canvas.LineTo(px1, py1)
@@ -1607,6 +1727,8 @@ func drawErrorBarFn(dc DrawContext) {
 		px, pyLo := dc.Coord.Transform(nx, nyLo, dc.W, dc.H)
 		_, pyHi := dc.Coord.Transform(nx, nyHi, dc.W, dc.H)
 
+		dc.SetRowMetadata(i)
+
 		// Vertical stem.
 		dc.Canvas.MoveTo(px, pyLo)
 		dc.Canvas.LineTo(px, pyHi)
@@ -1655,6 +1777,9 @@ func drawPolygonFn(dc DrawContext) {
 	if lw <= 0 {
 		lw = 1
 	}
+
+	// Polygon is a single closed shape per group — set group-level metadata.
+	dc.SetRowMetadata(0)
 
 	// Build closed path.
 	for i := range n {
@@ -1712,6 +1837,9 @@ func drawRibbonFn(dc DrawContext) {
 	}
 
 	fr, fg, fb := colormap.ParseRGB(dc.Params.Fill, 0.2, 0.5, 0.8)
+
+	// Ribbon is a single filled band per group — set group-level metadata.
+	dc.SetRowMetadata(0)
 
 	// Forward pass: trace the upper edge (ymax).
 	nx0 := normalize(xVals[0], dc.XMin, dc.XMax)
@@ -1822,6 +1950,8 @@ func drawCrossbarFn(dc DrawContext) {
 		_, pyHi := dc.Coord.Transform(nx, nyHi, dc.W, dc.H)
 		_, pyMid := dc.Coord.Transform(nx, nyMid, dc.W, dc.H)
 
+		dc.SetRowMetadata(i)
+
 		// Filled rectangle from ymin to ymax.
 		dc.Canvas.SetRGBA(fr, fg, fb, alpha)
 		dc.Canvas.DrawRectangle(px-halfPx, pyHi, halfPx*2, pyLo-pyHi) //nolint:mnd // Full width = 2 * half.
@@ -1886,6 +2016,8 @@ func drawLinerangeFn(dc DrawContext) {
 		px, pyLo := dc.Coord.Transform(nx, nyLo, dc.W, dc.H)
 		_, pyHi := dc.Coord.Transform(nx, nyHi, dc.W, dc.H)
 
+		dc.SetRowMetadata(i)
+
 		dc.Canvas.MoveTo(px, pyLo)
 		dc.Canvas.LineTo(px, pyHi)
 		dc.Canvas.Stroke()
@@ -1945,6 +2077,8 @@ func drawPointrangeFn(dc DrawContext) {
 		px, py := dc.Coord.Transform(nx, ny, dc.W, dc.H)
 		_, pyLo := dc.Coord.Transform(nx, nyLo, dc.W, dc.H)
 		_, pyHi := dc.Coord.Transform(nx, nyHi, dc.W, dc.H)
+
+		dc.SetRowMetadata(i)
 
 		// Vertical line from ymin to ymax.
 		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
@@ -2022,6 +2156,8 @@ func drawCurveFn(dc DrawContext) {
 		segLen := math.Sqrt(dx*dx + dy*dy)
 		cx := mx - dy*curvature
 		cy := my + dx/segLen*segLen*curvature
+
+		dc.SetRowMetadata(i)
 
 		dc.Canvas.SetRGBA(cr, cg, cb, alpha)
 		dc.Canvas.MoveTo(px0, py0)
@@ -2103,6 +2239,9 @@ func drawViolinFn(dc DrawContext) {
 
 		// Build polygon: right side (xmax) top-to-bottom, then left side (xmin) bottom-to-top.
 		nR := len(rows)
+
+		// Violin is a single polygon per group — set group-level metadata.
+		dc.SetRowMetadata(0)
 
 		// Right side: walk from first to last.
 		dc.Canvas.SetRGBA(fr, fg, fb, alpha)
@@ -2209,6 +2348,8 @@ func drawDotplotFn(dc DrawContext) {
 		// Center each dot at y + 0.5 so the first dot sits above the baseline.
 		ny := normalize(yVals[i]+0.5, dc.YMin, dc.YMax) //nolint:mnd // 0.5 offset centers dot in its stack slot.
 		px, py := dc.Coord.Transform(nx, ny, dc.W, dc.H)
+
+		dc.SetRowMetadata(i)
 
 		// Fill.
 		dc.Canvas.SetRGBA(fr, fg, fb, alpha)

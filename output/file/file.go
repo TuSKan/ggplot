@@ -121,15 +121,22 @@ func (s *fileSurface) encode(w io.Writer) error {
 			return fmt.Errorf("file: %w: expected RecordingCanvas", output.ErrUnsupportedFormat)
 		}
 
+		recording := rec.FinishRecording()
+		meta := rec.MetadataMap()
+
 		var (
 			n   int64
 			err error
 		)
 
 		if s.format == "svg" {
-			n, err = canvas.ExportSVG(rec.FinishRecording(), w)
+			if len(meta) > 0 {
+				n, err = canvas.ExportSVGWithMeta(recording, meta, w)
+			} else {
+				n, err = canvas.ExportSVG(recording, w)
+			}
 		} else {
-			n, err = canvas.ExportPDF(rec.FinishRecording(), w)
+			n, err = canvas.ExportPDF(recording, w)
 		}
 
 		_ = n

@@ -27,7 +27,7 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 | **Faceting** | Grid (row ~ col, margins, drop), Wrap (NCols, drop), Labellers (Value, Both, Context, custom) |
 | **Data Backends** | Native Memory, Apache Arrow IPC/Parquet, BigQuery SQL pushdown |
 | **Data Types** | Float64, Int64, String, Bool, Timestamp, Date, Time |
-| **Output** | PNG, SVG 1.1, PDF 1.4, HiDPI via `WithScale()`; interactive desktop window (GPU scene graph rendering) + headless `Session` loop |
+| **Output** | PNG, SVG 1.1 (responsive, metadata: tooltips/links/ARIA), PDF 1.4, HiDPI via `WithScale()`; interactive desktop window (GPU scene graph rendering) + headless `Session` loop |
 | **Theming** | 60+ themes — Dashboard, Dark, Classic, Minimal, Observable, Seaborn, Nord, Dracula, and more |
 | **Annotations** | `AnnotateText`, `AnnotateRect`, `AnnotateSegment`, `AnnotateArrow`, `AnnotateLabel` — layer-less fixed-coordinate annotations |
 | **Coordinate Systems** | `CoordCartesian` (viewport zoom), `CoordFixed` (aspect ratio), `CoordFlip`, `Coord(Polar())` |

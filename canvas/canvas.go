@@ -112,6 +112,17 @@ type Canvas interface {
 	// Used for compositing panel sub-canvases during parallel rendering.
 	DrawImage(img image.Image, x, y float64)
 
+	// --- Metadata ---
+
+	// SetMetadata attaches per-primitive metadata to the next drawing call.
+	// Only backends that support metadata (SVG) emit it; others (PNG, PDF)
+	// silently discard it. The metadata is consumed by the next Fill, Stroke,
+	// or DrawStringAnchored call, then cleared.
+	//
+	// Supported keys: "title" (<title> tooltip), "href" (hyperlink),
+	// "aria_label" (ARIA accessibility label).
+	SetMetadata(meta map[string]string)
+
 	// Close releases backend resources (GPU buffers, etc.).
 	// Implementations that hold no resources may return nil.
 	Close() error

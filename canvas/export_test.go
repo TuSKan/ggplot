@@ -171,3 +171,151 @@ func TestExportPDFRotatesText(t *testing.T) {
 		t.Errorf("rotated text must not fall back to Td; PDF stream:\n%s", pdf)
 	}
 }
+
+func TestExportSVGResponsiveStyle(t *testing.T) {
+	t.Parallel()
+
+	cv := canvas.NewRecordingCanvas(400, 300)
+
+	var buf bytes.Buffer
+	if _, err := canvas.ExportSVG(cv.FinishRecording(), &buf); err != nil {
+		t.Fatalf("ExportSVG: %v", err)
+	}
+
+	svg := buf.String()
+	if !strings.Contains(svg, `style="max-width:100%;height:auto"`) {
+		t.Errorf("SVG root must have responsive style; SVG:\n%s", svg)
+	}
+}
+
+func TestExportSVGWithMetaTitle(t *testing.T) {
+	t.Parallel()
+
+	cv := canvas.NewRecordingCanvas(100, 100)
+	cv.SetMetadata(map[string]string{"title": "My Tooltip"})
+	cv.DrawRectangle(10, 10, 30, 30)
+	cv.Fill()
+
+	rec := cv.FinishRecording()
+	meta := cv.MetadataMap()
+
+	var buf bytes.Buffer
+	if _, err := canvas.ExportSVGWithMeta(rec, meta, &buf); err != nil {
+		t.Fatalf("ExportSVGWithMeta: %v", err)
+	}
+
+	svg := buf.String()
+	if !strings.Contains(svg, "<title>My Tooltip</title>") {
+		t.Errorf("SVG must contain <title> tooltip; SVG:\n%s", svg)
+	}
+}
+
+func TestExportSVGWithMetaHref(t *testing.T) {
+	t.Parallel()
+
+	cv := canvas.NewRecordingCanvas(100, 100)
+	cv.SetMetadata(map[string]string{"href": "https://example.com"})
+	cv.DrawRectangle(10, 10, 30, 30)
+	cv.Fill()
+
+	rec := cv.FinishRecording()
+	meta := cv.MetadataMap()
+
+	var buf bytes.Buffer
+	if _, err := canvas.ExportSVGWithMeta(rec, meta, &buf); err != nil {
+		t.Fatalf("ExportSVGWithMeta: %v", err)
+	}
+
+	svg := buf.String()
+	if !strings.Contains(svg, `<a href="https://example.com">`) {
+		t.Errorf("SVG must contain <a href> wrapper; SVG:\n%s", svg)
+	}
+
+	if !strings.Contains(svg, `</a>`) {
+		t.Errorf("SVG must close <a> wrapper; SVG:\n%s", svg)
+	}
+}
+
+func TestExportSVGWithMetaAriaLabel(t *testing.T) {
+	t.Parallel()
+
+	cv := canvas.NewRecordingCanvas(100, 100)
+	cv.SetMetadata(map[string]string{"aria_label": "Data point A"})
+	cv.DrawRectangle(10, 10, 30, 30)
+	cv.Fill()
+
+	rec := cv.FinishRecording()
+	meta := cv.MetadataMap()
+
+	var buf bytes.Buffer
+	if _, err := canvas.ExportSVGWithMeta(rec, meta, &buf); err != nil {
+		t.Fatalf("ExportSVGWithMeta: %v", err)
+	}
+
+	svg := buf.String()
+	if !strings.Contains(svg, `aria-label="Data point A"`) {
+		t.Errorf("SVG must contain aria-label attribute; SVG:\n%s", svg)
+	}
+}
+
+func TestExportSVGWithMetaCombined(t *testing.T) {
+	t.Parallel()
+
+	cv := canvas.NewRecordingCanvas(100, 100)
+	cv.SetMetadata(map[string]string{
+		"title":      "Point 1",
+		"href":       "https://example.com/1",
+		"aria_label": "First data point",
+	})
+	cv.DrawCircle(50, 50, 5)
+	cv.Fill()
+
+	rec := cv.FinishRecording()
+	meta := cv.MetadataMap()
+
+	var buf bytes.Buffer
+	if _, err := canvas.ExportSVGWithMeta(rec, meta, &buf); err != nil {
+		t.Fatalf("ExportSVGWithMeta: %v", err)
+	}
+
+	svg := buf.String()
+	if !strings.Contains(svg, `<title>Point 1</title>`) {
+		t.Errorf("missing title; SVG:\n%s", svg)
+	}
+
+	if !strings.Contains(svg, `<a href="https://example.com/1">`) {
+		t.Errorf("missing href; SVG:\n%s", svg)
+	}
+
+	if !strings.Contains(svg, `aria-label="First data point"`) {
+		t.Errorf("missing aria-label; SVG:\n%s", svg)
+	}
+}
+
+func TestExportSVGNoMetadata(t *testing.T) {
+	t.Parallel()
+
+	// No SetMetadata calls — should produce clean SVG without metadata wrappers.
+	cv := canvas.NewRecordingCanvas(100, 100)
+	cv.DrawRectangle(10, 10, 30, 30)
+	cv.Fill()
+
+	var buf bytes.Buffer
+	if _, err := canvas.ExportSVG(cv.FinishRecording(), &buf); err != nil {
+		t.Fatalf("ExportSVG: %v", err)
+	}
+
+	svg := buf.String()
+
+	if strings.Contains(svg, "<title>") {
+		t.Errorf("SVG without metadata should not contain <title>; SVG:\n%s", svg)
+	}
+
+	if strings.Contains(svg, "<a ") {
+		t.Errorf("SVG without metadata should not contain <a>; SVG:\n%s", svg)
+	}
+
+	if strings.Contains(svg, "aria-label") {
+		t.Errorf("SVG without metadata should not contain aria-label; SVG:\n%s", svg)
+	}
+}

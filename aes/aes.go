@@ -67,3 +67,19 @@ func XEnd(col string) Mapping { return Mapping{Channel: "xend", Column: col} }
 
 // YEnd maps a column to the end y-position of a segment.
 func YEnd(col string) Mapping { return Mapping{Channel: "yend", Column: col} }
+
+// --- Metadata channels (SVG tooltips, links, accessibility) ---
+
+// Title maps a column to the SVG <title> tooltip aesthetic.
+// In SVG output, each primitive gets a <title> child element for hover tooltips.
+// PNG and PDF output ignore this aesthetic.
+func Title(col string) Mapping { return Mapping{Channel: "title", Column: col} }
+
+// Href maps a column to the hyperlink aesthetic.
+// In SVG output, primitives are wrapped in <a href="...">. PDF may emit
+// link annotations. PNG output ignores this aesthetic.
+func Href(col string) Mapping { return Mapping{Channel: "href", Column: col} }
+
+// AriaLabel maps a column to the ARIA accessibility label aesthetic.
+// In SVG output, primitives get an aria-label attribute for screen readers.
+func AriaLabel(col string) Mapping { return Mapping{Channel: "aria_label", Column: col} }

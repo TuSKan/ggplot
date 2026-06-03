@@ -24,6 +24,10 @@ type svgBackend struct {
 	buf   strings.Builder
 	ctm   recording.Matrix   // tracked transform; used only to orient text
 	stack []recording.Matrix // Save/Restore stack for ctm
+
+	// Metadata side-channel: draw-op counter syncs with RecordingCanvas.
+	metadata    map[int]map[string]string
+	drawOpCount int
 }
 
 func newSVGBackend() *svgBackend {
@@ -34,7 +38,8 @@ func (b *svgBackend) Begin(width, height int) error {
 	b.w, b.h = width, height
 	b.ctm = recording.Identity()
 	fmt.Fprintf(&b.buf, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"+
-		"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\">\n",
+		"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\""+
+		" style=\"max-width:100%%;height:auto\">\n",
 		width, height, width, height)
 
 	return nil
@@ -86,8 +91,9 @@ func (b *svgBackend) FillPath(path *gg.Path, brush recording.Brush, rule recordi
 		opacityAttr = fmt.Sprintf(` fill-opacity="%.3f"`, opacity)
 	}
 
-	fmt.Fprintf(&b.buf, "<path d=\"%s\" fill=\"%s\"%s%s stroke=\"none\"/>\n",
+	fmt.Fprintf(&b.buf, "<path d=\"%s\" fill=\"%s\"%s%s stroke=\"none\"/>",
 		d, fill, opacityAttr, ruleAttr)
+	b.emitDrawOp()
 }
 
 func (b *svgBackend) StrokePath(path *gg.Path, brush recording.Brush, stroke recording.Stroke) {
@@ -117,8 +123,9 @@ func (b *svgBackend) StrokePath(path *gg.Path, brush recording.Brush, stroke rec
 		extra += fmt.Sprintf(` stroke-dasharray="%s"`, strings.Join(parts, ","))
 	}
 
-	fmt.Fprintf(&b.buf, "<path d=\"%s\" fill=\"none\" stroke=\"%s\" stroke-width=\"%.2f\"%s/>\n",
+	fmt.Fprintf(&b.buf, "<path d=\"%s\" fill=\"none\" stroke=\"%s\" stroke-width=\"%.2f\"%s/>",
 		d, col, lw, extra)
+	b.emitDrawOp()
 }
 
 func (b *svgBackend) FillRect(rect recording.Rect, brush recording.Brush) {
@@ -129,8 +136,9 @@ func (b *svgBackend) FillRect(rect recording.Rect, brush recording.Brush) {
 		opacityAttr = fmt.Sprintf(` fill-opacity="%.3f"`, opacity)
 	}
 
-	fmt.Fprintf(&b.buf, "<rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"%s\"%s/>\n",
+	fmt.Fprintf(&b.buf, "<rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"%s\"%s/>",
 		rect.X(), rect.Y(), rect.Width(), rect.Height(), fill, opacityAttr)
+	b.emitDrawOp()
 }
 
 func (b *svgBackend) DrawImage(_ image.Image, _, _ recording.Rect, _ recording.ImageOptions) {
@@ -167,8 +175,9 @@ func (b *svgBackend) DrawText(s string, x, y float64, face text.Face, brush reco
 	}
 
 	fmt.Fprintf(&b.buf,
-		"<text x=\"%.2f\" y=\"%.2f\" fill=\"%s\" font-family=\"sans-serif\" font-size=\"%.1f\"%s%s>%s</text>\n",
+		"<text x=\"%.2f\" y=\"%.2f\" fill=\"%s\" font-family=\"sans-serif\" font-size=\"%.1f\"%s%s>%s</text>",
 		x, y, fill, fontSize, variantAttr, transformAttr, escaped)
+	b.emitDrawOp()
 }
 
 // textRotationDeg returns the rotation of m in degrees, using the same y-down
@@ -254,10 +263,92 @@ func svgEscape(s string) string {
 }
 
 func exportSVG(r *recording.Recording, w io.Writer) (int64, error) {
+	return exportSVGWithMeta(r, nil, w)
+}
+
+func exportSVGWithMeta(r *recording.Recording, meta map[int]map[string]string, w io.Writer) (int64, error) {
 	b := newSVGBackend()
+
+	b.metadata = meta
+
 	if err := r.Playback(b); err != nil {
 		return 0, fmt.Errorf("canvas: SVG playback: %w", err)
 	}
 
 	return b.WriteTo(w)
+}
+
+// emitDrawOp wraps the last-emitted element with metadata (title, href,
+// aria-label) if present for the current draw-op index, then writes a newline.
+func (b *svgBackend) emitDrawOp() {
+	if meta, ok := b.metadata[b.drawOpCount]; ok {
+		// Find the start of the last element in the buffer.
+		raw := b.buf.String()
+
+		var wrappedElem string
+
+		// Extract the last element (the one just written without newline).
+		lastNewline := max(strings.LastIndex(raw, "\n"), 0)
+
+		elem := raw[lastNewline:]
+		if elem != "" && elem[0] == '\n' {
+			elem = elem[1:]
+		}
+
+		// Add aria-label attribute to the element if present.
+		if ariaLabel, ok := meta["aria_label"]; ok && ariaLabel != "" {
+			// Insert aria-label before the closing /> or >
+			if idx := strings.Index(elem, "/>"); idx >= 0 {
+				elem = elem[:idx] + fmt.Sprintf(" aria-label=\"%s\"", svgEscape(ariaLabel)) + elem[idx:]
+			} else if idx := strings.Index(elem, ">"); idx >= 0 {
+				elem = elem[:idx] + fmt.Sprintf(" aria-label=\"%s\"", svgEscape(ariaLabel)) + elem[idx:]
+			}
+		}
+
+		wrappedElem = elem
+
+		// Wrap with <title> if present.
+		if title, ok := meta["title"]; ok && title != "" {
+			// For self-closing elements, convert to open/close form for <title> child.
+			if strings.HasSuffix(wrappedElem, "/>") {
+				// Self-closing: <path .../> → <path ...></path>
+				tagEnd := strings.Index(wrappedElem, " ")
+				if tagEnd < 0 {
+					tagEnd = 1 // skip '<'
+				}
+
+				tagName := wrappedElem[1:tagEnd]
+				wrappedElem = wrappedElem[:len(wrappedElem)-2] + ">" +
+					"<title>" + svgEscape(title) + "</title>" +
+					"</" + tagName + ">"
+			} else {
+				// Already has closing tag (e.g. <text>...</text>).
+				// Insert <title> after the opening tag.
+				if idx := strings.Index(wrappedElem, ">"); idx >= 0 {
+					wrappedElem = wrappedElem[:idx+1] +
+						"<title>" + svgEscape(title) + "</title>" +
+						wrappedElem[idx+1:]
+				}
+			}
+		}
+
+		// Wrap with <a href> if present.
+		if href, ok := meta["href"]; ok && href != "" {
+			wrappedElem = fmt.Sprintf("<a href=\"%s\">", svgEscape(href)) + wrappedElem + "</a>"
+		}
+
+		// Replace the element in the buffer.
+		b.buf.Reset()
+
+		if lastNewline > 0 {
+			b.buf.WriteString(raw[:lastNewline])
+		}
+
+		b.buf.WriteString("\n")
+		b.buf.WriteString(wrappedElem)
+	}
+
+	b.buf.WriteString("\n")
+
+	b.drawOpCount++
 }

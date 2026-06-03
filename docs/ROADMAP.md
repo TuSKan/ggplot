@@ -239,6 +239,9 @@ The public extension API — implemented via Go interfaces + registration, not g
 - ✅ **Placeholder geom drawers (S5)** — `geom.Tile` (heatmap), `geom.Segment` (x,y→xend,yend), `geom.ErrorBar` (ymin/ymax + caps), `geom.Polygon` (closed paths); all four had declared types but no drawer
 - ✅ **`aes.XEnd`/`aes.YEnd` channels** — endpoint aesthetics for Segment geom
 - ✅ **Tabular figures on quantitative axes (S1)** — monospaced digit rendering for aligned tick labels via `SetTabularNums(true)` + OpenType `tnum` feature; enabled for X-axis labels, Y-axis labels, and Y-axis margin measurement
+- ✅ **SVG responsive output (S8)** — root `<svg>` includes `style="max-width:100%;height:auto"` for automatic responsive scaling in web containers
+- ✅ **Metadata channels (S6)** — `aes.Title`, `aes.Href`, `aes.AriaLabel` aesthetics; `Canvas.SetMetadata(meta)` interface method; SVG backend emits `<title>` tooltips, `<a href>` links, `aria-label` attributes; side-channel on `RecordingCanvas` (no recording format change)
+- ✅ **Band padding API** — `scale.WithPaddingInner(f)` / `scale.WithPaddingOuter(f)` for discrete scales; `DiscreteScale.BandWidth()` returns bar width fraction
 
 ---
 
@@ -474,6 +477,8 @@ The public extension API — implemented via Go interfaces + registration, not g
 - ✅ **Desktop window** — `output/window` `window.Show` opens a `gogpu` GPU window and presents the figure zero-copy via `ggcanvas.Canvas` (direct `gg.Context` rendering + `Render`/`RenderDirect` to surface). Reuses the `Controller`/`State` policy (OUTPUT-SPEC Phase 5; `//go:build !js`). Uses `RasterCanvas` wrapping the `gg.Context` from `ggcanvas.Canvas.Draw()` — one canvas implementation, one code path.
 - ✅ **GPU-accelerated rendering** — `output/window` draws into `gg.Context` (GPU-accelerated via SDF shapes, MSDF text) and presents via `ggcanvas.Canvas.Render()` (zero-copy `RenderDirect` when GPU available, universal CPU fallback otherwise). Replaced the previous `SceneCanvas` + `gogpu/ui` widget approach with direct `ggcanvas` integration.
 - ✅ **Data-space interactive zoom** — `DataSpaceController` (new default for `output/window`) provides pan/zoom that operates on data-space scale bounds, not canvas-level transforms. Axes stay at fixed screen positions, tick labels update dynamically. O(1) viewport mutation via `Zoomable.SetPanelViewport` — no rebuild, no data iteration. Per-panel hit-testing for faceted plots. Double-click resets to full trained range.
+- ✅ **SVG metadata channels** — `aes.Title` (`<title>` tooltips), `aes.Href` (`<a>` links), `aes.AriaLabel` (ARIA attributes) in SVG output; PNG/PDF ignore; resolved in `drawLayer()` → `DrawContext.SetRowMetadata(i)` → wired into all 20+ geometry drawers automatically — per-row primitives for discrete geoms (point, bar, tile, segment, text, errorbar, rug, crossbar, linerange, pointrange, curve, dotplot), group-level for continuous geoms (line, step, area, polygon, ribbon, violin); point batching disabled when metadata mapped for per-point SVG elements
+- ✅ **Responsive SVG** — `style="max-width:100%;height:auto"` on root `<svg>` element
 - 🔲 **Browser surface** — `output/web` (wasm, OUTPUT-SPEC Phase 6)
 - 🔲 **HTML output** — interactive plots with hover tooltips via embedded SVG + minimal JS (no React/heavyweight runtime)
 - 🔲 **Animated GIF / APNG** — frame-by-frame rendering for time-series; `Plot.Animate(frames, fn)` builds a sequence of `Built`s

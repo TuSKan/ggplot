@@ -19,6 +19,13 @@ type RecordingCanvas struct {
 	face     text.Face // current font face, for anchor measurement
 	fontSize float64
 	tabNums  bool // tabular figures enabled
+
+	// Metadata side-channel: pendingMeta is set by SetMetadata and consumed
+	// by the next draw-op (Fill, Stroke, DrawStringAnchored). The metadataMap
+	// stores metadata keyed by draw-op sequence number for SVG export.
+	pendingMeta map[string]string
+	metadataMap map[int]map[string]string
+	drawOpCount int
 }
 
 // NewRecordingCanvas creates a Canvas that records all drawing operations.
@@ -98,13 +105,22 @@ func (c *RecordingCanvas) SetLineWidth(w float64) { c.rec.SetLineWidth(w) }
 func (c *RecordingCanvas) SetLineDash(pattern ...float64) { c.rec.SetDash(pattern...) }
 
 // Fill fills the current path with the current color, then clears the path.
-func (c *RecordingCanvas) Fill() { c.rec.Fill() }
+func (c *RecordingCanvas) Fill() {
+	c.consumeMetadata()
+	c.rec.Fill()
+}
 
 // Stroke draws the current path outline, then clears the path.
-func (c *RecordingCanvas) Stroke() { c.rec.Stroke() }
+func (c *RecordingCanvas) Stroke() {
+	c.consumeMetadata()
+	c.rec.Stroke()
+}
 
 // FillPreserve fills without clearing the path (allows subsequent stroke).
-func (c *RecordingCanvas) FillPreserve() { c.rec.FillPreserve() }
+func (c *RecordingCanvas) FillPreserve() {
+	c.consumeMetadata()
+	c.rec.FillPreserve()
+}
 
 // Clip clips rendering to the current path.
 func (c *RecordingCanvas) Clip() { c.rec.Clip() }
@@ -195,6 +211,8 @@ func (c *RecordingCanvas) SetTabularNums(enabled bool) {
 // current face and record a base-positioned DrawString, keeping vector text
 // aligned with the raster output.
 func (c *RecordingCanvas) DrawStringAnchored(s string, x, y, ax, ay float64) {
+	c.consumeMetadata()
+
 	if c.face == nil {
 		c.rec.DrawString(s, x, y)
 
@@ -214,6 +232,13 @@ func (c *RecordingCanvas) MeasureString(s string) (float64, float64) {
 }
 
 // Clear fills the entire canvas with the given color.
+//
+// The recorder captures this as two draw ops during SVG playback:
+//  1. rec.Clear() → FillRect (transparent background clear)
+//  2. rec.DrawRectangle + rec.Fill → FillPath (opaque fill)
+//
+// We must increment drawOpCount for each to keep it in sync with the
+// SVG backend's emitDrawOp counter.
 func (c *RecordingCanvas) Clear(col color.Color) {
 	r, g, b, a := col.RGBA()
 	c.rec.SetRGBA(
@@ -222,8 +247,13 @@ func (c *RecordingCanvas) Clear(col color.Color) {
 		float64(b)/65535.0,
 		float64(a)/65535.0,
 	)
+
+	c.consumeMetadata() // draw-op #1: rec.Clear() → FillRect in SVG backend
 	c.rec.Clear()
+
 	c.rec.DrawRectangle(0, 0, float64(c.rec.Width()), float64(c.rec.Height()))
+
+	c.consumeMetadata() // draw-op #2: rec.Fill() → FillPath in SVG backend
 	c.rec.Fill()
 }
 
@@ -241,6 +271,34 @@ func (c *RecordingCanvas) DrawImage(_ image.Image, _, _ float64) {}
 // Close is a no-op for RecordingCanvas (no GPU resources to release).
 func (c *RecordingCanvas) Close() error { return nil }
 
+// SetMetadata attaches per-primitive metadata to the next draw call.
+// The metadata is stored in a side-channel indexed by draw-op sequence
+// number and emitted during SVG export.
+func (c *RecordingCanvas) SetMetadata(meta map[string]string) {
+	c.pendingMeta = meta
+}
+
+// MetadataMap returns the metadata side-channel for export.
+// Keyed by draw-op sequence number (Fill, Stroke, DrawText).
+func (c *RecordingCanvas) MetadataMap() map[int]map[string]string {
+	return c.metadataMap
+}
+
+// consumeMetadata stores pending metadata for the current draw-op index
+// and increments the draw-op counter.
+func (c *RecordingCanvas) consumeMetadata() {
+	if len(c.pendingMeta) > 0 {
+		if c.metadataMap == nil {
+			c.metadataMap = make(map[int]map[string]string)
+		}
+
+		c.metadataMap[c.drawOpCount] = c.pendingMeta
+		c.pendingMeta = nil
+	}
+
+	c.drawOpCount++
+}
+
 // Compile-time check.
 var _ Canvas = (*RecordingCanvas)(nil)
 
@@ -249,6 +307,13 @@ var _ Canvas = (*RecordingCanvas)(nil)
 // ExportSVG replays a recording into the native SVG backend and writes to w.
 func ExportSVG(r *recording.Recording, w io.Writer) (int64, error) {
 	return exportSVG(r, w)
+}
+
+// ExportSVGWithMeta replays a recording into the SVG backend with per-primitive
+// metadata (tooltips, links, ARIA labels). The metadata map is keyed by draw-op
+// sequence number, matching [RecordingCanvas.MetadataMap].
+func ExportSVGWithMeta(r *recording.Recording, meta map[int]map[string]string, w io.Writer) (int64, error) {
+	return exportSVGWithMeta(r, meta, w)
 }
 
 // ExportPDF replays a recording into the native PDF backend and writes to w.

@@ -2236,3 +2236,140 @@ func TestOutputEncodePNG(t *testing.T) {
 		t.Errorf("byte count mismatch: returned %d, buffer holds %d", n, buf.Len())
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SVG Metadata Pipeline Integration Tests
+// ---------------------------------------------------------------------------
+
+// TestRender_SVGMetadata_Bars verifies that aes.Title, aes.Href, and
+// aes.AriaLabel flow through the bar rendering pipeline into SVG output.
+func TestRender_SVGMetadata_Bars(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	eng := memory.NewEngine(ctx)
+
+	ds, err := dataset.NewDataset(eng,
+		eng.NewStringColumn("cat", []string{"A", "B", "C"}),
+		eng.NewFloat64Column("val", []float64{10, 20, 30}),
+		eng.NewStringColumn("tip", []string{"Cat A: 10", "Cat B: 20", "Cat C: 30"}),
+		eng.NewStringColumn("url", []string{"https://a.com", "https://b.com", "https://c.com"}),
+		eng.NewStringColumn("label", []string{"Bar A", "Bar B", "Bar C"}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := ggplot.New(ds,
+		aes.X("cat"),
+		aes.Y("val"),
+		aes.Title("tip"),
+		aes.Href("url"),
+		aes.AriaLabel("label"),
+	).Layer(geom.Col())
+
+	var buf bytes.Buffer
+
+	_, err = file.Encode(ctx, p, &buf, "svg", 400, 300)
+	if err != nil {
+		t.Fatalf("Encode SVG: %v", err)
+	}
+
+	svg := buf.String()
+
+	// Verify each bar's metadata appears in the SVG.
+	for _, tc := range []struct {
+		needle string
+		desc   string
+	}{
+		{"<title>Cat A: 10</title>", "title tooltip for bar A"},
+		{"<title>Cat B: 20</title>", "title tooltip for bar B"},
+		{"<title>Cat C: 30</title>", "title tooltip for bar C"},
+		{`href="https://a.com"`, "href link for bar A"},
+		{`href="https://b.com"`, "href link for bar B"},
+		{`href="https://c.com"`, "href link for bar C"},
+		{`aria-label="Bar A"`, "aria-label for bar A"},
+		{`aria-label="Bar B"`, "aria-label for bar B"},
+		{`aria-label="Bar C"`, "aria-label for bar C"},
+	} {
+		if !strings.Contains(svg, tc.needle) {
+			t.Errorf("SVG missing %s: expected %q in output", tc.desc, tc.needle)
+		}
+	}
+}
+
+// TestRender_SVGMetadata_Points verifies per-point metadata emission.
+func TestRender_SVGMetadata_Points(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	eng := memory.NewEngine(ctx)
+
+	ds, err := dataset.NewDataset(eng,
+		eng.NewFloat64Column("x", []float64{1, 2, 3}),
+		eng.NewFloat64Column("y", []float64{10, 20, 30}),
+		eng.NewStringColumn("tip", []string{"P1", "P2", "P3"}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := ggplot.New(ds,
+		aes.X("x"),
+		aes.Y("y"),
+		aes.Title("tip"),
+	).Layer(geom.Point())
+
+	var buf bytes.Buffer
+
+	_, err = file.Encode(ctx, p, &buf, "svg", 400, 300)
+	if err != nil {
+		t.Fatalf("Encode SVG: %v", err)
+	}
+
+	svg := buf.String()
+
+	for _, tip := range []string{"P1", "P2", "P3"} {
+		needle := "<title>" + tip + "</title>"
+		if !strings.Contains(svg, needle) {
+			t.Errorf("SVG missing title %q for point", tip)
+		}
+	}
+}
+
+// TestRender_SVGMetadata_None_NoOverhead verifies that when no metadata
+// channels are mapped, the SVG does not contain any metadata wrappers.
+func TestRender_SVGMetadata_None_NoOverhead(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	eng := memory.NewEngine(ctx)
+
+	ds, err := dataset.NewDataset(eng,
+		eng.NewStringColumn("cat", []string{"A", "B"}),
+		eng.NewFloat64Column("val", []float64{10, 20}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := ggplot.New(ds,
+		aes.X("cat"),
+		aes.Y("val"),
+	).Layer(geom.Col())
+
+	var buf bytes.Buffer
+
+	_, err = file.Encode(ctx, p, &buf, "svg", 400, 300)
+	if err != nil {
+		t.Fatalf("Encode SVG: %v", err)
+	}
+
+	svg := buf.String()
+
+	// No metadata channels mapped — SVG should not contain <title>, <a href>,
+	// or aria-label on geometry elements.
+	if strings.Contains(svg, "aria-label=") {
+		t.Error("SVG contains unexpected aria-label when no metadata mapped")
+	}
+}
