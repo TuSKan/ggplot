@@ -69,11 +69,11 @@ func breaksAndLabels(dir string) {
 			scale.WithBreaks([]float64{0, 30, 60, 90}),
 			scale.WithLabels([]string{"Start", "Month 1", "Month 2", "Month 3"}),
 		).
-		Labs(
+		Labels(
 			ggplot.Title("Project Completion Tracker"),
 			ggplot.Subtitle("Custom breaks and labels on both axes"),
-			ggplot.XLab("Timeline"),
-			ggplot.YLab("Completion"),
+			ggplot.XLabel("Timeline"),
+			ggplot.YLabel("Completion"),
 		).
 		Theme("seaborn_whitegrid")
 	save(p, dir, "01_breaks_labels", 900, 550)
@@ -108,11 +108,11 @@ func currencyFormatter(dir string) {
 			scale.WithBreaks([]float64{1, 3, 6, 9, 12}),
 			scale.WithLabels([]string{"Jan", "Mar", "Jun", "Sep", "Dec"}),
 		).
-		Labs(
+		Labels(
 			ggplot.Title("Monthly Revenue"),
 			ggplot.Subtitle("Y-axis with custom currency formatter"),
-			ggplot.XLab(""),
-			ggplot.YLab("Revenue (USD)"),
+			ggplot.XLabel(""),
+			ggplot.YLabel("Revenue (USD)"),
 		).
 		Theme("fivethirtyeight")
 	save(p, dir, "02_formatter", 900, 550)
@@ -140,10 +140,10 @@ func expandPadding(dir string) {
 		Layer(geom.Line(geom.WithColor("#E74C3C"), geom.WithLineWidth(2))).
 		ScaleX(scale.Linear, scale.WithExpand(0.01, 0)).
 		ScaleY(scale.Linear, scale.WithExpand(0.01, 0)).
-		Labs(
+		Labels(
 			ggplot.Title("Tight Expand (1%)"),
 			ggplot.Subtitle("scale.WithExpand(0.01, 0) — minimal padding"),
-			ggplot.XLab("x"), ggplot.YLab("sin(x)"),
+			ggplot.XLabel("x"), ggplot.YLabel("sin(x)"),
 		).
 		Theme("bmh")
 	save(tight, dir, "03_expand_tight", 900, 550)
@@ -153,10 +153,10 @@ func expandPadding(dir string) {
 		Layer(geom.Line(geom.WithColor("#8E44AD"), geom.WithLineWidth(2))).
 		ScaleX(scale.Linear, scale.WithExpand(0.20, 2)).
 		ScaleY(scale.Linear, scale.WithExpand(0.15, 0)).
-		Labs(
+		Labels(
 			ggplot.Title("Wide Expand (20% + 2)"),
 			ggplot.Subtitle("scale.WithExpand(0.20, 2) — generous padding"),
-			ggplot.XLab("x"), ggplot.YLab("sin(x)"),
+			ggplot.XLabel("x"), ggplot.YLabel("sin(x)"),
 		).
 		Theme("bmh")
 	save(wide, dir, "04_expand_wide", 900, 550)
@@ -194,11 +194,11 @@ func minorGridLines(dir string) {
 			scale.WithBreaks([]float64{-1, -0.5, 0, 0.5, 1}),
 			scale.WithMinorBreaks(minorY),
 		).
-		Labs(
+		Labels(
 			ggplot.Title("Damped Oscillation"),
 			ggplot.Subtitle("Minor grid lines between major ticks"),
-			ggplot.XLab("Time (s)"),
-			ggplot.YLab("Amplitude"),
+			ggplot.XLabel("Time (s)"),
+			ggplot.YLabel("Amplitude"),
 		).
 		Theme("seaborn_whitegrid")
 	save(p, dir, "05_minor_breaks", 1000, 550)
@@ -225,10 +225,10 @@ func clipBoundsZoom(dir string) {
 	// Full view.
 	full := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#E67E22"), geom.WithLineWidth(2))).
-		Labs(
+		Labels(
 			ggplot.Title("Full Data Range"),
 			ggplot.Subtitle("All 200 points visible"),
-			ggplot.XLab("x"), ggplot.YLab("y"),
+			ggplot.XLabel("x"), ggplot.YLabel("y"),
 		).
 		Theme("dark_background")
 	save(full, dir, "06_clip_full", 900, 500)
@@ -238,10 +238,10 @@ func clipBoundsZoom(dir string) {
 		Layer(geom.Line(geom.WithColor("#E67E22"), geom.WithLineWidth(2))).
 		ScaleX(scale.Linear, scale.WithClipBounds(20, 60)).
 		ScaleY(scale.Linear, scale.WithClipBounds(90, 130)).
-		Labs(
+		Labels(
 			ggplot.Title("Zoomed via ClipBounds"),
 			ggplot.Subtitle("WithClipBounds(20,60) × (90,130) — data is NOT filtered"),
-			ggplot.XLab("x"), ggplot.YLab("y"),
+			ggplot.XLabel("x"), ggplot.YLabel("y"),
 		).
 		Theme("dark_background")
 	save(zoomed, dir, "07_clip_zoomed", 900, 500)
@@ -277,11 +277,11 @@ func composedFeatures(dir string) {
 			scale.WithExpand(0.05, 2000),
 			scale.WithMinorBreaks([]float64{50000, 60000, 70000, 80000, 90000, 100000}),
 		).
-		Labs(
+		Labels(
 			ggplot.Title("Quarterly Sales Performance"),
 			ggplot.Subtitle("Breaks + Labels + Formatter + Expand + MinorBreaks — all combined"),
-			ggplot.XLab(""),
-			ggplot.YLab("Revenue"),
+			ggplot.XLabel(""),
+			ggplot.YLabel("Revenue"),
 		).
 		Theme("seaborn_whitegrid")
 	save(p, dir, "08_composed", 1000, 600)
@@ -311,11 +311,11 @@ func binnedScale(dir string) {
 	p := ggplot.New(ds, aes.X("exam_score"), aes.Y("course_grade")).
 		Layer(geom.Point(geom.WithSize(2.5), geom.WithColor("#3498DB"), geom.WithAlpha(0.6))).
 		ScaleX(scale.Binned, scale.WithBinBreaks([]float64{40, 50, 60, 70, 80, 90, 100})).
-		Labs(
+		Labels(
 			ggplot.Title("Exam Score Bins"),
 			ggplot.Subtitle("ScaleX(scale.Binned) — continuous axis grouped into range labels"),
-			ggplot.XLab("Exam Score Range"),
-			ggplot.YLab("Course Grade"),
+			ggplot.XLabel("Exam Score Range"),
+			ggplot.YLabel("Course Grade"),
 		).
 		Theme("seaborn_whitegrid")
 	save(p, dir, "09_binned", 900, 550)

@@ -46,10 +46,10 @@ func main() {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("value")).
 		Layer(geom.Tile()).
 		ScaleColorContinuous(colormap.Viridis, &colormap.LinearNorm{Vmin: 0, Vmax: 1}).
-		Labs(
+		Labels(
 			ggplot.Title("Correlation Heatmap"),
-			ggplot.XLab("Variable"),
-			ggplot.YLab("Variable"),
+			ggplot.XLabel("Variable"),
+			ggplot.YLabel("Variable"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

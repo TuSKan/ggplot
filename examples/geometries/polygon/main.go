@@ -47,10 +47,10 @@ func main() {
 			geom.WithAlpha(0.7),
 			geom.WithLineWidth(2),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Regular Pentagon"),
-			ggplot.XLab("x"),
-			ggplot.YLab("y"),
+			ggplot.XLabel("x"),
+			ggplot.YLabel("y"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

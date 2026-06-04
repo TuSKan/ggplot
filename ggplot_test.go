@@ -123,7 +123,7 @@ func TestPlot_Clone_Independence(t *testing.T) {
 	ds := testDataset(t)
 	base := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
-		Labs(ggplot.Title("Base"))
+		Labels(ggplot.Title("Base"))
 
 	// Derive siblings with different modifications.
 	withTheme := base.Theme("dark")
@@ -371,11 +371,11 @@ func TestRender_Labels(t *testing.T) {
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
-		Labs(
+		Labels(
 			ggplot.Title("Main Title"),
 			ggplot.Subtitle("Subtitle"),
-			ggplot.XLab("X Axis"),
-			ggplot.YLab("Y Axis"),
+			ggplot.XLabel("X Axis"),
+			ggplot.YLabel("Y Axis"),
 			ggplot.Caption("Source: test data"),
 		)
 
@@ -409,7 +409,7 @@ func TestPlot_Save_PNG(t *testing.T) {
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
-		Labs(ggplot.Title("Test Plot"))
+		Labels(ggplot.Title("Test Plot"))
 
 	outPath := filepath.Join(t.TempDir(), "test.png")
 	if err := file.Save(context.Background(), p, outPath, 400, 300); err != nil {
@@ -440,7 +440,7 @@ func TestPlot_Save_Histogram(t *testing.T) {
 	outPath := filepath.Join(t.TempDir(), "hist.png")
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Histogram(geom.WithBins(20))).
-		Labs(ggplot.Title("Histogram Test"))
+		Labels(ggplot.Title("Histogram Test"))
 
 	if err := file.Save(context.Background(), p, outPath, 800, 600); err != nil {
 		t.Fatalf("Histogram Save failed: %v", err)
@@ -691,7 +691,7 @@ func TestRender_ColorMapping_WithLegend(t *testing.T) {
 	ds := groupedDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Point()).
-		Labs(ggplot.Title("Grouped Scatter"))
+		Labels(ggplot.Title("Grouped Scatter"))
 
 	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
@@ -925,10 +925,10 @@ func TestRender_AllNewFeatures(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Point(geom.WithSize(4))).
 		Layer(geom.Step()).
-		Labs(
+		Labels(
 			ggplot.Title("Combined Features Test"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		).
 		XLim(0, 5).
 		YLim(0, 12).
@@ -948,7 +948,7 @@ func TestSave_ColorMapping(t *testing.T) {
 	ds := groupedDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Point(geom.WithSize(6))).
-		Labs(ggplot.Title("Color Mapping Test"))
+		Labels(ggplot.Title("Color Mapping Test"))
 
 	dir := t.TempDir()
 
@@ -971,7 +971,7 @@ func TestSave_XLimYLim(t *testing.T) {
 		Layer(geom.Point()).
 		XLim(2, 8).
 		YLim(0, 15).
-		Labs(ggplot.Title("Axis Limits Test"))
+		Labels(ggplot.Title("Axis Limits Test"))
 
 	dir := t.TempDir()
 
@@ -992,7 +992,7 @@ func TestSave_StepWithLegend(t *testing.T) {
 	ds := groupedDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Step(geom.WithLineWidth(2))).
-		Labs(ggplot.Title("Step Functions"))
+		Labels(ggplot.Title("Step Functions"))
 
 	dir := t.TempDir()
 
@@ -1135,7 +1135,7 @@ func TestRender_WithLabel_Legend(t *testing.T) {
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Line(geom.WithColor("#1F77B4"), geom.WithLabel("sin")), aes.Y("sin")).
 		Layer(geom.Line(geom.WithColor("#FF7F0E"), geom.WithLabel("cos")), aes.Y("cos")).
-		Labs(ggplot.Title("Wide Format Legend"))
+		Labels(ggplot.Title("Wide Format Legend"))
 
 	_, err := drawPlot(context.Background(), p, 800, 600)
 	if err != nil {
@@ -1489,7 +1489,7 @@ func TestAxisLabelRows_RotatedLabels_Save(t *testing.T) {
 	ds := testDataset(t)
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point()).
-		Labs(ggplot.Title("Rotated Labels Test"))
+		Labels(ggplot.Title("Rotated Labels Test"))
 
 	outPath := filepath.Join(t.TempDir(), "rotated.png")
 	if err := file.Save(context.Background(), p, outPath, 400, 300); err != nil {
@@ -1532,7 +1532,7 @@ func TestRender_Raster_SmallGrid(t *testing.T) {
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("z")).
 		Layer(geom.Raster()).
-		Labs(ggplot.Title("Raster 5×5"))
+		Labels(ggplot.Title("Raster 5×5"))
 
 	cv, err := drawPlot(context.Background(), p, 400, 400)
 	if err != nil {
@@ -1568,7 +1568,7 @@ func TestRender_Raster_Interpolated(t *testing.T) {
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("z")).
 		Layer(geom.Raster(geom.WithInterpolate(true))).
-		Labs(ggplot.Title("Raster Interpolated"))
+		Labels(ggplot.Title("Raster Interpolated"))
 
 	_, err := drawPlot(context.Background(), p, 600, 600)
 	if err != nil {
@@ -1642,7 +1642,7 @@ func TestRender_Raster_Save_PNG(t *testing.T) {
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("z")).
 		Layer(geom.Raster()).
-		Labs(ggplot.Title("Raster Save Test"))
+		Labels(ggplot.Title("Raster Save Test"))
 
 	outPath := filepath.Join(t.TempDir(), "raster.png")
 	if err := file.Save(context.Background(), p, outPath, 400, 400); err != nil {
@@ -1677,7 +1677,7 @@ func TestRender_JitterPoint(t *testing.T) {
 			geom.WithJitterHeight(0.3),
 			geom.WithJitterSeed(99),
 		)).
-		Labs(ggplot.Title("Jitter Point"))
+		Labels(ggplot.Title("Jitter Point"))
 
 	cv, err := drawPlot(context.Background(), p, 400, 400)
 	if err != nil {

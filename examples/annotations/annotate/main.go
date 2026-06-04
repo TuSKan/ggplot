@@ -153,11 +153,11 @@ func main() {
 
 		// Y-limits with ample headroom so no annotations are clipped.
 		YLim(-1.5, 1.5).
-		Labs(
+		Labels(
 			ggplot.Title("Annotation Showcase"),
 			ggplot.Subtitle("Text · Rect · Segment · Arrow · Label"),
-			ggplot.XLab("x (radians)"),
-			ggplot.YLab("sin(x)"),
+			ggplot.XLabel("x (radians)"),
+			ggplot.YLabel("sin(x)"),
 		).
 		Theme("minimal")
 

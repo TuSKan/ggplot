@@ -44,7 +44,7 @@ func main() {
 
 	p := ggplot.New(ds, aes.X("group"), aes.Y("score")).
 		Layer(geom.Boxplot(geom.WithFill("#E8E8E8"), geom.WithColor("#2C3E50"), geom.WithWidth(0.6))).
-		Labs(ggplot.Title("Boxplot"), ggplot.Subtitle("Three treatment groups"))
+		Labels(ggplot.Title("Boxplot"), ggplot.Subtitle("Three treatment groups"))
 
 	_, filename, _, _ := runtime.Caller(0)
 	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "boxplot.png"), 800, 600, output.WithCPU(true)); err != nil {

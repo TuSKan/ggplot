@@ -10,6 +10,8 @@ require (
 	github.com/gogpu/gg v0.48.8-0.20260601074101-1f79a5e9468f
 	github.com/gogpu/gogpu v0.41.0
 	github.com/gogpu/gpucontext v0.19.0
+	github.com/gogpu/gputypes v0.5.0
+	github.com/gogpu/wgpu v0.29.1
 	github.com/parquet-go/parquet-go v0.30.1
 	github.com/rickb777/date/v2 v2.3.11
 	golang.org/x/image v0.41.0
@@ -35,9 +37,7 @@ require (
 	github.com/go-webgpu/goffi v0.5.2 // indirect
 	github.com/go-webgpu/webgpu v0.5.2 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
-	github.com/gogpu/gputypes v0.5.0 // indirect
 	github.com/gogpu/naga v0.17.13 // indirect
-	github.com/gogpu/wgpu v0.29.1 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -63,7 +63,7 @@ require (
 	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
 	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260409153401-be6f6cb8b1fa // indirect
@@ -77,4 +77,8 @@ require (
 	google.golang.org/grpc v1.81.1 // indirect
 )
 
-replace github.com/gogpu/gg => github.com/TuSKan/gogpugg v0.0.0-20260603040614-f055f29eb01c
+replace github.com/gogpu/gg => ../gogpu-gg
+
+replace github.com/go-webgpu/webgpu => ../go-webgpu
+
+replace github.com/gogpu/wgpu => ../gogpu-wgpu

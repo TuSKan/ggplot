@@ -48,11 +48,11 @@ func main() {
 	full := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#1F77B4"), geom.WithLineWidth(2))).
 		Layer(geom.Point(geom.WithColor("#E74C3C"), geom.WithSize(2), geom.WithAlpha(0.5))).
-		Labs(
+		Labels(
 			ggplot.Title("Full View"),
 			ggplot.Subtitle("All data visible"),
-			ggplot.XLab("x (radians)"),
-			ggplot.YLab("sin(x)"),
+			ggplot.XLabel("x (radians)"),
+			ggplot.YLabel("sin(x)"),
 		).
 		Theme("minimal")
 
@@ -70,11 +70,11 @@ func main() {
 		Layer(geom.Line(geom.WithColor("#1F77B4"), geom.WithLineWidth(2))).
 		Layer(geom.Point(geom.WithColor("#E74C3C"), geom.WithSize(3), geom.WithAlpha(0.6))).
 		CoordCartesian(0, math.Pi, 0.5, 1.1). //nolint:mnd // Zoom into the first peak.
-		Labs(
+		Labels(
 			ggplot.Title("Zoomed View — CoordCartesian"),
 			ggplot.Subtitle("Viewport zoom into the first peak (data NOT clipped)"),
-			ggplot.XLab("x (radians)"),
-			ggplot.YLab("sin(x)"),
+			ggplot.XLabel("x (radians)"),
+			ggplot.YLabel("sin(x)"),
 		).
 		Theme("minimal")
 

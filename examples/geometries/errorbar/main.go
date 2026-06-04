@@ -44,10 +44,10 @@ func main() {
 			geom.WithColor("#2C3E50"),
 			geom.WithLineWidth(1.5),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Measurements with Error Bars"),
-			ggplot.XLab("Sample"),
-			ggplot.YLab("Value ± σ"),
+			ggplot.XLabel("Sample"),
+			ggplot.YLabel("Value ± σ"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

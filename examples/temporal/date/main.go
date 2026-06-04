@@ -56,11 +56,11 @@ func dateStrFromString(eng *memory.Engine, dir string) {
 	p := ggplot.New(ds, aes.X("month"), aes.Y("subscribers")).
 		Layer(geom.Line(geom.WithColor("#27AE60"), geom.WithLineWidth(2.5))).
 		Layer(geom.Point(geom.WithSize(4), geom.WithColor("#27AE60"))).
-		Labs(
+		Labels(
 			ggplot.Title("Subscriber Growth"),
 			ggplot.Subtitle("Monthly count — DTypeDate from ISO strings"),
-			ggplot.XLab("Month"),
-			ggplot.YLab("Subscribers"),
+			ggplot.XLabel("Month"),
+			ggplot.YLabel("Subscribers"),
 		).
 		Theme("seaborn_whitegrid")
 
@@ -97,11 +97,11 @@ func dateFromTime(eng *memory.Engine, dir string) {
 
 	p := ggplot.New(ds, aes.X("date"), aes.Y("revenue")).
 		Layer(geom.Line(geom.WithColor("#8E44AD"), geom.WithLineWidth(1.5))).
-		Labs(
+		Labels(
 			ggplot.Title("Daily Revenue — Q2 2024"),
 			ggplot.Subtitle("90 days from time.Time — weekly cycle visible"),
-			ggplot.XLab("Date"),
-			ggplot.YLab("Revenue ($)"),
+			ggplot.XLabel("Date"),
+			ggplot.YLabel("Revenue ($)"),
 		).
 		Theme("fivethirtyeight")
 

@@ -58,7 +58,7 @@ func main() {
 			geom.WithFill("#3b82f6"), geom.WithAlpha(0.85),
 			geom.WithOrientation(geom.Horizontal),
 		)).
-		Labs(ggplot.Title("Horizontal Bar"), ggplot.XLab("Language"), ggplot.YLab("Score")).
+		Labels(ggplot.Title("Horizontal Bar"), ggplot.XLabel("Language"), ggplot.YLabel("Score")).
 		Theme("minimal")
 	file.Save(ctx, pBar, filepath.Join(dir, "01_horizontal_bar.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -80,7 +80,7 @@ func main() {
 			geom.WithBins(25), geom.WithFill("#8b5cf6"), geom.WithAlpha(0.8),
 			geom.WithOrientation(geom.Horizontal),
 		)).
-		Labs(ggplot.Title("Horizontal Histogram"), ggplot.XLab("Value"), ggplot.YLab("Count")).
+		Labels(ggplot.Title("Horizontal Histogram"), ggplot.XLabel("Value"), ggplot.YLabel("Count")).
 		Theme("minimal")
 	file.Save(ctx, pHist, filepath.Join(dir, "02_horizontal_histogram.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -95,7 +95,7 @@ func main() {
 	pPt := ggplot.New(dsPt, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(3), geom.WithColor("#ef4444"), geom.WithAlpha(0.7))).
 		CoordFlip().
-		Labs(ggplot.Title("Flipped Scatter")).
+		Labels(ggplot.Title("Flipped Scatter")).
 		Theme("minimal")
 	file.Save(ctx, pPt, filepath.Join(dir, "03_horizontal_scatter.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -110,7 +110,7 @@ func main() {
 	pLine := ggplot.New(dsLine, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#0ea5e9"), geom.WithLineWidth(2))).
 		CoordFlip().
-		Labs(ggplot.Title("Flipped Line")).
+		Labels(ggplot.Title("Flipped Line")).
 		Theme("minimal")
 	file.Save(ctx, pLine, filepath.Join(dir, "04_horizontal_line.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -141,7 +141,7 @@ func main() {
 	pML := ggplot.New(dsML, aes.X("t"), aes.Y("v"), aes.Color("signal")).
 		Layer(geom.Line(geom.WithLineWidth(2))).
 		CoordFlip().
-		Labs(ggplot.Title("Flipped Multi-Line"), ggplot.XLab("Time"), ggplot.YLab("Value")).
+		Labels(ggplot.Title("Flipped Multi-Line"), ggplot.XLabel("Time"), ggplot.YLabel("Value")).
 		Theme("minimal")
 	file.Save(ctx, pML, filepath.Join(dir, "05_horizontal_multiline.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -163,7 +163,7 @@ func main() {
 	pStep := ggplot.New(dsStep, aes.X("x"), aes.Y("y")).
 		Layer(geom.Step(geom.WithColor("#f59e0b"), geom.WithLineWidth(2))).
 		CoordFlip().
-		Labs(ggplot.Title("Flipped Step")).
+		Labels(ggplot.Title("Flipped Step")).
 		Theme("minimal")
 	file.Save(ctx, pStep, filepath.Join(dir, "06_horizontal_step.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -187,7 +187,7 @@ func main() {
 			geom.WithFill("#10b981"), geom.WithAlpha(0.5),
 			geom.WithOrientation(geom.Horizontal),
 		)).
-		Labs(ggplot.Title("Horizontal Area")).
+		Labels(ggplot.Title("Horizontal Area")).
 		Theme("minimal")
 	file.Save(ctx, pArea, filepath.Join(dir, "07_horizontal_area.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -209,7 +209,7 @@ func main() {
 			geom.WithFill("#ec4899"), geom.WithAlpha(0.5),
 			geom.WithOrientation(geom.Horizontal),
 		)).
-		Labs(ggplot.Title("Horizontal Density")).
+		Labels(ggplot.Title("Horizontal Density")).
 		Theme("minimal")
 	file.Save(ctx, pDens, filepath.Join(dir, "08_horizontal_density.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -238,7 +238,7 @@ func main() {
 			geom.WithFill("#6366f1"), geom.WithAlpha(0.7),
 			geom.WithOrientation(geom.Horizontal),
 		)).
-		Labs(ggplot.Title("Horizontal Boxplot"), ggplot.XLab("Group"), ggplot.YLab("Score")).
+		Labels(ggplot.Title("Horizontal Boxplot"), ggplot.XLabel("Group"), ggplot.YLabel("Score")).
 		Theme("minimal")
 	file.Save(ctx, pBox, filepath.Join(dir, "09_horizontal_boxplot.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -262,7 +262,7 @@ func main() {
 		Layer(geom.Point(geom.WithSize(2), geom.WithAlpha(0.3), geom.WithColor("#94a3b8"))).
 		Layer(geom.Smooth(geom.WithColor("#ef4444"), geom.WithLineWidth(2))).
 		CoordFlip().
-		Labs(ggplot.Title("Flipped Smooth (LOESS)")).
+		Labels(ggplot.Title("Flipped Smooth (LOESS)")).
 		Theme("minimal")
 	file.Save(ctx, pSm, filepath.Join(dir, "10_horizontal_smooth.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -278,7 +278,7 @@ func main() {
 		Layer(geom.HLine(geom.WithIntercept(20), geom.WithColor("#ef4444"), geom.WithLineWidth(1.5))).
 		Layer(geom.VLine(geom.WithIntercept(4), geom.WithColor("#22c55e"), geom.WithLineWidth(1.5))).
 		CoordFlip().
-		Labs(ggplot.Title("Flipped Reference Lines")).
+		Labels(ggplot.Title("Flipped Reference Lines")).
 		Theme("minimal")
 	file.Save(ctx, pRef, filepath.Join(dir, "11_flipped_reflines.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 
@@ -302,7 +302,7 @@ func main() {
 		Layer(geom.Point(geom.WithSize(2), geom.WithAlpha(0.5), geom.WithColor("#8b5cf6"))).
 		Layer(geom.Rug(geom.WithAlpha(0.4), geom.WithColor("#8b5cf6"))).
 		CoordFlip().
-		Labs(ggplot.Title("Flipped Scatter + Rug")).
+		Labels(ggplot.Title("Flipped Scatter + Rug")).
 		Theme("minimal")
 	file.Save(ctx, pRug, filepath.Join(dir, "12_flipped_rug.png"), 700, 450) //nolint:errcheck // error checked by test assertion.
 

@@ -34,7 +34,7 @@ func tabularFiguresExample(dir string) {
 
 	p := ggplot.New(ds, aes.X("Category"), aes.Y("Value")).
 		Layer(geom.Col(geom.WithFill("#3498DB"), geom.WithAlpha(0.85))).
-		Labs(ggplot.Title("Tabular Figures in Action"), ggplot.Subtitle("Quantitative axes align correctly (e.g. 111111.1 vs 888888.8)")).
+		Labels(ggplot.Title("Tabular Figures in Action"), ggplot.Subtitle("Quantitative axes align correctly (e.g. 111111.1 vs 888888.8)")).
 		Theme("minimal")
 
 	save(p, dir, "tabular_figures", 800, 500)

@@ -134,10 +134,10 @@ func main() { //nolint:funlen // stress-test example; length is intentional.
 			func(v float64) float64 { return v/100 + 100 },     //nolint:mnd // BPS → price.
 			"Change (bps)",
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Intraday Price — 100K ticks × 4 layers + annotations"),
-			ggplot.XLab("Time (s)"),
-			ggplot.YLab("Price ($)"),
+			ggplot.XLabel("Time (s)"),
+			ggplot.YLabel("Price ($)"),
 		)
 
 	if err := window.Show(ctx, plot,

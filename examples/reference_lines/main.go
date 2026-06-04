@@ -71,10 +71,10 @@ func hlineThreshold(dir string) {
 				return fmt.Sprintf("$%.0f", v)
 			}),
 		).
-		Labs(
+		Labels(
 			ggplot.Title("Daily Sales with Targets"),
 			ggplot.Subtitle("Red = stretch goal ($85) · Orange = minimum ($70)"),
-			ggplot.XLab("Day"), ggplot.YLab("Sales"),
+			ggplot.XLabel("Day"), ggplot.YLabel("Sales"),
 		).
 		Theme("seaborn_whitegrid")
 	save(p, dir, "01_hline_threshold", 900, 550)
@@ -117,10 +117,10 @@ func vlineEvents(dir string) {
 			geom.WithColor("#9B59B6"),
 			geom.WithLineWidth(2),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("User Growth with Event Markers"),
 			ggplot.Subtitle("Red = v1.0 launch (day 30) · Purple = viral moment (day 70)"),
-			ggplot.XLab("Day"), ggplot.YLab("Active Users"),
+			ggplot.XLabel("Day"), ggplot.YLabel("Active Users"),
 		).
 		Theme("fivethirtyeight")
 	save(p, dir, "02_vline_events", 900, 550)
@@ -163,10 +163,10 @@ func ablineRegression(dir string) {
 			geom.WithColor("#E74C3C"),
 			geom.WithLineWidth(2.5),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Scatter with Regression Line"),
 			ggplot.Subtitle(fmt.Sprintf("y = %.2fx + %.2f (ABLine)", slope, intercept)),
-			ggplot.XLab("x"), ggplot.YLab("y"),
+			ggplot.XLabel("x"), ggplot.YLabel("y"),
 		).
 		Theme("bmh")
 	save(p, dir, "03_abline_regression", 900, 550)
@@ -209,10 +209,10 @@ func combined(dir string) {
 			geom.WithColor("#8E44AD"),
 			geom.WithLineWidth(2),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Reference Lines — All Three Types"),
 			ggplot.Subtitle("HLine (red=mean) · VLine (green=boundary) · ABLine (purple=trend)"),
-			ggplot.XLab("x"), ggplot.YLab("y"),
+			ggplot.XLabel("x"), ggplot.YLabel("y"),
 		).
 		Theme("seaborn_whitegrid")
 	save(p, dir, "04_combined", 1000, 600)

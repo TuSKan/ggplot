@@ -76,11 +76,11 @@ func stepExample(dir string) {
 		aes.Color("sensor"),
 	).
 		Layer(geom.Step(geom.WithLineWidth(2))).
-		Labs(
+		Labels(
 			ggplot.Title("Step Function: Sensor Readings"),
 			ggplot.Subtitle("Discrete signal levels over time"),
-			ggplot.XLab("Time (s)"),
-			ggplot.YLab("Level"),
+			ggplot.XLabel("Time (s)"),
+			ggplot.YLabel("Level"),
 		).
 		Theme("minimal")
 
@@ -127,11 +127,11 @@ func limitsExample(dir string) {
 		Layer(geom.Point(geom.WithSize(2), geom.WithAlpha(0.7))).
 		XLim(2, 8).
 		YLim(-1.5, 1.5).
-		Labs(
+		Labels(
 			ggplot.Title("Scatter with Axis Limits"),
 			ggplot.Subtitle("Zoomed into x=[2,8], y=[-1.5,1.5]"),
-			ggplot.XLab("x"),
-			ggplot.YLab("f(x)"),
+			ggplot.XLabel("x"),
+			ggplot.YLabel("f(x)"),
 		).
 		Theme("bw")
 
@@ -156,11 +156,11 @@ func flipExample(dir string) {
 	).
 		Layer(geom.Col(geom.WithFill("#4A90D9"), geom.WithAlpha(0.85))).
 		CoordFlip().
-		Labs(
+		Labels(
 			ggplot.Title("Horizontal Bar Chart"),
 			ggplot.Subtitle("Using CoordFlip()"),
-			ggplot.XLab("Category"),
-			ggplot.YLab("Value"),
+			ggplot.XLabel("Category"),
+			ggplot.YLabel("Value"),
 		).
 		Theme("classic")
 
@@ -204,11 +204,11 @@ func rugExample(dir string) {
 	).
 		Layer(geom.Point(geom.WithSize(3), geom.WithAlpha(0.7))).
 		Layer(geom.Rug(geom.WithAlpha(0.4))).
-		Labs(
+		Labels(
 			ggplot.Title("Scatter with Marginal Rug"),
 			ggplot.Subtitle("Rug marks show marginal distributions"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	out := filepath.Join(dir, "rug_scatter.png")

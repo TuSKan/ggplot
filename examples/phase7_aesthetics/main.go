@@ -49,11 +49,11 @@ func sizeMapping(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("#4C72B0"), geom.WithAlpha(0.7)), aes.Size("magnitude")).
 		ScaleSizeArea().
-		Labs(
+		Labels(
 			ggplot.Title("Area-Proportional Size Scale"),
 			ggplot.Subtitle("Circle radius proportional to sqrt(magnitude)"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	outPath := filepath.Join(dir, "size_mapping_area.png")
@@ -89,11 +89,11 @@ func shapeMapping(dir string) {
 			"Type B": "triangle",
 			"Type C": "star",
 		}).
-		Labs(
+		Labels(
 			ggplot.Title("Categorical Shape Mapping"),
 			ggplot.Subtitle("Discrete types mapped to custom glyphs: square, triangle, star"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	outPath := filepath.Join(dir, "shape_mapping.png")
@@ -125,11 +125,11 @@ func linetypeMapping(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithLineWidth(2.5), geom.WithColor("#2ECC71")), aes.Linetype("series")).
 		ScaleLinetype().
-		Labs(
+		Labels(
 			ggplot.Title("Linetype Mapping & Grouping"),
 			ggplot.Subtitle("Linetype mappings automatically group lines and assign dash patterns"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	outPath := filepath.Join(dir, "linetype_mapping.png")
@@ -166,11 +166,11 @@ func alphaMapping(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(5), geom.WithColor("#9B59B6")), aes.Alpha("density")).
 		ScaleAlpha(0.1, 0.9).
-		Labs(
+		Labels(
 			ggplot.Title("Continuous Alpha Mapping"),
 			ggplot.Subtitle("Opacity maps continuously from 0.1 to 0.9 based on density"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	outPath := filepath.Join(dir, "alpha_mapping.png")
@@ -205,11 +205,11 @@ func identityMapping(dir string) {
 		Layer(geom.Point(geom.WithColor("#FF8C00")), aes.Size("my_size"), aes.Alpha("my_alpha")).
 		ScaleSizeIdentity().
 		ScaleAlphaIdentity().
-		Labs(
+		Labels(
 			ggplot.Title("Identity Scale mapping"),
 			ggplot.Subtitle("Bypasses normalization: size maps to [2..24]px, alpha maps to [0.2..1.0]"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	outPath := filepath.Join(dir, "identity_scale_mapping.png")

@@ -57,10 +57,10 @@ func main() {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("z")).
 		Layer(geom.Raster()).
 		ScaleColorContinuous(colormap.Viridis, nil).
-		Labs(
+		Labels(
 			ggplot.Title("Raster — Dampened Ripple (50×50)"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

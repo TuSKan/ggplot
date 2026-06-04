@@ -60,11 +60,11 @@ func main() {
 
 	p := ggplot.New(ds, aes.X("time_of_day"), aes.Y("bpm")).
 		Layer(geom.Line(geom.WithColor("#E74C3C"), geom.WithLineWidth(2))).
-		Labs(
+		Labels(
 			ggplot.Title("Heart Rate — Daily Pattern"),
 			ggplot.Subtitle("DTypeTime: nanoseconds since midnight, 5-min intervals"),
-			ggplot.XLab("Time of Day"),
-			ggplot.YLab("Heart Rate (bpm)"),
+			ggplot.XLabel("Time of Day"),
+			ggplot.YLabel("Heart Rate (bpm)"),
 		).
 		Theme("bmh")
 

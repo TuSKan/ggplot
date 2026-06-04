@@ -61,11 +61,11 @@ func main() {
 		aes.Color("Density"),
 	).
 		Layer(geom.Point(geom.WithSize(0.5), geom.WithAlpha(0.6))).
-		Labs(
+		Labels(
 			ggplot.Title("Clifford Attractor"),
 			ggplot.Subtitle("100,000 iterations · a=-1.4, b=1.6, c=1.0, d=0.7"),
-			ggplot.XLab("Space X"),
-			ggplot.YLab("Space Y"),
+			ggplot.XLabel("Space X"),
+			ggplot.YLabel("Space Y"),
 		).
 		LegendPosition("bottom").
 		Theme("dark")

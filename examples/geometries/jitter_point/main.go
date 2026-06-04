@@ -62,10 +62,10 @@ func main() {
 			geom.WithAlpha(0.6),
 			geom.WithSize(4),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Jitter Point — Overplotting Reduction"),
-			ggplot.XLab("Category"),
-			ggplot.YLab("Value"),
+			ggplot.XLabel("Category"),
+			ggplot.YLabel("Value"),
 		)
 
 	if err := file.Save(context.Background(), p, filepath.Join(dir, "jitter_point.png"), 800, 500); err != nil {

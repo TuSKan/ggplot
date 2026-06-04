@@ -62,7 +62,7 @@ func main() {
 	p1 := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("steelblue"))).
 		FacetWrap("species").
-		Labs(ggplot.Title("Shared Scales (Default)")).
+		Labels(ggplot.Title("Shared Scales (Default)")).
 		Theme("default")
 
 	if err := file.Save(ctx, p1, filepath.Join(dir, "01_shared_scales.png"), 900, 300); err != nil { //nolint:mnd // Example.
@@ -75,7 +75,7 @@ func main() {
 	p2 := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("coral"))).
 		FacetWrap("species", facet.FreeY()).
-		Labs(ggplot.Title("Free Y Scales")).
+		Labels(ggplot.Title("Free Y Scales")).
 		Theme("default")
 
 	if err := file.Save(ctx, p2, filepath.Join(dir, "02_free_y.png"), 900, 300); err != nil { //nolint:mnd // Example.
@@ -88,7 +88,7 @@ func main() {
 	p3 := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("seagreen"))).
 		FacetWrap("species", facet.FreeXY()).
-		Labs(ggplot.Title("Free X & Y Scales")).
+		Labels(ggplot.Title("Free X & Y Scales")).
 		Theme("default")
 
 	if err := file.Save(ctx, p3, filepath.Join(dir, "03_free_xy.png"), 900, 300); err != nil { //nolint:mnd // Example.
@@ -101,7 +101,7 @@ func main() {
 	p4 := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("orchid"))).
 		FacetWrap("species", facet.FreeY()).
-		Labs(ggplot.Title("Custom Strip Styling")).
+		Labels(ggplot.Title("Custom Strip Styling")).
 		Theme("default").
 		ThemeOverride(
 			theme.StripTextOverride(theme.ElementText{Bold: true, Size: 13}), //nolint:mnd // Custom size.

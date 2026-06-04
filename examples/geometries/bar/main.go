@@ -31,10 +31,10 @@ func main() {
 			geom.WithFill("#9B59B6"),
 			geom.WithAlpha(0.85),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Sales by Category"),
-			ggplot.XLab("Category"),
-			ggplot.YLab("Count"),
+			ggplot.XLabel("Category"),
+			ggplot.YLabel("Count"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

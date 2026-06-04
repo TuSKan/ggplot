@@ -73,11 +73,11 @@ func main() {
 	).
 		Layer(geom.Point(geom.WithSize(4), geom.WithAlpha(0.8))).
 		ScaleColor(colormap.Set1).
-		Labs(
+		Labels(
 			ggplot.Title("Iris Sepal Dimensions"),
 			ggplot.Subtitle("Coloured by species (Set1 palette)"),
-			ggplot.XLab("Sepal Length (cm)"),
-			ggplot.YLab("Sepal Width (cm)"),
+			ggplot.XLabel("Sepal Length (cm)"),
+			ggplot.YLabel("Sepal Width (cm)"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

@@ -117,7 +117,7 @@ func buildPlot(ctx context.Context) *ggplot.Plot {
 	return ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(3), geom.WithColor("coral"))).
 		Layer(geom.Smooth(geom.WithColor("steelblue"))).
-		Labs(ggplot.Title("Session loop — pan, zoom, rebuild"), ggplot.XLab("x"), ggplot.YLab("y"))
+		Labels(ggplot.Title("Session loop — pan, zoom, rebuild"), ggplot.XLabel("x"), ggplot.YLabel("y"))
 }
 
 // filmstrip is a headless [output.LiveSurface]: tests/examples push events onto

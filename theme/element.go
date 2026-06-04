@@ -55,6 +55,46 @@ type Margin struct {
 	Top, Right, Bottom, Left float64
 }
 
+// Align controls block-level alignment of layout regions (title block,
+// label block, legend block) within the overall plot layout.
+// This is separate from ElementText.Hjust/Vjust which control text-level
+// justification within a text box.
+type Align string
+
+const (
+	// AlignCenter centres the block horizontally or vertically (default for titles and labels).
+	AlignCenter Align = "center"
+	// AlignLeft aligns the block to the left edge.
+	AlignLeft Align = "left"
+	// AlignRight aligns the block to the right edge.
+	AlignRight Align = "right"
+	// AlignTop aligns the block to the top edge (vertical alignment for legend).
+	AlignTop Align = "top"
+	// AlignBottom aligns the block to the bottom edge (vertical alignment for legend).
+	AlignBottom Align = "bottom"
+)
+
+// BlockAlignment groups block-level alignment settings for plot elements.
+// Used as a pointer in PlotSpec: nil means "use theme defaults".
+// Non-empty fields override the theme's Spacing alignment fields.
+type BlockAlignment struct {
+	// Title controls horizontal alignment of the title block
+	// (title + subtitle). "center" (default), "left", "right".
+	Title Align
+	// Caption controls horizontal alignment of the caption.
+	// "right" (default), "left", "center".
+	Caption Align
+	// XLabel controls horizontal alignment of the X-axis label.
+	// "center" (default), "left", "right".
+	XLabel Align
+	// YLabel controls vertical alignment of the Y-axis label.
+	// "center" (default), "top", "bottom".
+	YLabel Align
+	// Legend controls alignment of the legend stack within its margin.
+	// "top" (default for right/left), "center", "bottom".
+	Legend Align
+}
+
 // IsBlank reports whether an Element is ElementBlank.
 func IsBlank(e Element) bool {
 	_, ok := e.(ElementBlank)

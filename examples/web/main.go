@@ -218,9 +218,9 @@ func buildPlot(eng *memory.Engine, rng *rand.Rand) *ggplot.Plot {
 			geom.WithSize(3),    //nolint:mnd // Visible point size.
 			geom.WithAlpha(0.7), //nolint:mnd // Semi-transparent.
 		), aes.Color("group"), aes.Title("group")).
-		Labs(
+		Labels(
 			ggplot.Title("Interactive Scatter — Pan & Zoom"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 }

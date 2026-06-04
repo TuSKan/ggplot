@@ -36,7 +36,7 @@ func main() {
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#E74C3C"), geom.WithLineWidth(2))).
-		Labs(ggplot.Title("Line Plot"))
+		Labels(ggplot.Title("Line Plot"))
 
 	_, filename, _, _ := runtime.Caller(0)
 	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "line.png"), 800, 600, output.WithCPU(true)); err != nil {

@@ -47,7 +47,7 @@ func identityStat(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#3498DB"), geom.WithLineWidth(2))).
 		Layer(geom.Point(geom.WithSize(4), geom.WithColor("#E74C3C"))).
-		Labs(ggplot.Title("stat: Identity"), ggplot.Subtitle("Raw data → line + points")).
+		Labels(ggplot.Title("stat: Identity"), ggplot.Subtitle("Raw data → line + points")).
 		Theme("dark")
 	save(p, dir, "01_stat_identity", 800, 500)
 }
@@ -66,7 +66,7 @@ func binCountStat(dir string) {
 	ds, _ := dataset.NewDataset(eng2, eng2.NewFloat64Column("weight", xs))
 	p := ggplot.New(ds, aes.X("weight")).
 		Layer(geom.Histogram(geom.WithFill("#1ABC9C"), geom.WithAlpha(0.8))).
-		Labs(ggplot.Title("stat: Bin/Count"), ggplot.Subtitle("Automatic binning of weight distribution")).
+		Labels(ggplot.Title("stat: Bin/Count"), ggplot.Subtitle("Automatic binning of weight distribution")).
 		Theme("minimal")
 	save(p, dir, "02_stat_bin", 800, 500)
 }
@@ -89,7 +89,7 @@ func densityStat(dir string) {
 	ds, _ := dataset.NewDataset(eng3, eng3.NewFloat64Column("measurement", xs))
 	p := ggplot.New(ds, aes.X("measurement")).
 		Layer(geom.Density(geom.WithFill("#9B59B6"), geom.WithAlpha(0.5), geom.WithColor("#6C3483"))).
-		Labs(ggplot.Title("stat: Density (KDE)"), ggplot.Subtitle("Kernel density of bimodal measurement data")).
+		Labels(ggplot.Title("stat: Density (KDE)"), ggplot.Subtitle("Kernel density of bimodal measurement data")).
 		Theme("bw")
 	save(p, dir, "03_stat_density", 800, 500)
 }
@@ -110,7 +110,7 @@ func smoothStat(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(2), geom.WithAlpha(0.3), geom.WithColor("#95A5A6"))).
 		Layer(geom.Smooth(geom.WithColor("#E74C3C"), geom.WithLineWidth(2.5))).
-		Labs(ggplot.Title("stat: Smooth (LOESS)"), ggplot.Subtitle("Local polynomial regression through noisy data")).
+		Labels(ggplot.Title("stat: Smooth (LOESS)"), ggplot.Subtitle("Local polynomial regression through noisy data")).
 		Theme("dark")
 	save(p, dir, "04_stat_smooth", 800, 500)
 }
@@ -132,7 +132,7 @@ func boxplotStat(dir string) {
 	ds, _ := dataset.NewDataset(eng5, eng5.NewFloat64Column("group", x), eng5.NewFloat64Column("value", y))
 	p := ggplot.New(ds, aes.X("group"), aes.Y("value")).
 		Layer(geom.Boxplot(geom.WithFill("#F0E68C"), geom.WithColor("#2C3E50"), geom.WithWidth(0.5))).
-		Labs(ggplot.Title("stat: BoxPlot"), ggplot.Subtitle("Five-number summary per group (variance increases with group)")).
+		Labels(ggplot.Title("stat: BoxPlot"), ggplot.Subtitle("Five-number summary per group (variance increases with group)")).
 		Theme("classic")
 	save(p, dir, "05_stat_boxplot", 800, 500)
 }

@@ -94,6 +94,14 @@ type PlotSpec struct {
 	// ThemeOverrides holds per-plot theme element overrides.
 	// Applied after the base theme is resolved, before rendering.
 	ThemeOverrides []theme.Override
+
+	// PlotMargin overrides the theme's default plot margins with typed units.
+	// When nil, the theme's Spacing margins are used.
+	PlotMargin *theme.PlotMargin
+
+	// Alignment overrides block-level alignment for titles, labels, and
+	// legend within the theme. When nil, theme defaults are used.
+	Alignment *theme.BlockAlignment
 }
 
 // AesMap maps aesthetic channel names to column names.
@@ -139,6 +147,12 @@ type Labels struct {
 	X        string
 	Y        string
 	Caption  string
+
+	// Legend title overrides — when non-empty, override the default
+	// column-name title for each legend type.
+	Color string // categorical / continuous color legend
+	Size  string // graduated-size legend
+	Alpha string // continuous-alpha legend
 }
 
 // AxisGuide controls axis label layout — dodging, overlap handling,

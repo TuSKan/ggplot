@@ -48,10 +48,10 @@ func main() {
 			geom.WithAlpha(0.7),
 			geom.WithColor("#4C72B0"),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Scatter Plot Example"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	// Save to PNG.

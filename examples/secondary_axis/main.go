@@ -47,10 +47,10 @@ func main() {
 	p1 := ggplot.New(ds, aes.X("hour"), aes.Y("temp_c")).
 		Layer(geom.Line(geom.WithColor("steelblue"), geom.WithLineWidth(2))). //nolint:mnd // Line styling.
 		Layer(geom.Point(geom.WithColor("steelblue"))).
-		Labs(
+		Labels(
 			ggplot.Title("Temperature — Dual Axis"),
-			ggplot.XLab("Hour of Day"),
-			ggplot.YLab("Temperature (°C)"),
+			ggplot.XLabel("Hour of Day"),
+			ggplot.YLabel("Temperature (°C)"),
 		).
 		SecondAxis(scale.SecAxis(
 			func(c float64) float64 { return c*9/5 + 32 },       //nolint:mnd // °C → °F.
@@ -68,10 +68,10 @@ func main() {
 	// 2. DupAxis — mirror the same axis on the right.
 	p2 := ggplot.New(ds, aes.X("hour"), aes.Y("temp_c")).
 		Layer(geom.Line(geom.WithColor("coral"), geom.WithLineWidth(2))). //nolint:mnd // Line styling.
-		Labs(
+		Labels(
 			ggplot.Title("Temperature — Duplicated Axis"),
-			ggplot.XLab("Hour of Day"),
-			ggplot.YLab("Temperature (°C)"),
+			ggplot.XLabel("Hour of Day"),
+			ggplot.YLabel("Temperature (°C)"),
 		).
 		SecondAxis(scale.DupAxis("Temperature (°C)")).
 		Theme("dark")

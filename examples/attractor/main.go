@@ -52,7 +52,7 @@ func plotAttractor(dir, filename, title string, seg SegmentData) {
 			geom.WithSize(1.2),
 			geom.WithAlpha(0.7),
 		)).
-		Labs(ggplot.Title(title)).
+		Labels(ggplot.Title(title)).
 		LegendPosition("none").
 		Theme("dark").
 		ThemeOverride(

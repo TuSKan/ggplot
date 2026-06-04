@@ -39,7 +39,7 @@ func main() {
 
 	p := ggplot.New(ds, aes.X("value")).
 		Layer(geom.Density(geom.WithFill("#3498DB"), geom.WithAlpha(0.5), geom.WithColor("#2C3E50"))).
-		Labs(ggplot.Title("Density Plot"), ggplot.Subtitle("Bimodal distribution"))
+		Labels(ggplot.Title("Density Plot"), ggplot.Subtitle("Bimodal distribution"))
 
 	_, filename, _, _ := runtime.Caller(0)
 	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "density.png"), 800, 600, output.WithCPU(true)); err != nil {

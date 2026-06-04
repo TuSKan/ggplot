@@ -42,7 +42,7 @@ func main() {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(2.5), geom.WithColor("#8E44AD"), geom.WithAlpha(0.6))).
 		Layer(geom.Rug(geom.WithAlpha(0.4), geom.WithColor("#8E44AD"))).
-		Labs(ggplot.Title("Rug Plot"), ggplot.Subtitle("Marginal rug marks on scatter"))
+		Labels(ggplot.Title("Rug Plot"), ggplot.Subtitle("Marginal rug marks on scatter"))
 
 	_, filename, _, _ := runtime.Caller(0)
 	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "rug.png"), 800, 600, output.WithCPU(true)); err != nil {

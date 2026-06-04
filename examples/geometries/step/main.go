@@ -39,7 +39,7 @@ func main() {
 
 	p := ggplot.New(ds, aes.X("time"), aes.Y("level")).
 		Layer(geom.Step(geom.WithColor("#2ECC71"), geom.WithLineWidth(2))).
-		Labs(ggplot.Title("Step Plot"))
+		Labels(ggplot.Title("Step Plot"))
 
 	_, filename, _, _ := runtime.Caller(0)
 	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "step.png"), 800, 600, output.WithCPU(true)); err != nil {

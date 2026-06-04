@@ -52,11 +52,11 @@ func main() {
 	p := ggplot.New(ds, aes.X("time"), aes.Y("latency_ms")).
 		Layer(geom.Line(geom.WithColor("#3498DB"), geom.WithLineWidth(2))).
 		Layer(geom.Point(geom.WithSize(3), geom.WithColor("#2C3E50"))).
-		Labs(
+		Labels(
 			ggplot.Title("Server Response Time"),
 			ggplot.Subtitle("Two-week daily latency — auto DateTimeScale on X"),
-			ggplot.XLab("Date"),
-			ggplot.YLab("Latency (ms)"),
+			ggplot.XLabel("Date"),
+			ggplot.YLabel("Latency (ms)"),
 		).
 		Theme("seaborn_whitegrid")
 
@@ -95,11 +95,11 @@ func main() {
 
 	p2 := ggplot.New(ds2, aes.X("hour"), aes.Y("cpu")).
 		Layer(geom.Line(geom.WithColor("#E74C3C"), geom.WithLineWidth(2.5))).
-		Labs(
+		Labels(
 			ggplot.Title("CPU Load — Intraday"),
 			ggplot.Subtitle("Hourly samples on 2024-06-15 — auto hour-level ticks"),
-			ggplot.XLab("Time"),
-			ggplot.YLab("CPU %"),
+			ggplot.XLabel("Time"),
+			ggplot.YLabel("CPU %"),
 		).
 		Theme("dark_background")
 

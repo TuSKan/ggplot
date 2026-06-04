@@ -30,8 +30,6 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55.0/go.mod h1:IA1C1U7jO/ENqm/vhi7V9YYpBsp+IMyqNrEN94N7tVc=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.55.0 h1:0s6TxfCu2KHkkZPnBfsQ2y5qia0jl3MMrmBhu3nCOYk=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.55.0/go.mod h1:Mf6O40IAyB9zR/1J8nGDDPirZQQPbYJni8Yisy7NTMc=
-github.com/TuSKan/gogpugg v0.0.0-20260603040614-f055f29eb01c h1:pR591R6pt717Otcx+VqTtqSNXbHL7eojGMqu1ysFcq8=
-github.com/TuSKan/gogpugg v0.0.0-20260603040614-f055f29eb01c/go.mod h1:KtMYgYxsSSNhKhia9vmOU9muvz9gROCTj8A7ZGxPwb8=
 github.com/ajroetker/go-highway v0.0.13-0.20260528204430-c3b5b59834b1 h1:PAEA9KYpE58upyfgLfokJa8Gt8sph52bytdCqomEHV4=
 github.com/ajroetker/go-highway v0.0.13-0.20260528204430-c3b5b59834b1/go.mod h1:un7fcrwix7UOHJrr18Lgh5eeF+1yaZiGWdTw3FbfDv4=
 github.com/alecthomas/assert/v2 v2.10.0 h1:jjRCHsj6hBJhkmhznrCzoNpbA3zqy0fYiUcYZP/GkPY=
@@ -83,8 +81,6 @@ github.com/go-text/typesetting-utils v0.0.0-20260223113751-2d88ac90dae3 h1:drBZz
 github.com/go-text/typesetting-utils v0.0.0-20260223113751-2d88ac90dae3/go.mod h1:3/62I4La/HBRX9TcTpBj4eipLiwzf+vhI+7whTc9V7o=
 github.com/go-webgpu/goffi v0.5.2 h1:Kq2llPlA6IhkkmAffkM5CtsgaXuBQC4mBI0BOREwV04=
 github.com/go-webgpu/goffi v0.5.2/go.mod h1:wfoxNsJkU+5RFbV1kNN1kunhc1lFHuJKK3zpgx08/uM=
-github.com/go-webgpu/webgpu v0.5.2 h1:E+yKCbRw/Dgn77pb/CX3kXatwwROGX7/B4ZFbRPaRbQ=
-github.com/go-webgpu/webgpu v0.5.2/go.mod h1:d2RR3tI2kUtcMfpC+qJt46IRkDslRhftjCfQvnprGkY=
 github.com/goccy/go-json v0.10.6 h1:p8HrPJzOakx/mn/bQtjgNjdTcN+/S6FcG2CTtQOrHVU=
 github.com/goccy/go-json v0.10.6/go.mod h1:oq7eo15ShAhp70Anwd5lgX2pLfOS3QCiwU/PULtXL6M=
 github.com/gogpu/gogpu v0.41.0 h1:iXmiGEJrFfUXfM35HuhTDhPF8lIQo6l0o1sFkib7hzY=
@@ -95,8 +91,6 @@ github.com/gogpu/gputypes v0.5.0 h1:i2ED/9w6m6yLxf8XJT69/NIMSNTLO2y5F1LqvugCKIE=
 github.com/gogpu/gputypes v0.5.0/go.mod h1:cnXrDMwTpWTvJLW1Vreop3PcT6a2YP/i3s91rPaOavw=
 github.com/gogpu/naga v0.17.13 h1:VlponVgD1fEfNotx0874M4n7tnfum8YlMEB3pBdd2Ps=
 github.com/gogpu/naga v0.17.13/go.mod h1:15sQaHKkbqXcwTN+hHYGLsA0WBBnkmYzne/eF5p5WEg=
-github.com/gogpu/wgpu v0.29.1 h1:pSLOpg/VlhnkyZ2ffmnqkGUVAiuCbPnnduxlWgPHZwI=
-github.com/gogpu/wgpu v0.29.1/go.mod h1:aZVNcEK4tf8fmSha+W7vwxxfJBBRWvUMjT+17bWHSYY=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b/go.mod h1:SBH7ygxi8pfUlaOkMMuAQtPIUF8ecWP5IEl/CR7VP2Q=
 github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e/go.mod h1:cIg4eruTrX1D+g88fzRXU5OdNfaM+9IcxsU14FzY7Hc=
 github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da h1:oI5xCqsCo564l8iNU+DwB5epxmsaqB+rhGL0m5jtYqE=
@@ -228,8 +222,8 @@ golang.org/x/net v0.0.0-20190213061140-3a22650c66bd/go.mod h1:mL1N/T3taQHkDXs73r
 golang.org/x/net v0.0.0-20190311183353-d8887717615a/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
 golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
 golang.org/x/net v0.0.0-20201110031124-69a78807bb2b/go.mod h1:sp8m0HH+o8qH0wwXwYZr8TS3Oi6o0r6Gce1SSxlDquU=
-golang.org/x/net v0.54.0 h1:2zJIZAxAHV/OHCDTCOHAYehQzLfSXuf/5SoL/Dv6w/w=
-golang.org/x/net v0.54.0/go.mod h1:Sj4oj8jK6XmHpBZU/zWHw3BV3abl4Kvi+Ut7cQcY+cQ=
+golang.org/x/net v0.55.0 h1:bcvxaJn3e1U6InsFWt1JUq1aSjnRxLzT2rtD2KfkDF8=
+golang.org/x/net v0.55.0/go.mod h1:L5U2KuzuOe1lY7Z+aWVIKK6qEeJXnXV9yzGA+WCHJww=
 golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
 golang.org/x/oauth2 v0.36.0 h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=
 golang.org/x/oauth2 v0.36.0/go.mod h1:YDBUJMTkDnJS+A4BP4eZBjCqtokkg1hODuPjwiGPO7Q=

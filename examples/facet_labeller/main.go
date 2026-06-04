@@ -60,7 +60,7 @@ func main() {
 	p1 := ggplot.New(ds, aes.X("sepal"), aes.Y("petal"), aes.Color("species")).
 		Layer(geom.Point()).
 		FacetWrap("species", facet.WithLabeller(facet.LabelBoth()), facet.NCols(3)).
-		Labs(ggplot.Title("FacetWrap + LabelBoth"), ggplot.XLab("Sepal Length"), ggplot.YLab("Petal Length")).
+		Labels(ggplot.Title("FacetWrap + LabelBoth"), ggplot.XLabel("Sepal Length"), ggplot.YLabel("Petal Length")).
 		Theme("minimal")
 	file.Save(ctx, p1, filepath.Join(dir, "01_facet_wrap_labelboth.png"), 900, 350) //nolint:errcheck,mnd // demo.
 
@@ -74,7 +74,7 @@ func main() {
 			facet.GridMargins(true),
 			facet.GridDrop(false),
 		).
-		Labs(ggplot.Title("FacetGrid + Margins"), ggplot.XLab("Sepal Length"), ggplot.YLab("Petal Length")).
+		Labels(ggplot.Title("FacetGrid + Margins"), ggplot.XLabel("Sepal Length"), ggplot.YLabel("Petal Length")).
 		Theme("minimal")
 	file.Save(ctx, p2, filepath.Join(dir, "02_facet_grid_margins.png"), 900, 700) //nolint:errcheck,mnd // demo.
 
@@ -84,7 +84,7 @@ func main() {
 	p3 := ggplot.New(ds, aes.X("sepal"), aes.Y("petal")).
 		Layer(geom.Point(geom.WithColor("#3b82f6"))).
 		FacetWrap("species", facet.WithDrop(false), facet.NCols(3)).
-		Labs(ggplot.Title("FacetWrap — Drop=false"), ggplot.XLab("Sepal"), ggplot.YLab("Petal")).
+		Labels(ggplot.Title("FacetWrap — Drop=false"), ggplot.XLabel("Sepal"), ggplot.YLabel("Petal")).
 		Theme("minimal")
 	file.Save(ctx, p3, filepath.Join(dir, "03_facet_wrap_nodrop.png"), 900, 350) //nolint:errcheck,mnd // demo.
 
@@ -94,7 +94,7 @@ func main() {
 	p4 := ggplot.New(ds, aes.X("sepal"), aes.Y("petal"), aes.Color("species")).
 		Layer(geom.Point()).
 		FacetGrid("species", "region").
-		Labs(ggplot.Title("FacetGrid — Default Labels"), ggplot.XLab("Sepal"), ggplot.YLab("Petal")).
+		Labels(ggplot.Title("FacetGrid — Default Labels"), ggplot.XLabel("Sepal"), ggplot.YLabel("Petal")).
 		Theme("minimal")
 	file.Save(ctx, p4, filepath.Join(dir, "04_facet_grid_default.png"), 700, 500) //nolint:errcheck,mnd // demo.
 

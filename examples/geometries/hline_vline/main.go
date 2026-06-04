@@ -42,7 +42,7 @@ func main() {
 		Layer(geom.Point(geom.WithSize(2), geom.WithAlpha(0.6), geom.WithColor("#2980B9"))).
 		Layer(geom.HLine(geom.WithIntercept(15), geom.WithColor("#E74C3C"), geom.WithLineWidth(1.5))).
 		Layer(geom.VLine(geom.WithIntercept(10), geom.WithColor("#27AE60"), geom.WithLineWidth(1.5))).
-		Labs(ggplot.Title("HLine + VLine"), ggplot.Subtitle("Reference lines at y=15, x=10"))
+		Labels(ggplot.Title("HLine + VLine"), ggplot.Subtitle("Reference lines at y=15, x=10"))
 
 	_, filename, _, _ := runtime.Caller(0)
 	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "hline_vline.png"), 800, 600, output.WithCPU(true)); err != nil {

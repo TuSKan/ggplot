@@ -100,11 +100,11 @@ func main() {
 			geom.WithColor("#1F2937"),
 			geom.WithFontSize(10), //nolint:mnd // Clean editorial size.
 		), aes.Label("label")).
-		Labs(
+		Labels(
 			ggplot.Title("Excess Deaths in New York City During 2020"),
 			ggplot.Subtitle("Weekly deaths from all causes compared with the historical normal range"),
-			ggplot.XLab("Date"),
-			ggplot.YLab("Weekly Deaths"),
+			ggplot.XLabel("Date"),
+			ggplot.YLabel("Weekly Deaths"),
 		).
 		Theme("newsroom")
 

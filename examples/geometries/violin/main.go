@@ -63,10 +63,10 @@ func main() {
 			geom.WithAlpha(0.7),
 			geom.WithWidth(0.8),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Distribution Shape — Violin Plot"),
-			ggplot.XLab("Group"),
-			ggplot.YLab("Value"),
+			ggplot.XLabel("Group"),
+			ggplot.YLabel("Value"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

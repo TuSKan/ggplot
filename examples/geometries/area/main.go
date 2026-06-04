@@ -35,7 +35,7 @@ func main() {
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Area(geom.WithFill("#2ECC71"), geom.WithAlpha(0.5))).
-		Labs(ggplot.Title("Area Plot"))
+		Labels(ggplot.Title("Area Plot"))
 
 	_, filename, _, _ := runtime.Caller(0)
 	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "area.png"), 800, 600); err != nil {

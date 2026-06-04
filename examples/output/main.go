@@ -58,7 +58,7 @@ func main() {
 	plot := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(5), geom.WithColor("coral"))).
 		Layer(geom.Smooth(geom.WithColor("steelblue"))).
-		Labs(ggplot.Title("Output Layer Demo"), ggplot.XLab("x"), ggplot.YLab("y"))
+		Labels(ggplot.Title("Output Layer Demo"), ggplot.XLabel("x"), ggplot.YLabel("y"))
 
 	// 1. Plot.Save — one call per format; the encoder is inferred from the
 	//    extension. Each goes through output.Render + the "file" surface.

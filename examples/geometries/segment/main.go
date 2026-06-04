@@ -43,10 +43,10 @@ func main() {
 			geom.WithColor("#2ECC71"),
 			geom.WithSize(5),
 		), aes.X("xend"), aes.Y("yend")).
-		Labs(
+		Labels(
 			ggplot.Title("Dumbbell Chart — Before vs After"),
-			ggplot.XLab("Value"),
-			ggplot.YLab("Item"),
+			ggplot.XLabel("Value"),
+			ggplot.YLabel("Item"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

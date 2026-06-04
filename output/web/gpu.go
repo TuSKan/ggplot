@@ -7,299 +7,412 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"log/slog"
 	"syscall/js"
-	"time"
+	"unsafe"
 
 	"github.com/gogpu/gg"
+	_ "github.com/gogpu/gg/gpu" // register GPU accelerator for browser
 	"github.com/gogpu/gg/integration/ggcanvas"
-	"github.com/gogpu/gogpu"
 	"github.com/gogpu/gpucontext"
+	"github.com/gogpu/gputypes"
+	"github.com/gogpu/wgpu"
 
 	pcanvas "github.com/TuSKan/ggplot/canvas"
 	"github.com/TuSKan/ggplot/output"
 )
 
-// WithGPU enables WebGPU-accelerated rendering via gogpu + ggcanvas. The
-// figure is drawn into a gg.Context (GPU-accelerated SDF shapes, MSDF text)
-// and presented zero-copy to the browser's WebGPU surface.
+// WithGPU enables WebGPU-accelerated rendering. The GPU accelerator (SDF
+// shapes, MSDF text, convex polygons, stencil paths) renders directly to
+// the WebGPU surface via ggcanvas.RenderDirect — zero-copy, no readback.
 //
 // This requires a browser with WebGPU support (Chrome 113+, Edge 113+,
 // Firefox behind flag). If WebGPU is unavailable at runtime, Mount returns
 // an error.
 func WithGPU() Opt { return func(o *Options) { o.GPU = true } }
 
-// mountGPU creates a gogpu.App with a browser canvas, sets up the draw
-// callback via ggcanvas, and runs the gogpu event loop. Like output/window,
-// gogpu owns the event loop — we wire draw + input callbacks and dispatch
-// through the output.Controller.
-func mountGPU(ctx context.Context, src output.Source, fig output.Figure, _ js.Value, o Options) error {
-	app := gogpu.NewApp(gogpu.DefaultConfig().
-		WithTitle("ggplot").
-		WithSize(o.Width, o.Height).
-		WithContinuousRender(false)) // event-driven: 0% CPU when idle
-
-	ws := &gpuState{
-		ctx:        ctx,
-		src:        src,
-		app:        app,
-		controller: o.Controller,
-		cur:        fig,
-		state:      output.State{Bounds: image.Rect(0, 0, o.Width, o.Height), Figure: fig},
-		drawErr:    make(chan error, 1),
-	}
-
-	// Register input event handlers.
-	ws.registerEvents(app)
-
-	// Draw callback: ggcanvas lazy-init + figure render + present.
-	app.OnDraw(func(dc *gogpu.Context) {
-		ws.draw(dc)
-	})
-
-	// Cleanup on close.
-	app.OnClose(func() {
-		if ws.cv != nil {
-			_ = ws.cv.Close()
-			ws.cv = nil
-		}
-	})
-
-	// Run app.Run() in a goroutine — it blocks on the gogpu event loop.
-	appDone := make(chan error, 1)
-	go func() {
-		appDone <- app.Run()
-	}()
-
-	// Wait for: draw panic, context cancel (mode switch), or app exit.
-	select {
-	case err := <-ws.drawErr:
-		// Draw callback panicked. Don't call app.Quit() synchronously —
-		// schedule it for after we return to let gogpu unwind cleanly.
-		go app.Quit()
-
-		return err
-
-	case <-ctx.Done():
-		// Mode switching — cancel is normal.
-		app.Quit()
-		<-appDone // Wait for Run to return.
-
-		return nil
-
-	case err := <-appDone:
-		// app.Run() returned — could be from draw panic's go app.Quit().
-		if ws.err != nil {
-			return ws.err
-		}
-
-		if err != nil && ctx.Err() == nil {
-			return fmt.Errorf("web: gpu: %w", err)
-		}
-
-		return nil
-	}
-}
-
-// gpuState holds mutable state for the WebGPU-accelerated browser surface.
-// Mirrors output/window's windowState but simplified for the browser.
-type gpuState struct {
-	ctx        context.Context
-	src        output.Source
-	app        *gogpu.App
-	controller output.Controller
-
-	cur   output.Figure
-	state output.State
-	err   error
-
-	// drawErr signals draw-callback panics to mountGPU without calling
-	// app.Quit() inside the callback (which kills the WASM runtime).
-	drawErr chan error
-	failed  bool // set after first draw panic — prevents retries
-
-	// ggcanvas — created lazily on first draw frame.
-	cv    *ggcanvas.Canvas
-	lastW int
-	lastH int
-
-	// Mouse tracking for pan.
-	mouseX float64
-	mouseY float64
-
-	// Double-click detection.
-	lastClickTime time.Time
-}
-
-// registerEvents hooks the gogpu event system for mouse/scroll input.
-func (ws *gpuState) registerEvents(app *gogpu.App) {
-	es := app.EventSource()
-
-	es.OnMousePress(func(_ gpucontext.MouseButton, x, y float64) {
-		ws.mouseX, ws.mouseY = x, y
-
-		now := time.Now()
-		if now.Sub(ws.lastClickTime) < 400*time.Millisecond { //nolint:mnd // Standard double-click threshold.
-			ws.dispatch(output.Event{Kind: output.EventDoubleClick, X: x, Y: y})
-			ws.lastClickTime = time.Time{}
-		} else {
-			ws.dispatch(output.Event{Kind: output.EventPointerDown, X: x, Y: y})
-			ws.lastClickTime = now
-		}
-	})
-
-	es.OnMouseRelease(func(_ gpucontext.MouseButton, x, y float64) {
-		ws.mouseX, ws.mouseY = x, y
-		ws.dispatch(output.Event{Kind: output.EventPointerUp, X: x, Y: y})
-	})
-
-	es.OnMouseMove(func(x, y float64) {
-		ws.mouseX, ws.mouseY = x, y
-		ws.dispatch(output.Event{Kind: output.EventPointerMove, X: x, Y: y})
-	})
-
-	if ses, ok := es.(gpucontext.ScrollEventSource); ok {
-		ses.OnScrollEvent(func(ev gpucontext.ScrollEvent) {
-			ws.dispatch(output.Event{
-				Kind: output.EventScroll,
-				X:    ev.X,
-				Y:    ev.Y,
-				DX:   ev.DeltaX,
-				DY:   ev.DeltaY,
-			})
-		})
-	} else {
-		es.OnScroll(func(dx, dy float64) {
-			ws.dispatch(output.Event{
-				Kind: output.EventScroll,
-				X:    ws.mouseX,
-				Y:    ws.mouseY,
-				DX:   dx,
-				DY:   dy,
-			})
-		})
-	}
-}
-
-// draw is the OnDraw callback — runs each frame.
-// The defer/recover guards against panics in upstream wgpu/ggcanvas code (e.g.,
-// CreateTexture returning nil in the browser WebGPU backend) that we cannot fix
-// from ggplot. CRITICAL: we must NOT call app.Quit() inside the draw callback —
-// doing so kills the WASM runtime before mountGPU can handle the error.
-func (ws *gpuState) draw(dc *gogpu.Context) {
-	// After a panic, all future draw calls are no-ops.
-	if ws.failed {
-		return
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			ws.failed = true
-			ws.err = fmt.Errorf("web: gpu: draw panic: %v", r)
-
-			// Signal the error to mountGPU via channel (non-blocking).
-			select {
-			case ws.drawErr <- ws.err:
-			default:
-			}
-
-			// Schedule app.Quit() on a new goroutine so app.Run() returns
-			// on the next event cycle. We must NOT call Quit() synchronously
-			// inside the draw callback — it corrupts the WASM call stack.
-			go ws.app.Quit()
-
-			// Log to browser console so the user sees the error.
-			js.Global().Get("console").Call("error",
-				fmt.Sprintf("[ggplot] GPU draw panic: %v", r))
-		}
-	}()
-
-	w, h := dc.Width(), dc.Height()
-	if w <= 0 || h <= 0 {
-		return
-	}
-
-	ws.state.Bounds = image.Rect(0, 0, w, h)
-
-	// Lazy init or resize the ggcanvas.
-	if ws.cv == nil {
-		provider := ws.app.GPUContextProvider()
-		if provider == nil {
-			return // GPU not ready yet; will retry next frame.
-		}
-
-		cv, err := ggcanvas.New(provider, w, h)
-		if err != nil {
-			ws.fail(fmt.Errorf("web: gpu: ggcanvas.New: %w", err))
-
-			return
-		}
-
-		ws.cv = cv
-		ws.lastW, ws.lastH = w, h
-	} else if w != ws.lastW || h != ws.lastH {
-		if err := ws.cv.Resize(w, h); err != nil {
-			ws.fail(fmt.Errorf("web: gpu: ggcanvas.Resize: %w", err))
-
-			return
-		}
-
-		ws.lastW, ws.lastH = w, h
-	}
-
-	// Draw the figure into gg.Context via ggcanvas.
-	if err := ws.cv.Draw(func(cc *gg.Context) {
-		c := pcanvas.RasterFromContext(cc)
-		c.Clear(color.White)
-
-		if drawErr := ws.cur.Draw(ws.ctx, c, w, h); drawErr != nil {
-			ws.fail(drawErr)
-		}
-	}); err != nil {
-		ws.fail(fmt.Errorf("web: gpu: ggcanvas.Draw: %w", err))
-
-		return
-	}
-
-	// Present: zero-copy GPU-direct via RenderDirect, or universal fallback.
-	if err := ws.cv.Render(dc.RenderTarget()); err != nil {
-		ws.fail(fmt.Errorf("web: gpu: ggcanvas.Render: %w", err))
-	}
-}
-
-// dispatch runs one event through the controller and performs the action.
-func (ws *gpuState) dispatch(ev output.Event) {
-	ws.state.Figure = ws.cur
-
-	switch ws.controller.OnEvent(ev, &ws.state) {
-	case output.ActionIgnore:
-	case output.ActionRedraw:
-		ws.app.RequestRedraw()
-	case output.ActionRebuild:
-		ws.rebuildSync()
-		ws.app.RequestRedraw()
-	case output.ActionExport:
-	case output.ActionClose:
-		ws.app.Quit()
-	}
-}
-
-// rebuildSync recomputes the figure from the source synchronously.
-func (ws *gpuState) rebuildSync() {
-	fig, err := ws.src.Build(ws.ctx)
+// mountGPU creates a WebGPU surface inside the container, initialises the
+// wgpu pipeline (instance → adapter → device → surface), registers the GPU
+// accelerator, and runs a standard output.Session event loop.
+//
+// Rendering uses ggcanvas.RenderDirect for GPU-accelerated content (SDF
+// shapes, text) and queue.WriteTexture as fallback for CPU-rasterized
+// content.
+func mountGPU(ctx context.Context, src output.Source, fig output.Figure, container js.Value, o Options) error {
+	surf, err := newGPUSurface(container, o.Width, o.Height)
 	if err != nil {
-		ws.fail(fmt.Errorf("web: gpu: rebuild: %w", err))
+		return fmt.Errorf("web: gpu: %w", err)
+	}
+	defer func() { _ = surf.Close() }()
 
+	// Initial render.
+	if err := output.Render(ctx, fig, surf); err != nil {
+		return fmt.Errorf("web: gpu: initial render: %w", err)
+	}
+
+	// Session-based event loop — same as raster/SVG modes.
+	sessOpts := []output.SessionOpt{
+		output.WithController(o.Controller),
+	}
+	if o.RebuildDelay > 0 {
+		sessOpts = append(sessOpts, output.WithRebuildDelay(o.RebuildDelay))
+	}
+	if o.OnRebuildErr != nil {
+		sessOpts = append(sessOpts, output.WithRebuildError(o.OnRebuildErr))
+	}
+
+	sess := output.NewSession(src, surf, sessOpts...)
+	return sess.Run(ctx)
+}
+
+// ---------------------------------------------------------------------------
+// gpuDeviceProvider — gpucontext.DeviceProvider backed by raw wgpu
+// ---------------------------------------------------------------------------
+
+// gpuDeviceProvider wraps raw wgpu resources as a gpucontext.DeviceProvider.
+// This lets ggcanvas and the GPU accelerator share our device.
+type gpuDeviceProvider struct {
+	device  *wgpu.Device
+	adapter *wgpu.Adapter
+	format  wgpu.TextureFormat
+}
+
+func (p *gpuDeviceProvider) Device() gpucontext.Device             { return p.device }
+func (p *gpuDeviceProvider) Queue() gpucontext.Queue               { return p.device.Queue() }
+func (p *gpuDeviceProvider) SurfaceFormat() gputypes.TextureFormat { return p.format }
+func (p *gpuDeviceProvider) Adapter() gpucontext.Adapter           { return p.adapter }
+func (p *gpuDeviceProvider) AdapterInfo() gpucontext.AdapterInfo {
+	info := p.adapter.Info()
+	var atype gpucontext.AdapterType
+	switch info.DeviceType {
+	case gputypes.DeviceTypeDiscreteGPU:
+		atype = gpucontext.AdapterTypeDiscrete
+	case gputypes.DeviceTypeIntegratedGPU:
+		atype = gpucontext.AdapterTypeIntegrated
+	case gputypes.DeviceTypeCPU:
+		atype = gpucontext.AdapterTypeSoftware
+	default:
+		atype = gpucontext.AdapterTypeUnknown
+	}
+	return gpucontext.AdapterInfo{
+		Name: info.Name,
+		Type: atype,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// gpuSurface — output.LiveSurface backed by ggcanvas + GPU accelerator
+// ---------------------------------------------------------------------------
+
+// gpuSurface implements [output.LiveSurface] for browser WebGPU rendering.
+// It creates a <canvas> inside the container, initialises the wgpu pipeline,
+// and uses ggcanvas + the GPU accelerator for zero-copy rendering.
+//
+// Data flow:
+//
+//	Draw calls → gg.Context → GPU accelerator (SDF/text/convex/stencil)
+//	  → FlushGPUWithView(surfaceView) → GPU render pass → surface → present
+//
+// CPU-rasterized content (fallback paths) is uploaded via queue.WriteTexture.
+type gpuSurface struct {
+	container js.Value
+	canvas    js.Value
+
+	// wgpu pipeline — owned, released on Close.
+	instance *wgpu.Instance
+	adapter  *wgpu.Adapter
+	device   *wgpu.Device
+	surface  *wgpu.Surface
+	format   wgpu.TextureFormat
+
+	// ggcanvas for integrated GPU rendering.
+	ggcanvas *ggcanvas.Canvas
+	provider *gpuDeviceProvider
+
+	// DOM events.
+	events    chan output.Event
+	callbacks []jsCallback
+	fps       *fpsTracker
+	bounds    image.Rectangle
+}
+
+// newGPUSurface creates a WebGPU-backed surface inside the container.
+//
+// Pipeline: Instance → Adapter → Device → Surface → Configure → GPU Accelerator.
+func newGPUSurface(container js.Value, w, h int) (*gpuSurface, error) {
+	doc := js.Global().Get("document")
+
+	// Create <canvas> inside the container (same pattern as rasterSurface).
+	canvasEl := doc.Call("createElement", "canvas")
+	canvasEl.Set("width", w)
+	canvasEl.Set("height", h)
+
+	style := canvasEl.Get("style")
+	style.Set("display", "block")
+	style.Set("width", "100%")
+	style.Set("height", "100%")
+	style.Set("touch-action", "none") // disable browser pan/zoom
+
+	container.Call("appendChild", canvasEl)
+
+	// --- wgpu pipeline ---
+	instance, err := wgpu.CreateInstance(nil)
+	if err != nil {
+		return nil, fmt.Errorf("CreateInstance: %w", err)
+	}
+
+	adapter, err := instance.RequestAdapter(nil)
+	if err != nil {
+		instance.Release()
+		return nil, fmt.Errorf("RequestAdapter: %w", err)
+	}
+
+	slog.Info("adapter selected",
+		"name", adapter.Info().Name,
+		"type", adapter.Info().DeviceType,
+	)
+
+	device, err := adapter.RequestDevice(nil)
+	if err != nil {
+		adapter.Release()
+		instance.Release()
+		return nil, fmt.Errorf("RequestDevice: %w", err)
+	}
+
+	// Create surface from our canvas (not querySelector — we own it).
+	surface, err := instance.CreateSurfaceFromCanvas(canvasEl)
+	if err != nil {
+		device.Release()
+		adapter.Release()
+		instance.Release()
+		return nil, fmt.Errorf("CreateSurfaceFromCanvas: %w", err)
+	}
+
+	// Use RGBA8Unorm to match gg.Context pixmap format (RGBA, 8bpc).
+	// This avoids R/B channel swapping. RGBA8Unorm is a supported canvas
+	// format per the WebGPU spec.
+	format := gputypes.TextureFormatRGBA8Unorm
+
+	// Configure the surface with CopyDst for fallback queue.WriteTexture
+	// and RenderAttachment for GPU-direct render passes.
+	if cfgErr := surface.Configure(device, &wgpu.SurfaceConfiguration{
+		Format: format,
+		Usage:  gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopyDst,
+		Width:  uint32(w), //nolint:gosec // G115: w validated positive by caller
+		Height: uint32(h), //nolint:gosec // G115: h validated positive by caller
+	}); cfgErr != nil {
+		surface.Release()
+		device.Release()
+		adapter.Release()
+		instance.Release()
+		return nil, fmt.Errorf("surface.Configure: %w", cfgErr)
+	}
+
+	// Create device provider for GPU accelerator + ggcanvas.
+	provider := &gpuDeviceProvider{
+		device:  device,
+		adapter: adapter,
+		format:  format,
+	}
+
+	// Register the GPU accelerator with our device. This enables SDF shapes,
+	// MSDF text, convex polygons, and stencil paths on the GPU.
+	if setErr := gg.SetAcceleratorDeviceProvider(provider); setErr != nil {
+		slog.Warn("GPU accelerator init failed, will use CPU fallback", "err", setErr)
+	} else {
+		slog.Info("GPU accelerator registered for browser WebGPU")
+	}
+
+	// Create ggcanvas for integrated rendering.
+	ggc, err := ggcanvas.NewWithScale(provider, w, h, 1.0)
+	if err != nil {
+		slog.Warn("ggcanvas creation failed, will use WriteTexture fallback", "err", err)
+	}
+
+	events := make(chan output.Event, 64) //nolint:mnd // Buffer size matches output/window event queue depth.
+
+	s := &gpuSurface{
+		container: container,
+		canvas:    canvasEl,
+		instance:  instance,
+		adapter:   adapter,
+		device:    device,
+		surface:   surface,
+		format:    format,
+		provider:  provider,
+		ggcanvas:  ggc,
+		events:    events,
+		bounds:    image.Rect(0, 0, w, h),
+		fps:       newFPSTracker(),
+	}
+
+	s.callbacks = registerDOMEvents(canvasEl, events)
+
+	return s, nil
+}
+
+// Acquire begins a GPU frame: lazy-inits or resizes the ggcanvas, clears
+// it, and returns a canvas.Canvas for drawing.
+func (s *gpuSurface) Acquire(_ context.Context) (pcanvas.Canvas, error) {
+	s.fps.Begin()
+
+	w, h := s.bounds.Dx(), s.bounds.Dy()
+
+	if s.ggcanvas != nil {
+		// Handle resize.
+		cw, ch := s.ggcanvas.Context().Width(), s.ggcanvas.Context().Height()
+		if cw != w || ch != h {
+			if err := s.ggcanvas.Resize(w, h); err != nil {
+				return nil, fmt.Errorf("ggcanvas.Resize: %w", err)
+			}
+			// Reconfigure the surface for new dimensions.
+			if err := s.surface.Configure(s.device, &wgpu.SurfaceConfiguration{
+				Format: s.format,
+				Usage:  gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopyDst,
+				Width:  uint32(w), //nolint:gosec // G115: w is from bounds, always positive
+				Height: uint32(h), //nolint:gosec // G115: h is from bounds, always positive
+			}); err != nil {
+				return nil, fmt.Errorf("surface.Configure resize: %w", err)
+			}
+		}
+
+		// Draw through ggcanvas — GPU accelerator is active.
+		s.ggcanvas.Draw(func(cc *gg.Context) {
+			cc.SetColor(color.White)
+			cc.Clear()
+		})
+
+		rc := pcanvas.RasterFromContext(s.ggcanvas.Context())
+		rc.Clear(color.White)
+		return rc, nil
+	}
+
+	// Fallback: no ggcanvas, use raw gg.Context (shouldn't happen normally).
+	return nil, fmt.Errorf("ggcanvas not initialized")
+}
+
+// Commit ends the frame. Tries GPU-direct rendering via ggcanvas.RenderDirect,
+// falling back to queue.WriteTexture if GPU-direct is unavailable.
+func (s *gpuSurface) Commit(_ context.Context) error {
+	w, h := s.bounds.Dx(), s.bounds.Dy()
+
+	// Acquire the surface texture for this frame.
+	surfTex, _, err := s.surface.GetCurrentTexture()
+	if err != nil {
+		return fmt.Errorf("GetCurrentTexture: %w", err)
+	}
+
+	uw := uint32(w) //nolint:gosec // G115: w positive
+	uh := uint32(h) //nolint:gosec // G115: h positive
+
+	if s.ggcanvas != nil {
+		// Create a TextureView handle from the surface texture.
+		surfView, vErr := s.device.CreateTextureView(surfTex.Texture(), &wgpu.TextureViewDescriptor{
+			Label:  "surface_view",
+			Format: s.format,
+		})
+		if vErr != nil {
+			return fmt.Errorf("CreateTextureView: %w", vErr)
+		}
+
+		// Wrap as gpucontext.TextureView for ggcanvas.
+		tv := gpucontext.NewTextureView(unsafe.Pointer(surfView)) //nolint:gosec // Go spec Rule 1 — same pattern as gg/internal/gpu
+
+		// GPU-direct: flush all GPU-accelerated draws to the surface view.
+		if rdErr := s.ggcanvas.RenderDirect(tv, uw, uh); rdErr != nil {
+			slog.Debug("RenderDirect failed, falling back to WriteTexture", "err", rdErr)
+			// Fall through to WriteTexture fallback below.
+			s.writeTextureFallback(surfTex, uw, uh)
+		}
+	} else {
+		s.writeTextureFallback(surfTex, uw, uh)
+	}
+
+	// Present — on browser this is a no-op (auto-present on event loop yield).
+	_ = s.surface.Present(surfTex)
+
+	s.fps.End()
+	return nil
+}
+
+// writeTextureFallback uploads the CPU pixmap to the surface texture via
+// queue.WriteTexture. Used when GPU-direct rendering is unavailable.
+func (s *gpuSurface) writeTextureFallback(surfTex *wgpu.SurfaceTexture, w, h uint32) {
+	if s.ggcanvas == nil {
 		return
 	}
 
-	ws.cur = fig
+	pixmap := s.ggcanvas.Context().ResizeTarget()
+	data := pixmap.Data()
+
+	stride := w * 4 //nolint:mnd // 4 = RGBA bytes per pixel
+	if err := s.device.Queue().WriteTexture(
+		&wgpu.ImageCopyTexture{
+			Texture:  surfTex.Texture(),
+			MipLevel: 0,
+			Origin:   wgpu.Origin3D{},
+			Aspect:   gputypes.TextureAspectAll,
+		},
+		data,
+		&wgpu.ImageDataLayout{
+			Offset:       0,
+			BytesPerRow:  stride,
+			RowsPerImage: h,
+		},
+		&wgpu.Extent3D{
+			Width:              w,
+			Height:             h,
+			DepthOrArrayLayers: 1,
+		},
+	); err != nil {
+		slog.Warn("writeTextureFallback failed", "err", err)
+	}
 }
 
-// fail records the first error and asks the app to quit.
-func (ws *gpuState) fail(err error) {
-	if ws.err == nil {
-		ws.err = err
+// Bounds returns the current logical drawing size.
+func (s *gpuSurface) Bounds() image.Rectangle { return s.bounds }
+
+// Events returns the channel receiving DOM events translated to output.Event.
+func (s *gpuSurface) Events() <-chan output.Event { return s.events }
+
+// Close releases all GPU resources, removes DOM listeners, and removes the
+// canvas from the container.
+func (s *gpuSurface) Close() error {
+	releaseCallbacks(s.callbacks)
+	s.callbacks = nil
+
+	if s.ggcanvas != nil {
+		s.ggcanvas.Close()
+		s.ggcanvas = nil
 	}
 
-	ws.app.Quit()
+	if s.surface != nil {
+		s.surface.Release()
+		s.surface = nil
+	}
+	if s.device != nil {
+		s.device.Release()
+		s.device = nil
+	}
+	if s.adapter != nil {
+		s.adapter.Release()
+		s.adapter = nil
+	}
+	if s.instance != nil {
+		s.instance.Release()
+		s.instance = nil
+	}
+
+	// Remove canvas from DOM.
+	if !s.canvas.IsUndefined() && !s.canvas.IsNull() {
+		parent := s.canvas.Get("parentElement")
+		if !parent.IsUndefined() && !parent.IsNull() {
+			parent.Call("removeChild", s.canvas)
+		}
+	}
+
+	return nil
 }
+
+// Compile-time interface check.
+var _ output.LiveSurface = (*gpuSurface)(nil)

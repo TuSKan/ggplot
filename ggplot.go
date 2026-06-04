@@ -13,7 +13,7 @@
 //	).
 //	    Layer(geom.Point(geom.WithSize(4), geom.WithAlpha(0.7))).
 //	    Layer(geom.Smooth()).
-//	    Labs(ggplot.Title("My Plot"), ggplot.XLab("X Axis")).
+//	    Labels(ggplot.Title("My Plot"), ggplot.XLabel("X Axis")).
 //	    Theme("minimal").
 //	    Save("output.png", 1200, 800)
 //
@@ -153,6 +153,8 @@ func (p *Plot) clone() *Plot {
 			Annotations:    slices.Clone(p.spec.Annotations),
 			SecondAxis:     p.spec.SecondAxis,
 			ThemeOverrides: slices.Clone(p.spec.ThemeOverrides),
+			PlotMargin:     p.spec.PlotMargin,
+			Alignment:      p.spec.Alignment,
 		},
 	}
 }
@@ -306,6 +308,22 @@ func (p *Plot) ThemeOverride(overrides ...theme.Override) *Plot {
 	return cloned
 }
 
+// PlotMargin sets explicit plot margins with unit support.
+// Units can be theme.Pt, theme.Cm, theme.Inches, or theme.Lines.
+//
+// Example — 1cm top margin, 0.5in right margin:
+//
+//	p.PlotMargin(theme.PlotMargin{
+//	    Top:   theme.Cm(1),
+//	    Right: theme.Inches(0.5),
+//	})
+func (p *Plot) PlotMargin(m theme.PlotMargin) *Plot {
+	cloned := p.clone()
+	cloned.spec.PlotMargin = &m
+
+	return cloned
+}
+
 // XLim sets explicit x-axis limits. Pass math.NaN() for either end to auto-detect.
 func (p *Plot) XLim(lo, hi float64) *Plot {
 	cloned := p.clone()
@@ -387,6 +405,22 @@ func ptrFloat(v float64) *float64 {
 func (p *Plot) LegendPosition(pos LegendPos) *Plot {
 	cloned := p.clone()
 	cloned.spec.LegendPosition = string(pos)
+
+	return cloned
+}
+
+// Align sets block-level alignment for titles, labels, and legend.
+// Non-empty fields override the theme's default alignment.
+//
+// Example — left-aligned titles, right-aligned caption:
+//
+//	p.Align(theme.BlockAlignment{
+//	    Title:   theme.AlignLeft,
+//	    Caption: theme.AlignRight,
+//	})
+func (p *Plot) Align(a theme.BlockAlignment) *Plot {
+	cloned := p.clone()
+	cloned.spec.Alignment = &a
 
 	return cloned
 }
@@ -521,8 +555,8 @@ func (p *Plot) ScaleAlphaIdentity() *Plot {
 	return cloned
 }
 
-// Labs configures plot labels (title, subtitle, axis labels, caption).
-func (p *Plot) Labs(opts ...LabOpt) *Plot {
+// Labels configures plot labels (title, subtitle, axis labels, caption, and legend titles).
+func (p *Plot) Labels(opts ...LabelOpt) *Plot {
 	cloned := p.clone()
 	for _, opt := range opts {
 		opt(&cloned.spec.Labels)
@@ -531,23 +565,35 @@ func (p *Plot) Labs(opts ...LabOpt) *Plot {
 	return cloned
 }
 
-// LabOpt is a functional option for configuring plot labels.
-type LabOpt func(*Labels)
+// LabelOpt is a functional option for configuring plot labels.
+type LabelOpt func(*Labels)
 
 // Title sets the plot title.
-func Title(text string) LabOpt { return func(l *Labels) { l.Title = text } }
+func Title(text string) LabelOpt { return func(l *Labels) { l.Title = text } }
 
 // Subtitle sets the plot subtitle.
-func Subtitle(text string) LabOpt { return func(l *Labels) { l.Subtitle = text } }
+func Subtitle(text string) LabelOpt { return func(l *Labels) { l.Subtitle = text } }
 
-// XLab sets the x-axis label.
-func XLab(text string) LabOpt { return func(l *Labels) { l.X = text } }
+// XLabel sets the x-axis label.
+func XLabel(text string) LabelOpt { return func(l *Labels) { l.X = text } }
 
-// YLab sets the y-axis label.
-func YLab(text string) LabOpt { return func(l *Labels) { l.Y = text } }
+// YLabel sets the y-axis label.
+func YLabel(text string) LabelOpt { return func(l *Labels) { l.Y = text } }
 
 // Caption sets the plot caption.
-func Caption(text string) LabOpt { return func(l *Labels) { l.Caption = text } }
+func Caption(text string) LabelOpt { return func(l *Labels) { l.Caption = text } }
+
+// ColorLabel sets the title for the categorical/continuous color legend.
+// When set, this overrides the default column-name title.
+func ColorLabel(text string) LabelOpt { return func(l *Labels) { l.Color = text } }
+
+// SizeLabel sets the title for the graduated-size legend.
+// When set, this overrides the default column-name title.
+func SizeLabel(text string) LabelOpt { return func(l *Labels) { l.Size = text } }
+
+// AlphaLabel sets the title for the continuous-alpha legend.
+// When set, this overrides the default column-name title.
+func AlphaLabel(text string) LabelOpt { return func(l *Labels) { l.Alpha = text } }
 
 // SecondAxis adds a secondary Y-axis derived from the primary Y-axis via a
 // transform pair. The secondary axis is rendered on the right side of the
@@ -738,6 +784,8 @@ type BuiltPanel struct {
 	LegendEntries []LegendEntry
 	LegendTitle   string
 	ColorBarSpec  *ColorBarSpec
+	SizeLegend    *SizeLegendSpec  // graduated-size legend (nil = not mapped)
+	AlphaLegend   *AlphaLegendSpec // continuous-alpha legend (nil = not mapped)
 	XIsDiscrete   bool
 }
 
@@ -951,6 +999,14 @@ func (p *Plot) build(ctx context.Context) (*Built, error) {
 	if len(p.spec.ThemeOverrides) > 0 {
 		th = theme.WithOverrides(th, p.spec.ThemeOverrides...)
 	}
+
+	// Apply per-plot margin override.
+	if p.spec.PlotMargin != nil {
+		th.PlotMargin = p.spec.PlotMargin
+	}
+
+	// Apply per-plot alignment overrides.
+	applyBlockAlignment(&th, p.spec.Alignment)
 
 	// 1. Facet.
 	facetPanels, err := p.spec.Facet.Split(ctx, p.spec.Dataset)
@@ -1486,6 +1542,88 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 			}
 		}
 	}
+	// Build continuous size legend if any layer has a continuous size mapping.
+	var sizeLegend *SizeLegendSpec
+
+	for _, rl := range resolved {
+		if rl.SizeCol != "" && rl.SizeScale != nil {
+			if ss, ok := rl.SizeScale.(*scale.SizeScale); ok {
+				ticks := ss.Ticks(5) //nolint:mnd // 5 representative sizes.
+				entries := make([]SizeLegendEntry, len(ticks))
+
+				for i, v := range ticks {
+					entries[i] = SizeLegendEntry{
+						Label:  ss.Format(v),
+						Radius: ss.MapValue(v),
+					}
+				}
+
+				title := rl.SizeCol
+				if rl.Mapping["size"] != "" {
+					title = rl.Mapping["size"]
+				}
+
+				if p.spec.Labels.Size != "" {
+					title = p.spec.Labels.Size
+				}
+
+				sizeLegend = &SizeLegendSpec{
+					Title:   title,
+					Entries: entries,
+				}
+
+				break
+			}
+		}
+	}
+
+	// Build continuous alpha legend if any layer has a continuous alpha mapping.
+	var alphaLegend *AlphaLegendSpec
+
+	for _, rl := range resolved {
+		if rl.AlphaCol != "" && rl.AlphaScale != nil {
+			if as, ok := rl.AlphaScale.(*scale.AlphaScale); ok {
+				minA, maxA := as.Range()
+				minV, maxV := as.Bounds()
+
+				title := rl.AlphaCol
+				if rl.Mapping["alpha"] != "" {
+					title = rl.Mapping["alpha"]
+				}
+
+				if p.spec.Labels.Alpha != "" {
+					title = p.spec.Labels.Alpha
+				}
+
+				// Use the layer's geom base color, fall back to
+				// first legend entry, then default steelblue.
+				baseColor := gg.RGBA{R: 0.27, G: 0.51, B: 0.71, A: 1} //nolint:mnd // Default steelblue base color.
+
+				if rl.Geom.Params.Color != "" {
+					cr, cg, cb := colormap.ParseRGB(rl.Geom.Params.Color, baseColor.R, baseColor.G, baseColor.B)
+					baseColor = gg.RGBA{R: cr, G: cg, B: cb, A: 1}
+				} else if len(legendEntries) > 0 {
+					baseColor = legendEntries[0].Color
+				}
+
+				alphaLegend = &AlphaLegendSpec{
+					Title:     title,
+					MinAlpha:  minA,
+					MaxAlpha:  maxA,
+					MinValue:  minV,
+					MaxValue:  maxV,
+					BaseColor: baseColor,
+				}
+
+				break
+			}
+		}
+	}
+
+	// Apply Labels() legend title overrides for categorical/continuous color legend.
+	if p.spec.Labels.Color != "" {
+		legendTitle = p.spec.Labels.Color
+	}
 
 	return BuiltPanel{
 		Label:         label,
@@ -1495,6 +1633,8 @@ func (p *Plot) buildPanel(ctx context.Context, pi int, panelDS dataset.Dataset, 
 		LegendEntries: legendEntries,
 		LegendTitle:   legendTitle,
 		ColorBarSpec:  colorBarSpec,
+		SizeLegend:    sizeLegend,
+		AlphaLegend:   alphaLegend,
 		XIsDiscrete:   xIsDiscrete,
 	}, nil
 }
@@ -2349,9 +2489,10 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 		)
 
 		if pi == 0 || len(b.panels) == 1 {
-			mTop = 15.0
-			mRight = 20.0
-			mBottom = 15.0 + th.AxisTextElem().Size + th.Spacing.TickLength + 14
+			baseT, baseR, baseB, baseL := th.ResolvedPlotMargin(th.AxisTextElem().Size * 1.2) //nolint:mnd // 1.2× line-height approximation for UnitLines.
+			mTop = baseT
+			mRight = baseR
+			mBottom = baseB + th.AxisTextElem().Size + th.Spacing.TickLength + 14
 
 			// When axis labels are rotated, their projected height can be
 			// much larger than the raw font size. Measure the worst-case
@@ -2377,10 +2518,10 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 
 				rad := xAngle * math.Pi / 180 //nolint:mnd // degrees-to-radians conversion.
 				rotH := math.Abs(maxXLabelW*math.Sin(rad)) + math.Abs(th.AxisTextElem().Size*math.Cos(rad))
-				mBottom = 15.0 + rotH + th.Spacing.TickLength + 14
+				mBottom = baseB + rotH + th.Spacing.TickLength + 14
 			}
 
-			mLeft = 15.0 + maxTickW + th.Spacing.TickLength + 10
+			mLeft = baseL + maxTickW + th.Spacing.TickLength + 10
 
 			// When axis labels are dodged across multiple rows, the
 			// bottom margin must grow by (nRows−1) × rowHeight.
@@ -2430,7 +2571,7 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 			}
 
 			if b.labels.Subtitle != "" {
-				mTop += th.PlotSubtitle().Size + 4
+				mTop += th.PlotSubtitle().Size + 8 //nolint:mnd // Match title gap for consistent subtitle spacing.
 			}
 
 			if b.labels.X != "" {
@@ -2438,12 +2579,12 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 			}
 
 			if b.labels.Y != "" {
-				titleGap := 5 + maxTickW + th.AxisTitle().Size + 8
+				titleGap := 5 + maxTickW + th.AxisTitle().Size + 14
 				if titleGap < 30+th.AxisTitle().Size/2 {
 					titleGap = 30 + th.AxisTitle().Size/2
 				}
 
-				mLeft = 15.0 + titleGap + th.Spacing.TickLength
+				mLeft = baseL + titleGap + th.Spacing.TickLength
 			}
 
 			if b.labels.Caption != "" {
@@ -2482,11 +2623,19 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 				legendPos = "right"
 			}
 
-			hasLegend = legendPos != "none" && (len(bp.LegendEntries) > 0 || bp.ColorBarSpec != nil)
+			hasLegend = legendPos != "none" && (len(bp.LegendEntries) > 0 || bp.ColorBarSpec != nil || bp.SizeLegend != nil || bp.AlphaLegend != nil)
 
 			legendW = 0.0
 
 			if hasLegend && (legendPos == "right" || legendPos == "left") {
+				// Resolve title font size once — used to measure all legend titles.
+				titleSize := th.LegendTitle().Size
+				if titleSize == 0 {
+					titleSize = th.LegendTextElem().Size
+				}
+
+				ls := th.Spacing.Legend.Resolved()
+
 				if len(bp.LegendEntries) > 0 {
 					cv.SetFontSize(th.LegendTextElem().Size)
 
@@ -2499,7 +2648,18 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 						}
 					}
 
-					legendW += maxLabelW + 12 + 8 + 15
+					legendW += maxLabelW + ls.SwatchSize + ls.SwatchGap + ls.Padding*2 + ls.SwatchGap
+
+					// Ensure width fits the categorical legend title.
+					if bp.LegendTitle != "" {
+						cv.SetFontSize(titleSize)
+						ttw, _ := cv.MeasureString(bp.LegendTitle)
+
+						titleNeed := ttw + ls.Padding*2 + ls.SwatchGap*2
+						if titleNeed > legendW {
+							legendW = titleNeed
+						}
+					}
 				}
 
 				if bp.ColorBarSpec != nil {
@@ -2513,7 +2673,65 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 					maxLblW, _ := cv.MeasureString(fmt.Sprintf("%.4g", vmax))
 					minLblW, _ := cv.MeasureString(fmt.Sprintf("%.4g", vmin))
 					lblW := math.Max(maxLblW, minLblW)
-					legendW += 14 + lblW + 12
+					legendW += ls.BarWidth + lblW + ls.Padding*2
+				}
+
+				if bp.SizeLegend != nil {
+					// Size legend width: max diameter + gap + label width.
+					cv.SetFontSize(th.LegendTextElem().Size)
+
+					maxR := 0.0
+					maxSzLblW := 0.0
+
+					for _, e := range bp.SizeLegend.Entries {
+						if e.Radius > maxR {
+							maxR = e.Radius
+						}
+
+						tw, _ := cv.MeasureString(e.Label)
+						if tw > maxSzLblW {
+							maxSzLblW = tw
+						}
+					}
+
+					sizeLegW := maxR*2 + ls.SwatchGap + maxSzLblW + ls.Padding*2
+					if sizeLegW > legendW {
+						legendW = sizeLegW
+					}
+
+					// Ensure width fits the size legend title.
+					if bp.SizeLegend.Title != "" {
+						cv.SetFontSize(titleSize)
+						ttw, _ := cv.MeasureString(bp.SizeLegend.Title)
+
+						titleNeed := ttw + ls.Padding*2 + ls.SwatchGap*2
+						if titleNeed > legendW {
+							legendW = titleNeed
+						}
+					}
+				}
+
+				if bp.AlphaLegend != nil {
+					// Alpha legend width: bar + gap + label.
+					cv.SetFontSize(th.LegendTextElem().Size * 0.9) //nolint:mnd // Match alpha label size.
+
+					alphaLblW, _ := cv.MeasureString("1.00")
+
+					alphaLegW := ls.BarWidth + 4 + alphaLblW + ls.Padding*2 //nolint:mnd // bar + gap + label + padding.
+					if alphaLegW > legendW {
+						legendW = alphaLegW
+					}
+
+					// Ensure width fits the alpha legend title.
+					if bp.AlphaLegend.Title != "" {
+						cv.SetFontSize(titleSize)
+						ttw, _ := cv.MeasureString(bp.AlphaLegend.Title)
+
+						titleNeed := ttw + ls.Padding*2 + ls.SwatchGap*2
+						if titleNeed > legendW {
+							legendW = titleNeed
+						}
+					}
 				}
 			}
 
@@ -2869,79 +3087,216 @@ func (b *Built) Draw(ctx context.Context, cv canvas.Canvas, width, height int) e
 func (b *Built) drawLegend(cv canvas.Canvas, bp BuiltPanel, legendPos string, dataX, dataY, cellW, cellH, mBottom, legendW float64, th theme.Theme) {
 	switch legendPos {
 	case "right":
-		lx := dataX + cellW + 10
+		lx := dataX + cellW + 10 //nolint:mnd // Gap from panel edge.
+		ly := legendStartY(th.Spacing.LegendAlign, dataY, cellH, estimateLegendH(bp, cellH, th))
 
-		ly := dataY + 5
-		if len(bp.LegendEntries) > 0 {
-			drawLegendVertical(cv, bp.LegendTitle, bp.LegendEntries, lx, ly, th)
-			ly += float64(len(bp.LegendEntries)+1) * 20
-		}
-
-		if bp.ColorBarSpec != nil {
-			barH := math.Min(cellH*0.25, 120)
-			drawColorBar(cv, *bp.ColorBarSpec, lx, ly, barH, th)
-		}
+		drawLegendStack(cv, bp, lx, ly, cellH, th)
 	case "left":
-		lx := dataX - legendW - 5
+		lx := dataX - legendW - 5 //nolint:mnd // Gap from panel edge.
+		ly := legendStartY(th.Spacing.LegendAlign, dataY, cellH, estimateLegendH(bp, cellH, th))
 
-		ly := dataY + 5
-		if len(bp.LegendEntries) > 0 {
-			drawLegendVertical(cv, bp.LegendTitle, bp.LegendEntries, lx, ly, th)
-			ly += float64(len(bp.LegendEntries)+1) * 20
-		}
-
-		if bp.ColorBarSpec != nil {
-			barH := math.Min(cellH*0.25, 120)
-			drawColorBar(cv, *bp.ColorBarSpec, lx, ly, barH, th)
-		}
+		drawLegendStack(cv, bp, lx, ly, cellH, th)
 	case "top":
-		topY := dataY - 25
+		topY := dataY - 25 //nolint:mnd // Above panel.
 		if len(bp.LegendEntries) > 0 {
 			drawLegendHorizontal(cv, bp.LegendTitle, bp.LegendEntries, dataX, topY, cellW, th)
 		}
 
 		if bp.ColorBarSpec != nil {
-			barW := math.Min(cellW*0.3, 200)
-			barX := dataX + cellW/2 - barW/2
+			barW := math.Min(cellW*0.3, 200) //nolint:mnd // Max 200px bar width.
+			barX := dataX + cellW/2 - barW/2 //nolint:mnd // Centre bar.
 			drawColorBarHorizontal(cv, *bp.ColorBarSpec, barX, topY, barW, th)
 		}
+
+		if bp.SizeLegend != nil {
+			drawSizeLegendHorizontal(cv, *bp.SizeLegend, dataX, topY-20, cellW, th) //nolint:mnd // Above categorical legend.
+		}
+
+		if bp.AlphaLegend != nil {
+			barW := math.Min(cellW*0.2, 150)                                        //nolint:mnd // Max 150px alpha bar width.
+			barX := dataX + cellW/2 - barW/2                                        //nolint:mnd // Centre bar.
+			drawAlphaLegendHorizontal(cv, *bp.AlphaLegend, barX, topY-20, barW, th) //nolint:mnd // Above.
+		}
 	case "bottom":
-		bottomY := dataY + cellH + mBottom - 25
+		bottomY := dataY + cellH + mBottom - 25 //nolint:mnd // Below panel.
 		if len(bp.LegendEntries) > 0 {
 			drawLegendHorizontal(cv, bp.LegendTitle, bp.LegendEntries, dataX, bottomY, cellW, th)
 		}
 
 		if bp.ColorBarSpec != nil {
-			barW := math.Min(cellW*0.3, 200)
-			barX := dataX + cellW/2 - barW/2
+			barW := math.Min(cellW*0.3, 200) //nolint:mnd // Max 200px bar width.
+			barX := dataX + cellW/2 - barW/2 //nolint:mnd // Centre bar.
 			drawColorBarHorizontal(cv, *bp.ColorBarSpec, barX, bottomY, barW, th)
+		}
+
+		if bp.SizeLegend != nil {
+			drawSizeLegendHorizontal(cv, *bp.SizeLegend, dataX, bottomY+20, cellW, th) //nolint:mnd // Below categorical legend.
+		}
+
+		if bp.AlphaLegend != nil {
+			barW := math.Min(cellW*0.2, 150)                                           //nolint:mnd // Max 150px alpha bar width.
+			barX := dataX + cellW/2 - barW/2                                           //nolint:mnd // Centre bar.
+			drawAlphaLegendHorizontal(cv, *bp.AlphaLegend, barX, bottomY+20, barW, th) //nolint:mnd // Below.
 		}
 	}
 }
 
 // drawTitles renders title, subtitle, and caption.
 func (b *Built) drawTitles(cv canvas.Canvas, width, height int, th theme.Theme) {
-	centerX := float64(width) / 2
+	w := float64(width)
+	h := float64(height)
 	titleY := 10.0
+
+	// Resolve title alignment (default = center).
+	titleX, titleAnchorX := alignXAnchor(th.Spacing.TitleAlign, w)
 
 	if b.labels.Title != "" {
 		cv.SetColor(th.PlotTitle().Color)
 		cv.SetFontSize(th.PlotTitle().Size)
-		cv.DrawStringAnchored(b.labels.Title, centerX, titleY+th.PlotTitle().Size/2, 0.5, 0.5)
-		titleY += th.PlotTitle().Size + 8
+		cv.DrawStringAnchored(b.labels.Title, titleX, titleY+th.PlotTitle().Size/2, titleAnchorX, 0.5)
+		titleY += th.PlotTitle().Size + 8 //nolint:mnd // Title-to-subtitle gap.
 	}
 
 	if b.labels.Subtitle != "" {
 		cv.SetColor(th.PlotSubtitle().Color)
 		cv.SetFontSize(th.PlotSubtitle().Size)
-		cv.DrawStringAnchored(b.labels.Subtitle, centerX, titleY+th.PlotSubtitle().Size/2, 0.5, 0.5)
+		cv.DrawStringAnchored(b.labels.Subtitle, titleX, titleY+th.PlotSubtitle().Size/2, titleAnchorX, 0.5)
 	}
 
 	if b.labels.Caption != "" {
+		// Resolve caption alignment (default = right, matching ggplot2).
+		captionAlign := th.Spacing.CaptionAlign
+		if captionAlign == "" {
+			captionAlign = theme.AlignRight
+		}
+
+		captionX, captionAnchorX := alignXAnchor(captionAlign, w)
+
 		cv.SetColor(th.AxisTextElem().Color)
 		cv.SetFontSize(th.AxisTextElem().Size)
-		cv.DrawStringAnchored(b.labels.Caption, float64(width)-40, float64(height)-4, 1.0, 1.0)
+		cv.DrawStringAnchored(b.labels.Caption, captionX, h-4, captionAnchorX, 1.0) //nolint:mnd // 4px bottom padding.
 	}
+}
+
+// applyBlockAlignment applies per-plot alignment overrides to the theme.
+// Non-empty fields in a override the corresponding Spacing alignment.
+func applyBlockAlignment(th *theme.Theme, a *theme.BlockAlignment) {
+	if a == nil {
+		return
+	}
+
+	if a.Title != "" {
+		th.Spacing.TitleAlign = a.Title
+	}
+
+	if a.Caption != "" {
+		th.Spacing.CaptionAlign = a.Caption
+	}
+
+	if a.XLabel != "" {
+		th.Spacing.XLabelAlign = a.XLabel
+	}
+
+	if a.YLabel != "" {
+		th.Spacing.YLabelAlign = a.YLabel
+	}
+
+	if a.Legend != "" {
+		th.Spacing.LegendAlign = a.Legend
+	}
+}
+
+// alignXAnchor returns the x coordinate and anchor for a given horizontal
+// alignment within a region of width w. The default (empty) is center.
+func alignXAnchor(align theme.Align, w float64) (x, anchorX float64) {
+	const pad = 10.0 // edge padding for left/right alignment
+
+	switch align { //nolint:exhaustive // Only horizontal values are meaningful here.
+	case theme.AlignLeft:
+		return pad, 0
+	case theme.AlignRight:
+		return w - pad, 1.0
+	default: // center or empty
+		return w / 2, 0.5
+	}
+}
+
+// alignXAnchorInRegion returns the x coordinate and anchor for a given
+// horizontal alignment within a sub-region [regionX, regionX+regionW].
+func alignXAnchorInRegion(align theme.Align, regionX, regionW float64) (x, anchorX float64) {
+	switch align { //nolint:exhaustive // Only horizontal values are meaningful here.
+	case theme.AlignLeft:
+		return regionX, 0
+	case theme.AlignRight:
+		return regionX + regionW, 1.0
+	default: // center or empty
+		return regionX + regionW/2, 0.5
+	}
+}
+
+// alignYAnchorRotated returns the translate-Y and text anchorX for a
+// 90° counter-clockwise rotated label aligned within a vertical region
+// [regionY, regionY+regionH]. After CCW rotation the text's X-axis
+// maps to screen Y: higher anchorX pushes the text toward smaller Y (top).
+func alignYAnchorRotated(align theme.Align, regionY, regionH float64) (cy, anchorX float64) {
+	switch align { //nolint:exhaustive // Only vertical values are meaningful here.
+	case theme.AlignTop:
+		return regionY, 1.0
+	case theme.AlignBottom:
+		return regionY + regionH, 0
+	default: // center or empty
+		return regionY + regionH/2, 0.5
+	}
+}
+
+// legendStartY returns the Y coordinate to start the legend stack based on
+// vertical alignment within the cell. Default (empty or "top") = top-aligned.
+func legendStartY(align theme.Align, dataY, cellH, legendH float64) float64 {
+	const pad = 5.0 // edge padding
+
+	switch align { //nolint:exhaustive // Only vertical values are meaningful here.
+	case theme.AlignCenter:
+		return dataY + (cellH-legendH)/2
+	case theme.AlignBottom:
+		return dataY + cellH - legendH - pad
+	default: // top or empty (matches ggplot2 default)
+		return dataY + pad
+	}
+}
+
+// estimateLegendH computes the approximate total height of the legend stack
+// for vertical alignment. This is a layout estimate — it does not need to
+// be pixel-perfect, just close enough for center/bottom placement.
+func estimateLegendH(bp BuiltPanel, cellH float64, th theme.Theme) float64 {
+	ls := th.Spacing.Legend.Resolved()
+	h := 0.0
+
+	if len(bp.LegendEntries) > 0 {
+		n := float64(len(bp.LegendEntries))
+		h += ls.TitleSpacing + ls.SwatchSize/2 + (n-1)*ls.EntrySpacing + ls.SwatchSize/2 + ls.GroupGap
+	}
+
+	if bp.ColorBarSpec != nil {
+		barH := math.Min(cellH*0.25, 120) //nolint:mnd // Match drawLegendStack bar height.
+		h += ls.TitleSpacing + barH + ls.GroupGap
+	}
+
+	if bp.SizeLegend != nil {
+		// Approximate: title + 5 entries × entrySpacing.
+		nEntries := float64(len(bp.SizeLegend.Entries))
+		if nEntries == 0 {
+			nEntries = 5 //nolint:mnd // Fallback estimate.
+		}
+
+		h += ls.TitleSpacing + nEntries*ls.EntrySpacing + ls.GroupGap
+	}
+
+	if bp.AlphaLegend != nil {
+		barH := math.Min(cellH*0.15, 80) //nolint:mnd // Match drawLegendStack bar height.
+		h += ls.TitleSpacing + barH
+	}
+
+	return h
 }
 
 // builtLayersToLayerSpecs converts BuiltLayer slice to LayerSpec slice
@@ -3121,7 +3476,9 @@ func drawXAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, w float64, 
 			titleGapY += float64(effectiveNDodge-1) * rowHeight
 		}
 
-		cv.DrawStringAnchored(label, x+w/2, y+titleGapY, 0.5, 0.5)
+		// Resolve horizontal alignment (default = center).
+		labelX, anchorX := alignXAnchorInRegion(th.Spacing.XLabelAlign, x, w)
+		cv.DrawStringAnchored(label, labelX, y+titleGapY, anchorX, 0.5)
 	}
 }
 
@@ -3194,9 +3551,11 @@ func drawYAxis(cv canvas.Canvas, sc scale.Scale, label string, x, y, h float64, 
 			titleOffset = 30 // minimum offset for short labels
 		}
 
-		cv.Translate(x-tickLen-titleOffset, y+h/2)
+		// Resolve vertical alignment for Y label (default = center).
+		labelCY, anchorAX := alignYAnchorRotated(th.Spacing.YLabelAlign, y, h)
+		cv.Translate(x-tickLen-titleOffset, labelCY)
 		cv.Rotate(-math.Pi / 2)
-		cv.DrawStringAnchored(label, 0, 0, 0.5, 0.5)
+		cv.DrawStringAnchored(label, 0, 0, anchorAX, 0.5)
 		cv.Restore()
 	}
 }
@@ -3445,32 +3804,132 @@ func drawGlyph(cv canvas.Canvas, e LegendEntry, x, y, size float64) {
 	}
 }
 
+// drawLegendStack draws all vertical legend groups (categorical, colour bar,
+// size, alpha) stacked from top to bottom, using theme-controlled spacing.
+func drawLegendStack(cv canvas.Canvas, bp BuiltPanel, lx, ly, cellH float64, th theme.Theme) {
+	ls := th.Spacing.Legend.Resolved()
+
+	if len(bp.LegendEntries) > 0 {
+		drawLegendVertical(cv, bp.LegendTitle, bp.LegendEntries, lx, ly, th)
+		// Advance past: title + n entries (each centered) + half of last swatch.
+		n := float64(len(bp.LegendEntries))
+		ly += ls.TitleSpacing + ls.SwatchSize/2 + (n-1)*ls.EntrySpacing + ls.SwatchSize/2 + ls.GroupGap
+	}
+
+	if bp.ColorBarSpec != nil {
+		barH := math.Min(cellH*0.25, 120) //nolint:mnd // Max 120px bar height.
+		drawColorBar(cv, *bp.ColorBarSpec, lx, ly, barH, th)
+		ly += barH + ls.GroupGap
+	}
+
+	if bp.SizeLegend != nil {
+		bottomY := drawSizeLegend(cv, *bp.SizeLegend, lx, ly, th)
+		ly = bottomY + ls.GroupGap
+	}
+
+	if bp.AlphaLegend != nil {
+		barH := math.Min(cellH*0.15, 80) //nolint:mnd // Max 80px alpha bar height.
+		drawAlphaLegend(cv, *bp.AlphaLegend, lx, ly, barH, th)
+	}
+}
+
 // drawLegendVertical renders a categorical legend to the right of the data area.
 func drawLegendVertical(cv canvas.Canvas, title string, entries []LegendEntry, x, y float64, th theme.Theme) {
 	if len(entries) == 0 {
 		return
 	}
 
-	swatchSize := 12.0
-	spacing := 20.0
+	ls := th.Spacing.Legend.Resolved()
+	swatchSize := ls.SwatchSize
+	spacing := ls.EntrySpacing
+	padding := ls.Padding
+
+	// Measure total legend height for background rect.
+	totalH := padding
+	if title != "" {
+		totalH += ls.TitleSpacing
+	}
+
+	totalH += float64(len(entries)) * spacing
+	totalH += padding
+
+	// Measure max label width for background rect width.
+	cv.SetFontSize(th.LegendTextElem().Size)
+
+	maxLabelW := 0.0
+
+	for _, e := range entries {
+		tw, _ := cv.MeasureString(e.Label)
+		if tw > maxLabelW {
+			maxLabelW = tw
+		}
+	}
+
+	totalW := padding + swatchSize + ls.SwatchGap + maxLabelW + padding
+
+	// Draw legend background.
+	bg := th.LegendBackground()
+	if !theme.IsBlank(bg) && bg.Fill != nil {
+		r, g, b, a := bg.Fill.RGBA()
+		if a > 0 {
+			cv.SetRGBA(float64(r)/65535.0, float64(g)/65535.0, float64(b)/65535.0, float64(a)/65535.0)
+			cv.DrawRectangle(x-padding, y-spacing/2-padding, totalW, totalH)
+			cv.Fill()
+		}
+
+		// Background border.
+		if bg.Color != nil && bg.Size > 0 {
+			br, bg2, bb, ba := bg.Color.RGBA()
+			if ba > 0 {
+				cv.SetRGBA(float64(br)/65535.0, float64(bg2)/65535.0, float64(bb)/65535.0, float64(ba)/65535.0)
+				cv.SetLineWidth(bg.Size)
+				cv.DrawRectangle(x-padding, y-spacing/2-padding, totalW, totalH)
+				cv.Stroke()
+			}
+		}
+	}
+
 	curY := y
 
 	if title != "" {
-		r, g, b, _ := rgbaOf(th.LegendTextElem().Color)
-		cv.SetRGBA(r, g, b, 1)
-		cv.SetFontSize(th.LegendTextElem().Size)
-		cv.DrawStringAnchored(title, x+swatchSize+5, curY, 0, 0.5)
-		curY += spacing
+		titleElem := th.LegendTitle()
+		tr, tg, tb, _ := rgbaOf(titleElem.Color)
+		cv.SetRGBA(tr, tg, tb, 1)
+
+		titleSize := titleElem.Size
+		if titleSize == 0 {
+			titleSize = th.LegendTextElem().Size
+		}
+
+		cv.SetFontSize(titleSize)
+
+		// Left-align the title within the legend column.
+		cv.DrawStringAnchored(title, x, curY, 0, 0.5)
+		// Advance by TitleSpacing (visual gap) + half swatch so the swatch
+		// centre lands at curY and its top edge is TitleSpacing from the title.
+		curY += ls.TitleSpacing + swatchSize/2
 	}
 
+	keyRect := th.LegendKey()
+
 	for _, e := range entries {
+		// Draw legend key background behind swatch.
+		if !theme.IsBlank(keyRect) && keyRect.Fill != nil {
+			kr, kg, kb, ka := keyRect.Fill.RGBA()
+			if ka > 0 {
+				cv.SetRGBA(float64(kr)/65535.0, float64(kg)/65535.0, float64(kb)/65535.0, float64(ka)/65535.0)
+				cv.DrawRectangle(x-1, curY-swatchSize/2-1, swatchSize+2, swatchSize+2) //nolint:mnd // 1px padding around key.
+				cv.Fill()
+			}
+		}
+
 		cv.SetRGBA(e.Color.R, e.Color.G, e.Color.B, e.Color.A)
 		drawGlyph(cv, e, x, curY, swatchSize)
 
 		r, g, b, _ := rgbaOf(th.LegendTextElem().Color)
 		cv.SetRGBA(r, g, b, 1)
 		cv.SetFontSize(th.LegendTextElem().Size)
-		cv.DrawStringAnchored(e.Label, x+swatchSize+5, curY, 0, 0.5)
+		cv.DrawStringAnchored(e.Label, x+swatchSize+ls.SwatchGap, curY, 0, 0.5)
 
 		curY += spacing
 	}
@@ -3489,12 +3948,36 @@ type ColorBarSpec struct {
 	NBin     int     // 0 = default (pixel-matched strips)
 }
 
+// SizeLegendSpec describes a graduated-size legend showing representative
+// point sizes from a continuous size mapping.
+type SizeLegendSpec struct {
+	Title   string
+	Entries []SizeLegendEntry
+}
+
+// SizeLegendEntry is one representative value in a graduated-size legend.
+type SizeLegendEntry struct {
+	Label  string
+	Radius float64 // pixel radius for this representative value
+}
+
+// AlphaLegendSpec describes a continuous-alpha legend rendered as a
+// gradient strip from minimum to maximum opacity.
+type AlphaLegendSpec struct {
+	Title     string
+	MinAlpha  float64 // minimum opacity [0,1]
+	MaxAlpha  float64 // maximum opacity [0,1]
+	MinValue  float64 // data-space value at min opacity
+	MaxValue  float64 // data-space value at max opacity
+	BaseColor gg.RGBA // the colour whose opacity varies
+}
+
 // drawColorBar renders a continuous color bar legend at the given position.
 // The bar is drawn vertically (top = max, bottom = min) as in ggplot2.
 func drawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th theme.Theme) {
 	barW := spec.BarWidth
 	if barW <= 0 {
-		barW = 12.0 //nolint:mnd // Default color bar width in pixels.
+		barW = th.Spacing.Legend.Resolved().BarWidth
 	}
 
 	// Title above the bar.
@@ -3502,8 +3985,8 @@ func drawColorBar(cv canvas.Canvas, spec ColorBarSpec, x, y, barH float64, th th
 	if spec.Title != "" {
 		cv.SetRGBA(tr, tg, tb, 1)
 		cv.SetFontSize(th.LegendTextElem().Size)
-		cv.DrawStringAnchored(spec.Title, x+barW/2, y, 0.5, 1.0)
-		y += th.LegendTextElem().Size + 6
+		cv.DrawStringAnchored(spec.Title, x, y, 0, 0.5)
+		y += th.Spacing.Legend.Resolved().TitleSpacing
 	}
 
 	cm := spec.Cmap
@@ -3568,29 +4051,49 @@ func drawLegendHorizontal(cv canvas.Canvas, title string, entries []LegendEntry,
 	swatchSize := 10.0
 	gap := 8.0
 	curX := x
-	tr, tg, tb, _ := rgbaOf(th.LegendTextElem().Color)
 
 	if title != "" {
+		titleElem := th.LegendTitle()
+		tr, tg, tb, _ := rgbaOf(titleElem.Color)
 		cv.SetRGBA(tr, tg, tb, 1)
-		cv.SetFontSize(th.LegendTextElem().Size)
+
+		titleSize := titleElem.Size
+		if titleSize == 0 {
+			titleSize = th.LegendTextElem().Size
+		}
+
+		cv.SetFontSize(titleSize)
 		cv.DrawStringAnchored(title, curX, y, 0, 0.5)
 		tw, _ := cv.MeasureString(title)
-		curX += tw + gap*2
+		curX += tw + gap*2 //nolint:mnd // Double gap after title.
 	}
+
+	tr, tg, tb, _ := rgbaOf(th.LegendTextElem().Color)
+	keyRect := th.LegendKey()
 
 	for _, e := range entries {
 		if curX > x+maxW {
 			break
 		}
 
+		// Draw legend key background behind swatch.
+		if !theme.IsBlank(keyRect) && keyRect.Fill != nil {
+			kr, kg, kb, ka := keyRect.Fill.RGBA()
+			if ka > 0 {
+				cv.SetRGBA(float64(kr)/65535.0, float64(kg)/65535.0, float64(kb)/65535.0, float64(ka)/65535.0)
+				cv.DrawRectangle(curX-1, y-swatchSize/2-1, swatchSize+2, swatchSize+2) //nolint:mnd // 1px padding around key.
+				cv.Fill()
+			}
+		}
+
 		cv.SetRGBA(e.Color.R, e.Color.G, e.Color.B, e.Color.A)
 		drawGlyph(cv, e, curX, y, swatchSize)
 
 		cv.SetRGBA(tr, tg, tb, 1)
-		cv.SetFontSize(th.LegendTextElem().Size * 0.9)
-		cv.DrawStringAnchored(e.Label, curX+swatchSize+3, y, 0, 0.5)
+		cv.SetFontSize(th.LegendTextElem().Size * 0.9)               //nolint:mnd // Slightly smaller for horizontal legend.
+		cv.DrawStringAnchored(e.Label, curX+swatchSize+3, y, 0, 0.5) //nolint:mnd // swatch + gap offset.
 		tw, _ := cv.MeasureString(e.Label)
-		curX += swatchSize + 3 + tw + gap
+		curX += swatchSize + 3 + tw + gap //nolint:mnd // swatch + gap + label + inter-entry gap.
 	}
 }
 
@@ -3651,8 +4154,262 @@ func drawColorBarHorizontal(cv canvas.Canvas, spec ColorBarSpec, x, y, barW floa
 		hi = guideFormatNum(vmax)
 	}
 
-	cv.DrawStringAnchored(lo, startX, y+barH+10, 0.5, 0.5)
-	cv.DrawStringAnchored(hi, startX+availW, y+barH+10, 0.5, 0.5)
+	cv.DrawStringAnchored(lo, startX, y+barH+10, 0.5, 0.5)        //nolint:mnd // label offset below bar.
+	cv.DrawStringAnchored(hi, startX+availW, y+barH+10, 0.5, 0.5) //nolint:mnd // label offset below bar.
+}
+
+// drawSizeLegend renders a graduated-size legend vertically.
+// Each entry is drawn as a circle of the corresponding radius, from smallest
+// to largest, with data-space labels to the right.
+func drawSizeLegend(cv canvas.Canvas, spec SizeLegendSpec, x, y float64, th theme.Theme) float64 {
+	if len(spec.Entries) == 0 {
+		return y
+	}
+
+	tr, tg, tb, _ := rgbaOf(th.LegendTextElem().Color)
+
+	curY := y
+
+	// Pre-compute max radius and label width for layout.
+	maxRadius := 0.0
+	maxLabelW := 0.0
+
+	cv.SetFontSize(th.LegendTextElem().Size)
+
+	for _, e := range spec.Entries {
+		if e.Radius > maxRadius {
+			maxRadius = e.Radius
+		}
+
+		tw, _ := cv.MeasureString(e.Label)
+		if tw > maxLabelW {
+			maxLabelW = tw
+		}
+	}
+
+	if spec.Title != "" {
+		titleElem := th.LegendTitle()
+		titleR, titleG, titleB, _ := rgbaOf(titleElem.Color)
+		cv.SetRGBA(titleR, titleG, titleB, 1)
+
+		titleSize := titleElem.Size
+		if titleSize == 0 {
+			titleSize = th.LegendTextElem().Size
+		}
+
+		cv.SetFontSize(titleSize)
+
+		// Left-align the title within the legend column.
+		cv.DrawStringAnchored(spec.Title, x, curY, 0, 0.5)
+		// Advance by TitleSpacing + first entry radius so the circle top
+		// is TitleSpacing from the title.
+		firstR := spec.Entries[0].Radius
+		if firstR < 1 {
+			firstR = 1
+		}
+
+		curY += th.Spacing.Legend.Resolved().TitleSpacing + firstR
+	}
+
+	for i, e := range spec.Entries {
+		// Centre circle at (x + maxRadius, curY).
+		cx := x + maxRadius
+		r := e.Radius
+
+		if r < 1 {
+			r = 1
+		}
+
+		// Draw circle outline (filled with theme text colour at low alpha).
+		cv.SetRGBA(tr, tg, tb, 0.3) //nolint:mnd // 30% fill for size legend circles.
+		cv.DrawCircle(cx, curY, r)
+		cv.Fill()
+
+		// Draw circle border.
+		cv.SetRGBA(tr, tg, tb, 0.7) //nolint:mnd // 70% border for size legend circles.
+		cv.SetLineWidth(0.8)        //nolint:mnd // Thin stroke for legend circle border.
+		cv.DrawCircle(cx, curY, r)
+		cv.Stroke()
+
+		// Label to the right of the largest possible circle.
+		cv.SetRGBA(tr, tg, tb, 1)
+		cv.SetFontSize(th.LegendTextElem().Size)
+
+		labelX := x + maxRadius*2 + th.Spacing.Legend.Resolved().SwatchGap
+		cv.DrawStringAnchored(e.Label, labelX, curY, 0, 0.5)
+
+		// Advance to next entry (skip after the last one — GroupGap handles it).
+		if i < len(spec.Entries)-1 {
+			spacing := max(maxRadius*2+4, 16) //nolint:mnd // Minimum 16px spacing between entries.
+			curY += spacing
+		}
+	}
+	// Return the bottom edge of the last circle so GroupGap works consistently.
+	lastR := spec.Entries[len(spec.Entries)-1].Radius
+	if lastR < 1 {
+		lastR = 1
+	}
+
+	return curY + lastR
+}
+
+// drawSizeLegendHorizontal renders a graduated-size legend horizontally.
+func drawSizeLegendHorizontal(cv canvas.Canvas, spec SizeLegendSpec, x, y, maxW float64, th theme.Theme) {
+	if len(spec.Entries) == 0 {
+		return
+	}
+
+	tr, tg, tb, _ := rgbaOf(th.LegendTextElem().Color)
+	curX := x
+
+	if spec.Title != "" {
+		titleElem := th.LegendTitle()
+		titleR, titleG, titleB, _ := rgbaOf(titleElem.Color)
+		cv.SetRGBA(titleR, titleG, titleB, 1)
+
+		titleSize := titleElem.Size
+		if titleSize == 0 {
+			titleSize = th.LegendTextElem().Size
+		}
+
+		cv.SetFontSize(titleSize)
+		cv.DrawStringAnchored(spec.Title, curX, y, 0, 0.5)
+		tw, _ := cv.MeasureString(spec.Title)
+		curX += tw + 12 //nolint:mnd // Gap after title.
+	}
+
+	for _, e := range spec.Entries {
+		if curX > x+maxW {
+			break
+		}
+
+		r := e.Radius
+		if r < 1 {
+			r = 1
+		}
+
+		cx := curX + r
+
+		cv.SetRGBA(tr, tg, tb, 0.3) //nolint:mnd // 30% fill.
+		cv.DrawCircle(cx, y, r)
+		cv.Fill()
+
+		cv.SetRGBA(tr, tg, tb, 0.7) //nolint:mnd // 70% border.
+		cv.SetLineWidth(0.8)        //nolint:mnd // Thin stroke.
+		cv.DrawCircle(cx, y, r)
+		cv.Stroke()
+
+		// Label below circle.
+		cv.SetRGBA(tr, tg, tb, 1)
+		cv.SetFontSize(th.LegendTextElem().Size * 0.85)     //nolint:mnd // Slightly smaller for compact layout.
+		cv.DrawStringAnchored(e.Label, cx, y+r+8, 0.5, 0.5) //nolint:mnd // Below circle.
+		tw, _ := cv.MeasureString(e.Label)
+		curX += r*2 + max(tw, 4) + 8 //nolint:mnd // diameter + label + gap.
+	}
+}
+
+// drawAlphaLegend renders a continuous-alpha gradient strip vertically.
+// The strip fades from MinAlpha (bottom) to MaxAlpha (top) using the
+// base colour, with endpoint labels.
+func drawAlphaLegend(cv canvas.Canvas, spec AlphaLegendSpec, x, y, barH float64, th theme.Theme) {
+	barW := th.Spacing.Legend.Resolved().BarWidth
+
+	tr, tg, tb, _ := rgbaOf(th.LegendTextElem().Color)
+	curY := y
+
+	if spec.Title != "" {
+		titleElem := th.LegendTitle()
+		titleR, titleG, titleB, _ := rgbaOf(titleElem.Color)
+		cv.SetRGBA(titleR, titleG, titleB, 1)
+
+		titleSize := titleElem.Size
+		if titleSize == 0 {
+			titleSize = th.LegendTextElem().Size
+		}
+
+		cv.SetFontSize(titleSize)
+		cv.DrawStringAnchored(spec.Title, x, curY, 0, 0.5)
+		curY += th.Spacing.Legend.Resolved().TitleSpacing
+	}
+
+	// Draw gradient strip (top = MaxAlpha, bottom = MinAlpha).
+	nStrips := max(int(barH), 2)
+	stripH := barH / float64(nStrips)
+
+	for i := range nStrips {
+		// t=1 at top (max), t=0 at bottom (min).
+		t := 1.0 - float64(i)/float64(nStrips-1)
+		alpha := spec.MinAlpha + t*(spec.MaxAlpha-spec.MinAlpha)
+		cv.SetRGBA(spec.BaseColor.R, spec.BaseColor.G, spec.BaseColor.B, alpha)
+		cv.DrawRectangle(x, curY+float64(i)*stripH, barW, stripH+0.5) //nolint:mnd // 0.5px overlap to avoid gaps.
+		cv.Fill()
+	}
+
+	// Outline.
+	cv.SetRGBA(tr, tg, tb, 0.5) //nolint:mnd // Semi-transparent outline.
+	cv.SetLineWidth(0.5)        //nolint:mnd // Thin outline.
+	cv.DrawRectangle(x, curY, barW, barH)
+	cv.Stroke()
+
+	// Labels: data-space values at top (max) and bottom (min).
+	cv.SetRGBA(tr, tg, tb, 1)
+	cv.SetFontSize(th.LegendTextElem().Size * 0.9) //nolint:mnd // Slightly smaller for legend labels.
+
+	labelX := x + barW + 4                                                                //nolint:mnd // Gap between bar and labels.
+	cv.DrawStringAnchored(scale.FormatNumber(spec.MaxValue), labelX, curY+4, 0, 0.5)      //nolint:mnd // Top label offset.
+	cv.DrawStringAnchored(scale.FormatNumber(spec.MinValue), labelX, curY+barH-4, 0, 0.5) //nolint:mnd // Bottom label offset.
+}
+
+// drawAlphaLegendHorizontal renders a continuous-alpha gradient strip horizontally.
+func drawAlphaLegendHorizontal(cv canvas.Canvas, spec AlphaLegendSpec, x, y, barW float64, th theme.Theme) {
+	barH := 10.0 //nolint:mnd // Default horizontal bar height.
+
+	tr, tg, tb, _ := rgbaOf(th.LegendTextElem().Color)
+	startX := x
+
+	if spec.Title != "" {
+		titleElem := th.LegendTitle()
+		titleR, titleG, titleB, _ := rgbaOf(titleElem.Color)
+		cv.SetRGBA(titleR, titleG, titleB, 1)
+
+		titleSize := titleElem.Size
+		if titleSize == 0 {
+			titleSize = th.LegendTextElem().Size
+		}
+
+		cv.SetFontSize(titleSize)
+		cv.DrawStringAnchored(spec.Title, startX, y+barH/2, 0, 0.5) //nolint:mnd // Left-aligned.
+		tw, _ := cv.MeasureString(spec.Title)
+		startX += tw + 8 //nolint:mnd // Title-to-bar gap.
+	}
+
+	availW := barW - (startX - x)
+	if availW < 20 { //nolint:mnd // Minimum bar width.
+		availW = 20
+	}
+
+	nStrips := max(int(availW), 2)
+	stripW := availW / float64(nStrips)
+
+	for i := range nStrips {
+		t := float64(i) / float64(nStrips-1)
+		alpha := spec.MinAlpha + t*(spec.MaxAlpha-spec.MinAlpha)
+		cv.SetRGBA(spec.BaseColor.R, spec.BaseColor.G, spec.BaseColor.B, alpha)
+		cv.DrawRectangle(startX+float64(i)*stripW, y, stripW+0.5, barH) //nolint:mnd // 0.5px overlap.
+		cv.Fill()
+	}
+
+	// Outline.
+	cv.SetRGBA(tr, tg, tb, 0.4) //nolint:mnd // Semi-transparent outline.
+	cv.SetLineWidth(0.5)        //nolint:mnd // Thin outline.
+	cv.DrawRectangle(startX, y, availW, barH)
+	cv.Stroke()
+
+	// Labels: data-space values at left (min) and right (max).
+	cv.SetRGBA(tr, tg, tb, 1)
+	cv.SetFontSize(th.LegendTextElem().Size * 0.85)                                              //nolint:mnd // Slightly smaller.
+	cv.DrawStringAnchored(scale.FormatNumber(spec.MinValue), startX, y+barH+10, 0.5, 0.5)        //nolint:mnd // Below left.
+	cv.DrawStringAnchored(scale.FormatNumber(spec.MaxValue), startX+availW, y+barH+10, 0.5, 0.5) //nolint:mnd // Below right.
 }
 
 // --- Helpers ---

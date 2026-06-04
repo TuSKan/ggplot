@@ -44,10 +44,10 @@ func main() {
 			geom.WithColor("#27AE60"),
 			geom.WithSize(5),
 		), aes.X("xend"), aes.Y("yend")).
-		Labs(
+		Labels(
 			ggplot.Title("Network Connections — Quadratic Curves"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

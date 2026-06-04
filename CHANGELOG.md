@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+## [0.0.12] — 2026-06-04
+
+### Theme System Granularity (Phase 12 — Completion)
+
+#### Added
+- **Plot margin with unit support** — `theme.Pt`, `theme.Cm`, `theme.Inches`, `theme.Lines` unit types; `theme.Unit` value struct with `ToPixels(dpi, lineHeight)` conversion; `theme.PlotMargin` with per-side unit-based margins; `Plot.PlotMargin()` builder; `Theme.ResolvedPlotMargin(dpi)` resolves `PlotSpec.PlotMargin → Spacing.Margin* → hardcoded defaults` fallback chain.
+- **Legend layout theme elements** — `legend.background`, `legend.key` rect elements rendered in `drawLegendVertical`/`drawLegendHorizontal`; `legend.title` text element for title styling; convenience override constructors: `LegendBackgroundOverride`, `LegendKeyOverride`, `LegendTitleOverride`, `LegendTextOverride`.
+- **Theme inheritance proofs** — comprehensive table-driven golden tests in `theme/element_test.go` covering all text/line/rect inheritance chains, blank suppression at mid-chain and leaf, and override composition.
+- **Continuous size legend** — `SizeLegendSpec` and `SizeLegendEntry` types; graduated-circle rendering via `drawSizeLegend` (vertical) and `drawSizeLegendHorizontal`; populated from `SizeScale.Ticks`/`MapValue`/`Format` during `buildPanel`.
+- **Continuous alpha legend** — `AlphaLegendSpec` type; gradient strip rendering via `drawAlphaLegend` (vertical) and `drawAlphaLegendHorizontal`; populated from `AlphaScale.Range` during `buildPanel`.
+- **Legend margin computation** — `hasLegend` check now includes `SizeLegend` and `AlphaLegend`; `legendW` accounts for circle diameters, labels, and gradient bar widths.
+- **Block-level alignment** — new `theme.Align` type with `AlignCenter`, `AlignLeft`, `AlignRight`, `AlignTop`, `AlignBottom` constants. `theme.BlockAlignment` struct groups alignment settings for title block, caption, X/Y labels, and legend. `Plot.Align()` builder method applies per-plot overrides. `Spacing` struct gains `TitleAlign`, `CaptionAlign`, `XLabelAlign`, `YLabelAlign`, `LegendAlign` fields. Defaults match ggplot2: center titles, right caption, center labels, top legend.
+
+#### Changed
+- **Base theme spacing** — `baseTheme` spacing defaults changed from `10px` to `15/20/15/15px` (top/right/bottom/left) to match the previously hard-coded rendering margins, ensuring backward-compatible output when using `ResolvedPlotMargin`.
+- Golden test images updated to reflect legend layout improvements (background/key rectangles, title styling).
+- **Alpha legend default base color** — changed from grey (`0.3, 0.3, 0.3`) to steelblue (`0.27, 0.51, 0.71`) as a more visually meaningful default.
+
+#### Fixed
+- **Alpha legend labels** — legend labels now show data-space values (from `AlphaScale.Bounds()` via `scale.FormatNumber`) instead of the opacity range values. Previously a confidence column mapped to opacity `[0.15, 1.0]` would label the legend as "0.15" and "1.00" instead of the actual data values like "0.3" and "1.0".
+- **Alpha legend base color** — the gradient strip now uses the layer's `geom.Params.Color` (e.g., `geom.WithColor("#673AB7")`) as its base colour. Falls back to the first categorical legend entry colour if no fixed colour is set, then to default steelblue. Previously it always used the first categorical legend entry or grey.
+- **Legend title overrides** — added `ColorLabel(text)`, `SizeLabel(text)`, and `AlphaLabel(text)` constructors for `LabelOpt`. These allow overriding legend titles via `Labels(ggplot.SizeLabel("Population"))` instead of showing the raw column name. Three new fields added to `Labels` struct: `Color`, `Size`, `Alpha`.
+- **Legend title cropping** — legend width calculation now measures title text at the correct font size. Previously long legend titles like "Pop. (thousands)" were clipped because only entry label widths were considered.
+- **Plot.clone() missing fields** — `clone()` was not copying `PlotMargin` and `Alignment` fields, causing `Align()` and `PlotMargin()` settings to be silently dropped when followed by another builder method (e.g., `.Theme()`).
+
+#### API Renamed
+- `Labs()` → `Labels()` — the Plot builder method for configuring labels.
+- `LabOpt` → `LabelOpt` — the functional option type.
+- `XLab()` → `XLabel()`, `YLab()` → `YLabel()` — axis label constructors.
+- `ColorLab()` → `ColorLabel()`, `SizeLab()` → `SizeLabel()`, `AlphaLab()` → `AlphaLabel()` — legend title constructors.
+
 ## [0.0.11] — 2026-06-03
 
 ### Browser WASM Surface (Phase 6 of OUTPUT-SPEC.md)

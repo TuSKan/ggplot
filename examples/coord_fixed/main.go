@@ -47,11 +47,11 @@ func main() {
 	// Without CoordFixed — circle will be elliptical on a non-square canvas.
 	noFixed := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#1F77B4"), geom.WithLineWidth(2))).
-		Labs(
+		Labels(
 			ggplot.Title("No CoordFixed"),
 			ggplot.Subtitle("Circle appears as an ellipse on a wide canvas"),
-			ggplot.XLab("x"),
-			ggplot.YLab("y"),
+			ggplot.XLabel("x"),
+			ggplot.YLabel("y"),
 		).
 		Theme("minimal")
 
@@ -66,11 +66,11 @@ func main() {
 	fixed := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#E74C3C"), geom.WithLineWidth(2))).
 		CoordFixed(1).
-		Labs(
+		Labels(
 			ggplot.Title("CoordFixed(1)"),
 			ggplot.Subtitle("Equal scaling — circle is a true circle"),
-			ggplot.XLab("x"),
-			ggplot.YLab("y"),
+			ggplot.XLabel("x"),
+			ggplot.YLabel("y"),
 		).
 		Theme("minimal")
 

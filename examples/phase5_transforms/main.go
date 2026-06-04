@@ -70,7 +70,7 @@ func normalizedHistogram(dir string) {
 			geom.WithFill("#1ABC9C"),
 			geom.WithAlpha(0.85),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Normalized Histogram"),
 			ggplot.Subtitle("BinX → NormalizeY (proportions sum to 1.0)"),
 		).
@@ -100,7 +100,7 @@ func percentageHistogram(dir string) {
 			geom.WithFill("#9B59B6"),
 			geom.WithAlpha(0.8),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Percentage Histogram"),
 			ggplot.Subtitle("BinX → NormalizeY(100) — bars sum to 100%"),
 		).
@@ -135,7 +135,7 @@ func filteredScatter(dir string) {
 			geom.WithSize(3),
 			geom.WithAlpha(0.7),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Filtered Scatter"),
 			ggplot.Subtitle("FilterY(Gt(\"y\", 30)) — engine-native predicate"),
 		).
@@ -169,7 +169,7 @@ func groupMean(dir string) {
 			geom.WithAlpha(0.85),
 			geom.WithWidth(0.6),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Average Revenue by Region"),
 			ggplot.Subtitle("GroupX(\"mean\") — engine-native aggregation"),
 		).
@@ -200,7 +200,7 @@ func topNBars(dir string) {
 			geom.WithFill("#E67E22"),
 			geom.WithAlpha(0.9),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Top 5 Latency Bins"),
 			ggplot.Subtitle("BinX(15) → TopN(5, \"count\") — most frequent bins only"),
 		).
@@ -242,7 +242,7 @@ func sortedScatter(dir string) {
 			geom.WithLineWidth(1.5),
 			geom.WithAlpha(0.7),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Sorted Line — Descending Y"),
 			ggplot.Subtitle("SortBy(\"y\", Desc()) — line traces high → low"),
 		).
@@ -272,11 +272,11 @@ func stackedArea(dir string) {
 			geom.WithFill("#2ECC71"),
 			geom.WithAlpha(0.7),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Cumulative Sales"),
 			ggplot.Subtitle("StackY — cumulative sum of Y within a single series"),
-			ggplot.XLab("Month"),
-			ggplot.YLab("Cumulative Sales"),
+			ggplot.XLabel("Month"),
+			ggplot.YLabel("Cumulative Sales"),
 		).
 		Theme("minimal")
 
@@ -315,11 +315,11 @@ func groupReducers(dir string) {
 			geom.WithAlpha(0.85),
 			geom.WithWidth(0.6),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Sensor Reading Variability"),
 			ggplot.Subtitle("GroupX(\"deviation\") — std deviation per sensor"),
-			ggplot.XLab("Sensor"),
-			ggplot.YLab("Std Dev"),
+			ggplot.XLabel("Sensor"),
+			ggplot.YLabel("Std Dev"),
 		).
 		Theme("minimal")
 
@@ -333,11 +333,11 @@ func groupReducers(dir string) {
 			geom.WithAlpha(0.85),
 			geom.WithWidth(0.6),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("First Reading per Sensor"),
 			ggplot.Subtitle("GroupX(\"first\") — engine-native Aggregator.First"),
-			ggplot.XLab("Sensor"),
-			ggplot.YLab("First Reading"),
+			ggplot.XLabel("Sensor"),
+			ggplot.YLabel("First Reading"),
 		).
 		Theme("bw")
 
@@ -387,11 +387,11 @@ func selectRow(dir string) {
 			geom.WithSize(8),
 			geom.WithLabel("Trough"),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Daily Temperature with Extremes"),
 			ggplot.Subtitle("SelectRow(Max/Min, \"temp\") — highlight peak and trough"),
-			ggplot.XLab("Hour"),
-			ggplot.YLab("Temperature (°C)"),
+			ggplot.XLabel("Hour"),
+			ggplot.YLabel("Temperature (°C)"),
 		).
 		Theme("dark")
 
@@ -451,11 +451,11 @@ func ribbonBand(dir string) {
 			geom.WithColor("#2980B9"),
 			geom.WithLineWidth(2),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Confidence Band"),
 			ggplot.Subtitle("RibbonY — filled band between ymin/ymax"),
-			ggplot.XLab("Time"),
-			ggplot.YLab("Signal"),
+			ggplot.XLabel("Time"),
+			ggplot.YLabel("Signal"),
 		).
 		Theme("minimal")
 
@@ -498,11 +498,11 @@ func differenceFill(dir string) {
 			geom.WithFill("#E74C3C"),
 			geom.WithAlpha(0.6),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Series Difference"),
 			ggplot.Subtitle("Difference — filled area between observed and reference"),
-			ggplot.XLab("Day"),
-			ggplot.YLab("Value"),
+			ggplot.XLabel("Day"),
+			ggplot.YLabel("Value"),
 		).
 		Theme("dark")
 

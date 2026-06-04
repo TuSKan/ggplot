@@ -64,11 +64,11 @@ func referenceLines(dir string) {
 			geom.WithAlpha(0.6),
 			geom.WithLabel("x = π"),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Reference Lines"),
 			ggplot.Subtitle("HLine and VLine annotations"),
-			ggplot.XLab("x"),
-			ggplot.YLab("sin(x)"),
+			ggplot.XLabel("x"),
+			ggplot.YLabel("sin(x)"),
 		).
 		Theme("minimal")
 
@@ -97,11 +97,11 @@ func textLabels(dir string) {
 		Layer(geom.Point(geom.WithColor("#1F77B4"), geom.WithSize(5))).
 		Layer(geom.Text(geom.WithColor("#E74C3C"), geom.WithFontSize(11))).
 		YLim(-1.3, 1.3).
-		Labs(
+		Labels(
 			ggplot.Title("Text Annotations"),
 			ggplot.Subtitle("Labels at peaks and troughs"),
-			ggplot.XLab("x"),
-			ggplot.YLab("f(x)"),
+			ggplot.XLabel("x"),
+			ggplot.YLabel("f(x)"),
 		).
 		Theme("minimal")
 

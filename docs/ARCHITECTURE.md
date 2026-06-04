@@ -90,7 +90,13 @@ github.com/TuSKan/ggplot
 │   ├── theme.go         #   Name, Theme struct, Element types, inheritance resolver, registry
 │                        #   Override type, WithOverrides — per-plot element overrides
 │                        #   strip.text.x/y, strip.background.x/y inheritance paths
+│                        #   ResolvedPlotMargin — plot margin resolution with unit fallback
+│                        #   Legend overrides: LegendBackgroundOverride, LegendKeyOverride,
+│                        #   LegendTitleOverride, LegendTextOverride
+│   ├── unit.go          #   UnitType (Pt, Cm, Inch, Lines), Unit struct, PlotMargin
+│                        #   ToPixels conversion with line-height fallback
 │   ├── elements.go      #   ElementText, ElementLine, ElementRect, ElementBlank, Merge functions
+│                        #   Align type (Center/Left/Right/Top/Bottom), BlockAlignment struct
 │   ├── color_defaults.go#   Per-theme colormap defaults (discrete, sequential, diverging, cyclic)
 │   ├── ggplot.go        #   Ggplot (matplotlib) + Default alias → Dashboard
 │   ├── modern.go        #   ObservableDark, Dashboard, Quartz, Air, Ink
@@ -277,7 +283,7 @@ All errors are wrapped in `*ggplot.Error{Phase, Layer, Stage, Cause}` with
 
 ### Immutable Builder Pattern
 
-Every `Plot` method (`Layer`, `Labs`, `Theme`, `FacetWrap`, etc.) calls `clone()`
+Every `Plot` method (`Layer`, `Labels`, `Theme`, `FacetWrap`, etc.) calls `clone()`
 which deep-copies the `PlotSpec`. This prevents mutation surprises when building
 multiple plots from a shared base.
 
@@ -343,6 +349,15 @@ Zero-value fields merge with parent values via `MergeText()` / `MergeLine()` / `
 
 60+ themes are registered at init-time. `theme.Resolve(name)` instantiates on demand.
 Default theme is **Dashboard** (clean card-style with Tab10/Blues palette).
+
+#### Legend System
+
+Legends are built during `buildPanel` and drawn during `Built.Draw`:
+
+- **Categorical legend** (`LegendEntries`, `LegendTitle`) — discrete color/shape/linetype groups. Title defaults to the color column name, overridden by `Labels(ColorLabel("Species"))`.
+- **Color bar** (`ColorBarSpec`) — continuous color gradient for numeric color mappings.
+- **Size legend** (`SizeLegendSpec`) — graduated circles from `SizeScale.Ticks(5)`. Title defaults to size column name, overridden by `Labels(SizeLabel("Population"))`.
+- **Alpha legend** (`AlphaLegendSpec`) — gradient strip varying opacity. Labels show **data-space values** (from `AlphaScale.Bounds()`) not opacity range. Base color is resolved as: layer's `geom.Params.Color` → first categorical entry color → default steelblue. Title overridden by `Labels(AlphaLabel("Confidence"))`.
 
 ### Typed Error Envelope
 

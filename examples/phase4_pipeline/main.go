@@ -108,11 +108,11 @@ func facetedGrouped(dir string) {
 	p := ggplot.New(ds, aes.X("day"), aes.Y("sales"), aes.Color("product")).
 		Layer(geom.Line(geom.WithLineWidth(2))).
 		FacetWrap("region", facet.NCols(2)).
-		Labs(
+		Labels(
 			ggplot.Title("Phase 4.2: PANEL + group System Columns"),
 			ggplot.Subtitle("Faceted by region, grouped by product"),
-			ggplot.XLab("Day"),
-			ggplot.YLab("Sales"),
+			ggplot.XLabel("Day"),
+			ggplot.YLabel("Sales"),
 		).
 		Theme(theme.Dark)
 
@@ -126,11 +126,11 @@ func positionBars(dir string) {
 	// Stacked bars (default for geom.Col).
 	p1 := ggplot.New(ds, aes.X("quarter"), aes.Y("revenue"), aes.Color("product")).
 		Layer(geom.Col()).
-		Labs(
+		Labels(
 			ggplot.Title("Phase 4.3: Stacked Bars"),
 			ggplot.Subtitle("Stack() — cumulative Y offsets"),
-			ggplot.XLab("Quarter"),
-			ggplot.YLab("Revenue ($K)"),
+			ggplot.XLabel("Quarter"),
+			ggplot.YLabel("Revenue ($K)"),
 		).
 		Theme(theme.Dark)
 	save(p1, dir, "02_stacked_bars", 800)
@@ -138,11 +138,11 @@ func positionBars(dir string) {
 	// Dodged bars.
 	p2 := ggplot.New(ds, aes.X("quarter"), aes.Y("revenue"), aes.Color("product")).
 		Layer(geom.Col(geom.WithPosition(geom.Dodge()))).
-		Labs(
+		Labels(
 			ggplot.Title("Phase 4.3: Dodged Bars"),
 			ggplot.Subtitle("Dodge() — side-by-side groups"),
-			ggplot.XLab("Quarter"),
-			ggplot.YLab("Revenue ($K)"),
+			ggplot.XLabel("Quarter"),
+			ggplot.YLabel("Revenue ($K)"),
 		).
 		Theme(theme.Minimal)
 	save(p2, dir, "03_dodged_bars", 800)
@@ -150,11 +150,11 @@ func positionBars(dir string) {
 	// Filled (100% stacked) bars.
 	p3 := ggplot.New(ds, aes.X("quarter"), aes.Y("revenue"), aes.Color("product")).
 		Layer(geom.Col(geom.WithPosition(geom.Fill()))).
-		Labs(
+		Labels(
 			ggplot.Title("Phase 4.3: Filled Bars (100% Stacked)"),
 			ggplot.Subtitle("Fill() — proportional stacking"),
-			ggplot.XLab("Quarter"),
-			ggplot.YLab("Proportion"),
+			ggplot.XLabel("Quarter"),
+			ggplot.YLabel("Proportion"),
 		).
 		Theme(theme.Classic)
 	save(p3, dir, "04_filled_bars", 800)

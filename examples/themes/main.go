@@ -66,11 +66,11 @@ func main() {
 			Layer(geom.Line(geom.WithLineWidth(1.5))).
 			Layer(geom.Point(geom.WithSize(2.5), geom.WithAlpha(0.7))).
 			Theme(name).
-			Labs(
+			Labels(
 				ggplot.Title("Theme: "+string(name)),
 				ggplot.Subtitle("Phase-shifted sine waves with Gaussian noise"),
-				ggplot.XLab("Angle (rad)"),
-				ggplot.YLab("Amplitude"),
+				ggplot.XLabel("Angle (rad)"),
+				ggplot.YLabel("Amplitude"),
 				ggplot.Caption("ggplot theme showcase"),
 			)
 

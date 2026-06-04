@@ -280,6 +280,10 @@ type Theme struct {
 	// Elements maps ggplot2-style dotted paths to Element values.
 	// The resolver walks the inheritance chain to fill missing fields.
 	Elements map[string]Element
+
+	// PlotMargin overrides the default Spacing margins with typed units.
+	// When nil, the Spacing.Margin* values are used (in pixels).
+	PlotMargin *PlotMargin
 }
 
 // GeomDefaults holds theme-level visual defaults for geometry primitives
@@ -314,6 +318,99 @@ type Spacing struct {
 	GridLineCount int
 	// GridDashPattern is the dash pattern for grid lines (nil = solid).
 	GridDashPattern []float64
+	// Legend controls legend layout spacing.
+	Legend LegendSpacing
+
+	// --- Block-level alignment ---
+
+	// TitleAlign controls horizontal alignment of the title block
+	// (title + subtitle). "" or "center" (default), "left", "right".
+	TitleAlign Align
+	// CaptionAlign controls horizontal alignment of the caption.
+	// "" or "right" (default, matches ggplot2), "left", "center".
+	CaptionAlign Align
+	// XLabelAlign controls horizontal alignment of the X-axis label.
+	// "" or "center" (default), "left", "right".
+	XLabelAlign Align
+	// YLabelAlign controls vertical alignment of the Y-axis label.
+	// "" or "center" (default), "top", "bottom".
+	YLabelAlign Align
+	// LegendAlign controls vertical alignment of the legend stack within
+	// the right/left margin (or horizontal within top/bottom).
+	// "" or "top" (default, matches ggplot2), "center", "bottom".
+	LegendAlign Align
+}
+
+// LegendSpacing controls the layout spacing for legend elements.
+// All values are in pixels. Zero values are replaced with defaults
+// when the theme is resolved.
+type LegendSpacing struct {
+	// SwatchSize is the diameter of the colour swatch circle (px).
+	SwatchSize float64
+	// EntrySpacing is the vertical distance between legend entries (px).
+	EntrySpacing float64
+	// Padding is the internal padding inside the legend background (px).
+	Padding float64
+	// SwatchGap is the horizontal gap between swatch and label (px).
+	SwatchGap float64
+	// GroupGap is the vertical gap between stacked legend groups (px).
+	GroupGap float64
+	// TitleSpacing is the visual gap from a legend title to the top
+	// edge of the first content element (px). Draw functions compensate
+	// internally for items that are centred (swatches, circles) vs.
+	// items that paint from the top edge (bars).
+	TitleSpacing float64
+	// BarWidth is the width of colour-bar and alpha-bar strips (px).
+	BarWidth float64
+}
+
+// DefaultLegendSpacing returns the default legend spacing values.
+func DefaultLegendSpacing() LegendSpacing {
+	return LegendSpacing{
+		SwatchSize:   12,
+		EntrySpacing: 20,
+		Padding:      6,
+		SwatchGap:    5,
+		GroupGap:     20,
+		TitleSpacing: 12,
+		BarWidth:     12,
+	}
+}
+
+// Resolved returns a copy of ls with zero-valued fields replaced by
+// their defaults. This allows themes to leave fields at zero to
+// inherit the standard values.
+func (ls LegendSpacing) Resolved() LegendSpacing {
+	d := DefaultLegendSpacing()
+	if ls.SwatchSize == 0 {
+		ls.SwatchSize = d.SwatchSize
+	}
+
+	if ls.EntrySpacing == 0 {
+		ls.EntrySpacing = d.EntrySpacing
+	}
+
+	if ls.Padding == 0 {
+		ls.Padding = d.Padding
+	}
+
+	if ls.SwatchGap == 0 {
+		ls.SwatchGap = d.SwatchGap
+	}
+
+	if ls.GroupGap == 0 {
+		ls.GroupGap = d.GroupGap
+	}
+
+	if ls.TitleSpacing == 0 {
+		ls.TitleSpacing = d.TitleSpacing
+	}
+
+	if ls.BarWidth == 0 {
+		ls.BarWidth = d.BarWidth
+	}
+
+	return ls
 }
 
 // --- Inheritance tree ---
@@ -569,6 +666,32 @@ func PlotTitleOverride(e ElementText) Override { return Override{"plot.title", e
 // PanelBorderOverride creates an override for "panel.border".
 func PanelBorderOverride(e ElementRect) Override { return Override{"panel.border", e} }
 
+// LegendBackgroundOverride creates an override for "legend.background".
+func LegendBackgroundOverride(e ElementRect) Override { return Override{"legend.background", e} }
+
+// LegendKeyOverride creates an override for "legend.key".
+func LegendKeyOverride(e ElementRect) Override { return Override{"legend.key", e} }
+
+// LegendTitleOverride creates an override for "legend.title".
+func LegendTitleOverride(e ElementText) Override { return Override{"legend.title", e} }
+
+// LegendTextOverride creates an override for "legend.text".
+func LegendTextOverride(e ElementText) Override { return Override{"legend.text", e} }
+
+// ResolvedPlotMargin returns the plot margins in pixels. When the theme's
+// PlotMargin is nil, the default Spacing margins are returned.
+// lineHeight is the base text line-height in pixels (used for UnitLines).
+func (t Theme) ResolvedPlotMargin(lineHeight float64) (top, right, bottom, left float64) {
+	if t.PlotMargin != nil {
+		return t.PlotMargin.Top.ToPixels(lineHeight),
+			t.PlotMargin.Right.ToPixels(lineHeight),
+			t.PlotMargin.Bottom.ToPixels(lineHeight),
+			t.PlotMargin.Left.ToPixels(lineHeight)
+	}
+
+	return t.Spacing.MarginTop, t.Spacing.MarginRight, t.Spacing.MarginBottom, t.Spacing.MarginLeft
+}
+
 // --- Registry ---
 
 // Factory builds a Theme on demand.
@@ -647,9 +770,18 @@ func baseTheme(name string) Theme {
 	return Theme{
 		Name: name,
 		Spacing: Spacing{
-			MarginTop: 10, MarginRight: 10, MarginBottom: 10, MarginLeft: 10,
+			MarginTop: 15, MarginRight: 20, MarginBottom: 15, MarginLeft: 20,
 			PanelSpacing: 10,
 			TickLength:   5,
+			Legend: LegendSpacing{
+				SwatchSize:   12,
+				EntrySpacing: 20,
+				Padding:      6,
+				SwatchGap:    5,
+				GroupGap:     20,
+				TitleSpacing: 20,
+				BarWidth:     12,
+			},
 		},
 		Geom: GeomDefaults{
 			PatchEdgeColor: nil,
@@ -683,7 +815,9 @@ func baseTheme(name string) Theme {
 			"axis.ticks": ElementLine{Color: gray(60), Size: 1},
 
 			// Legend.
-			"legend.text": ElementText{Size: 10, Color: gray(40)},
+			"legend.text":       ElementText{Size: 10, Color: gray(40)},
+			"legend.background": ElementRect{Fill: color.RGBA{R: 255, G: 255, B: 255, A: 0}}, // transparent by default
+			"legend.key":        ElementRect{Fill: color.RGBA{R: 255, G: 255, B: 255, A: 0}}, // transparent by default
 
 			// Annotation.
 			"annotation.text": ElementText{Size: 10, Color: gray(60)},

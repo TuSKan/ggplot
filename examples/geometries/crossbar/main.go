@@ -37,10 +37,10 @@ func main() {
 			geom.WithWidth(0.6),
 			geom.WithLineWidth(1.5),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Treatment Response — Crossbar"),
-			ggplot.XLab("Treatment Group"),
-			ggplot.YLab("Response (median ± IQR)"),
+			ggplot.XLabel("Treatment Group"),
+			ggplot.YLabel("Response (median ± IQR)"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

@@ -39,10 +39,10 @@ func main() {
 			geom.WithColor("#E74C3C"),
 			geom.WithSize(3),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Daily Temperature Range"),
-			ggplot.XLab("Day"),
-			ggplot.YLab("Temperature (°C)"),
+			ggplot.XLabel("Day"),
+			ggplot.YLabel("Temperature (°C)"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

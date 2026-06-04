@@ -77,11 +77,11 @@ func cieLABGradient(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("z")).
 		Layer(geom.Tile()).
 		ScaleColor(colormap.Gradient(white, blue)).
-		Labs(
+		Labels(
 			ggplot.Title("CIELAB 2-Stop Gradient"),
 			ggplot.Subtitle("White → Blue with perceptually uniform interpolation"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	outPath := filepath.Join(dir, "cielab_gradient.png")
@@ -130,11 +130,11 @@ func divergingGradient(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("anomaly")).
 		Layer(geom.Tile()).
 		ScaleColor(colormap.Gradient2(cold, neutral, hot)).
-		Labs(
+		Labels(
 			ggplot.Title("Diverging Gradient (3-Stop)"),
 			ggplot.Subtitle("Blue → White → Red — midpoint at zero"),
-			ggplot.XLab("Longitude"),
-			ggplot.YLab("Latitude"),
+			ggplot.XLabel("Longitude"),
+			ggplot.YLabel("Latitude"),
 		)
 
 	outPath := filepath.Join(dir, "diverging_gradient.png")
@@ -185,11 +185,11 @@ func multiStopGradient(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("elevation")).
 		Layer(geom.Tile()).
 		ScaleColor(colormap.GradientN([]colormap.Color{ocean, sand, forest, snow})).
-		Labs(
+		Labels(
 			ggplot.Title("Multi-Stop Gradient (4 Colors)"),
 			ggplot.Subtitle("Ocean → Sand → Forest → Snow — terrain elevation"),
-			ggplot.XLab("Easting"),
-			ggplot.YLab("Northing"),
+			ggplot.XLabel("Easting"),
+			ggplot.YLabel("Northing"),
 		)
 
 	outPath := filepath.Join(dir, "multistop_gradient.png")
@@ -236,7 +236,7 @@ func themeAwareAutoSelection(dir string) {
 			Layer(geom.Point(geom.WithSize(6))).
 			Layer(geom.Line()).
 			Theme(th).
-			Labs(
+			Labels(
 				ggplot.Title("Theme-Aware Palette: "+labels[i]),
 				ggplot.Subtitle("No explicit ScaleColor — theme provides defaults"),
 			)
@@ -285,11 +285,11 @@ func legendKeyGlyphs(dir string) {
 			geom.WithLineWidth(1),
 			geom.WithLabel("Target"),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Legend Key Glyphs"),
 			ggplot.Subtitle("Each geom type gets its own legend shape: ● circle, ── line, ■ rect"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	outPath := filepath.Join(dir, "legend_key_glyphs.png")
@@ -334,11 +334,11 @@ func guideCustomization(dir string) {
 		ScaleColor(colormap.Plasma).
 		ColorBarWidth(20).
 		ColorBarNBin(8).
-		Labs(
+		Labels(
 			ggplot.Title("Guide Customization"),
 			ggplot.Subtitle("Wide color bar (20px) with 8 discrete steps"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	outPath := filepath.Join(dir, "guide_customization.png")

@@ -36,10 +36,10 @@ func main() {
 			geom.WithSize(4),
 			geom.WithLineWidth(1.5),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Model Coefficients with 95% CI"),
-			ggplot.XLab("Predictor"),
-			ggplot.YLab("Estimate ± CI"),
+			ggplot.XLabel("Predictor"),
+			ggplot.YLabel("Estimate ± CI"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

@@ -36,7 +36,7 @@ func main() {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(2), geom.WithColor("#95A5A6"))).
 		Layer(geom.Smooth(geom.WithColor("#E74C3C"), geom.WithLineWidth(3))).
-		Labs(ggplot.Title("Scatter + OLS Smooth"))
+		Labels(ggplot.Title("Scatter + OLS Smooth"))
 
 	_, filename, _, _ := runtime.Caller(0)
 	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "smooth.png"), 800, 600); err != nil {

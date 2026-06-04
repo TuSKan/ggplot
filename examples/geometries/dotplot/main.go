@@ -48,10 +48,10 @@ func main() {
 			geom.WithSize(4),
 			geom.WithAlpha(0.9),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Observation Distribution — Dot Plot"),
-			ggplot.XLab("Value"),
-			ggplot.YLab("Count"),
+			ggplot.XLabel("Value"),
+			ggplot.YLabel("Count"),
 		)
 
 	_, filename, _, _ := runtime.Caller(0)

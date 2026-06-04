@@ -33,7 +33,7 @@ func main() {
 
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Histogram(geom.WithBins(30), geom.WithFill("#3498DB"))).
-		Labs(ggplot.Title("Histogram"))
+		Labels(ggplot.Title("Histogram"))
 
 	_, filename, _, _ := runtime.Caller(0)
 	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "histogram.png"), 800, 600); err != nil {

@@ -29,7 +29,7 @@ func main() {
 
 	p := ggplot.New(ds, aes.X("fruit"), aes.Y("sales")).
 		Layer(geom.Col(geom.WithFill("#9B59B6"), geom.WithAlpha(0.85))).
-		Labs(ggplot.Title("Column Chart"), ggplot.Subtitle("Fruit sales by category"))
+		Labels(ggplot.Title("Column Chart"), ggplot.Subtitle("Fruit sales by category"))
 
 	_, filename, _, _ := runtime.Caller(0)
 	if err := file.Save(context.Background(), p, filepath.Join(filepath.Dir(filename), "col.png"), 800, 600, output.WithCPU(true)); err != nil {

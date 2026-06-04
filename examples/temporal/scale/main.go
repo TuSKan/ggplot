@@ -72,11 +72,11 @@ func explicitDateTimeScale(eng *memory.Engine, dir string) {
 		Layer(geom.Line(geom.WithColor("#2980B9"), geom.WithLineWidth(2))).
 		Layer(geom.Point(geom.WithSize(3), geom.WithColor("#2980B9"))).
 		ScaleX(scale.DateTime). // explicit DateTime scale
-		Labs(
+		Labels(
 			ggplot.Title("US GDP Growth Rate"),
 			ggplot.Subtitle("Quarterly annualized — explicit ScaleX(scale.DateTime)"),
-			ggplot.XLab("Quarter"),
-			ggplot.YLab("GDP Growth (%)"),
+			ggplot.XLabel("Quarter"),
+			ggplot.YLabel("GDP Growth (%)"),
 		).
 		Theme("seaborn_whitegrid")
 
@@ -111,11 +111,11 @@ func oobPolicies(eng *memory.Engine, dir string) {
 			scale.WithClipBounds(0, 1),
 			scale.WithOOB(scale.OOBSquish),
 		).
-		Labs(
+		Labels(
 			ggplot.Title("OOB Squish"),
 			ggplot.Subtitle("Out-of-bounds values clamped to [0, 1]"),
-			ggplot.XLab("x"),
-			ggplot.YLab("y"),
+			ggplot.XLabel("x"),
+			ggplot.YLabel("y"),
 		).
 		Theme("bmh")
 

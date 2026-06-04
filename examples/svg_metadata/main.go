@@ -78,11 +78,11 @@ func svgMetadataPipeline(ctx context.Context, dir string) {
 		aes.AriaLabel("a11y"), // → aria-label for screen readers
 	).
 		Layer(geom.Col(geom.WithFill("#E67E22"))).
-		Labs(
+		Labels(
 			ggplot.Title("Fruit Sales — SVG Metadata Demo"),
 			ggplot.Subtitle("Hover for tooltips, click for links"),
-			ggplot.XLab("Fruit"),
-			ggplot.YLab("Units Sold"),
+			ggplot.XLabel("Fruit"),
+			ggplot.YLabel("Units Sold"),
 		).
 		Theme("minimal")
 
@@ -116,7 +116,7 @@ func bandPadding(ctx context.Context, dir string) {
 	// Default padding (inner=0.2, outer=0.5) — the standard look.
 	p1 := ggplot.New(ds, aes.X("lang"), aes.Y("stars")).
 		Layer(geom.Col(geom.WithFill("#3498DB"))).
-		Labs(
+		Labels(
 			ggplot.Title("Default Padding"),
 			ggplot.Subtitle("inner=0.2, outer=0.5"),
 		).

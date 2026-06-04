@@ -34,7 +34,126 @@ A pure-Go data visualization library implementing a rigorous, declarative Gramma
 
 ---
 
-## What's New in v0.0.9
+## What's New in v0.0.12
+
+### Theme System Granularity
+
+Full theme-aware legend rendering and plot margin control with physical units:
+
+```go
+// Plot margins with physical units — cm, inches, points, or lines.
+ggplot.New(ds, aes.X("x"), aes.Y("y")).
+    Layer(geom.Line()).
+    PlotMargin(theme.PlotMargin{
+        Top:    theme.Inches(0.5),
+        Right:  theme.Cm(0.8),
+        Bottom: theme.Pt(20),
+        Left:   theme.Cm(1.0),
+    }).
+    Save(ctx, "margins.png", 800, 500)
+```
+
+### Block-Level Alignment
+
+Configurable alignment for titles, labels, caption, and legend — matching ggplot2:
+
+```go
+// Left-aligned titles, right-aligned caption, center-aligned legend.
+ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
+    Layer(geom.Point()).
+    Align(theme.BlockAlignment{
+        Title:   theme.AlignLeft,
+        Caption: theme.AlignRight,   // default
+        XLabel:  theme.AlignCenter,  // default
+        Legend:  theme.AlignCenter,
+    }).
+    Save(ctx, "aligned.png", 800, 500)
+```
+
+### Continuous Legends
+
+Graduated-size circles and alpha gradient strips, populated automatically from `aes.Size` / `aes.Alpha` mappings:
+
+```go
+ggplot.New(ds, aes.X("lon"), aes.Y("lat")).
+    Layer(geom.Point(), aes.Size("population"), aes.Alpha("confidence")).
+    ScaleSizeArea().
+    ScaleAlpha(0.15, 1.0).
+    Save(ctx, "bubbles.png", 800, 500)
+```
+
+### Legend Theme Overrides
+
+Per-plot legend styling without creating a custom theme:
+
+```go
+ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
+    Layer(geom.Point(geom.WithSize(5))).
+    ThemeOverride(
+        theme.LegendTitleOverride(theme.ElementText{Bold: true, Size: 13}),
+        theme.LegendBackgroundOverride(theme.ElementRect{Fill: color.RGBA{240, 240, 240, 255}}),
+    ).
+    Save(ctx, "styled_legend.png", 800, 500)
+```
+
+### ⚠️ Breaking Changes
+
+- `Labs()` → `Labels()` — the Plot builder method for configuring labels.
+- `LabOpt` → `LabelOpt` — the functional option type.
+- `XLab()` → `XLabel()`, `YLab()` → `YLabel()` — axis label constructors.
+
+<details>
+<summary><strong>What was new in v0.0.11</strong></summary>
+
+### Browser WASM Surface
+
+Render plots in the browser via WebAssembly — CPU raster, SVG, or WebGPU modes:
+
+```go
+import "github.com/TuSKan/ggplot/output/web"
+
+// Mounts into <div id="plot-container">.
+// Drag to pan, scroll to zoom — same DataSpaceController as the desktop window.
+_ = web.Mount(ctx, plot, "plot-container")
+```
+
+</details>
+
+<details>
+<summary><strong>What was new in v0.0.10</strong></summary>
+
+### Data-Space Interactive Pan/Zoom
+
+Pan (drag) and zoom (scroll wheel) operate on data-space scale bounds — axes stay at fixed screen positions while tick labels update dynamically:
+
+```go
+import "github.com/TuSKan/ggplot/output/window"
+
+// Opens a GPU window. Drag to pan, scroll to zoom.
+// Double-click to reset. Per-panel zoom for faceted plots.
+_ = window.Show(ctx, plot, window.WithTitle("ggplot"), window.WithSize(900, 600))
+```
+
+### Output Layer
+
+Unified destination layer separating Build → Draw → Surface:
+
+- **`output.Figure`** / **`output.Source`** interfaces — `*Built` implements `Figure`, `*Plot` implements `Source`.
+- **`output/file`** — `file.Save(ctx, plot, "out.png", 800, 500)` replaces `Plot.Save`.
+- **`output/image`** — `image.Render(ctx, plot, 800, 500)` for in-memory images.
+- **`output/window`** — GPU desktop window with `DataSpaceController`.
+- **`output.Session`** — event loop for any `LiveSurface`. `WithRebuildDelay` makes rebuilds async/debounced.
+
+### ⚠️ Breaking Changes
+
+- `Plot.Save`, `Plot.Encode`, `Plot.Image`, `Plot.WriteTo` → **removed**. Use `file.Save` / `file.Encode` / `image.Render`.
+- `Built.Save`, `Built.WriteTo` → **removed**. Use `output.Render` + a surface.
+- `Plot.Build` returns `output.Figure` (concretely `*Built`), not `*Built` directly.
+
+</details>
+
+<details>
+<summary><strong>What was new in v0.0.9</strong></summary>
 
 ### Advanced Faceting
 
@@ -67,8 +186,6 @@ ggplot.New(ds, aes.X("hour"), aes.Y("temp_c")).
         "Temperature (°F)",
     )).
     Save(ctx, "dual_axis.png", 800, 500)
-
-// scale.DupAxis("°C") mirrors the primary axis on the right.
 ```
 
 ### Theme Overrides
@@ -95,6 +212,8 @@ ggplot.New(ds, aes.X("x"), aes.Y("y")).
 - `Plot.FacetGrid(row, col string, opts ...GridOpt)` — replaces the old two-arg form.
 - `Plot.SecondaryY` → **`Plot.SecondAxis`**.
 - `coord.TransFunc` is now a name-only spec type (math moved to engine `MathKernel`).
+
+</details>
 
 <details>
 <summary><strong>What was new in v0.0.8</strong></summary>
@@ -214,6 +333,17 @@ All shape names are now exported constants (`canvas.ShapeCircle`, `canvas.ShapeS
 | ![Secondary Axis](examples/secondary_axis/01_secondary_axis_temp.png) | ![Dup Axis](examples/secondary_axis/02_dup_axis.png) |
 | `SecondAxis(SecAxis(°C→°F))` — dual Y-axis | `SecondAxis(DupAxis("°C"))` — mirrored axis |
 
+### Theme & Legends
+
+| | |
+|---|---|
+| ![Plot Margins](examples/theme_legends/01_plot_margin_units.png) | ![Legend Theming](examples/theme_legends/02_legend_theming.png) |
+| `PlotMargin` — physical units (cm, inches, pt) | `LegendTitleOverride` — per-plot legend styling |
+| ![Size Legend](examples/theme_legends/03_size_legend.png) | ![Alpha Legend](examples/theme_legends/04_alpha_legend.png) |
+| `aes.Size` — graduated-circle legend | `aes.Alpha` — gradient-strip legend |
+| ![Combined](examples/theme_legends/05_combined_aesthetics.png) | |
+| Size + Alpha + Color — three legend types stacked | |
+
 > Each image is generated by a self-contained example in [`examples/`](examples/).
 
 ---
@@ -256,7 +386,7 @@ func main() {
 	ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(5), geom.WithColor("coral"))).
 		Layer(geom.Smooth()).
-		Labs(ggplot.Title("Quick Start"), ggplot.XLab("X"), ggplot.YLab("Y")).
+		Labels(ggplot.Title("Quick Start"), ggplot.XLabel("X"), ggplot.YLabel("Y")).
 		Save(ctx, "scatter.png", 800, 500)
 }
 ```
@@ -267,7 +397,7 @@ func main() {
 ggplot.New(ds, aes.X("day"), aes.Y("temp")).
     Layer(geom.Line(geom.WithColor("seagreen"), geom.WithLineWidth(1.5))).
     FacetWrap("season", facet.NCols(2)).
-    Labs(ggplot.Title("Temperature by Season")).
+    Labels(ggplot.Title("Temperature by Season")).
     Theme("dark").
     Save(ctx, "facets.png", 900, 600)
 ```
@@ -277,7 +407,7 @@ ggplot.New(ds, aes.X("day"), aes.Y("temp")).
 ```go
 ggplot.New(ds, aes.X("group"), aes.Y("value")).
     Layer(geom.Boxplot(geom.WithFill("#E8E8E8"), geom.WithAlpha(0.8))).
-    Labs(ggplot.Title("Distribution by Group")).
+    Labels(ggplot.Title("Distribution by Group")).
     Theme("classic").
     Save(ctx, "boxplot.png", 800, 500)
 ```

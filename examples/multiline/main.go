@@ -65,10 +65,10 @@ func wideFormat(dir string) {
 		Layer(geom.Line(geom.WithColor("#1F77B4"), geom.WithLineWidth(2), geom.WithLabel("sin(x)")), aes.Y("sin")).
 		Layer(geom.Line(geom.WithColor("#FF7F0E"), geom.WithLineWidth(2), geom.WithLabel("cos(x)")), aes.Y("cos")).
 		Layer(geom.Line(geom.WithColor("#2CA02C"), geom.WithLineWidth(2), geom.WithLabel("sin(2x)/2")), aes.Y("sin_2x")).
-		Labs(
+		Labels(
 			ggplot.Title("Trigonometric Functions (Wide Format)"),
-			ggplot.XLab("x (radians)"),
-			ggplot.YLab("f(x)"),
+			ggplot.XLabel("x (radians)"),
+			ggplot.YLabel("f(x)"),
 		)
 
 	out := filepath.Join(dir, "multiline_wide.png")
@@ -113,10 +113,10 @@ func longFormat(dir string) {
 		aes.Color("func"),
 	).
 		Layer(geom.Line(geom.WithLineWidth(2))).
-		Labs(
+		Labels(
 			ggplot.Title("Trigonometric Functions (Long Format)"),
-			ggplot.XLab("x (radians)"),
-			ggplot.YLab("f(x)"),
+			ggplot.XLabel("x (radians)"),
+			ggplot.YLabel("f(x)"),
 		)
 
 	out := filepath.Join(dir, "multiline.png")

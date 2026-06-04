@@ -50,7 +50,7 @@ func linearScale(dir string) {
 	ds, _ := dataset.NewDataset(eng, eng.NewFloat64Column("x", xs), eng.NewFloat64Column("y", ys))
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#3498DB"), geom.WithLineWidth(2))).
-		Labs(ggplot.Title("Scale: Linear (default)"), ggplot.Subtitle("y = 2.5x")).
+		Labels(ggplot.Title("Scale: Linear (default)"), ggplot.Subtitle("y = 2.5x")).
 		Theme("dark")
 	save(p, dir, "01_scale_linear", 800, 500)
 }
@@ -71,7 +71,7 @@ func log10Scale(dir string) {
 		Layer(geom.Line(geom.WithColor("#E74C3C"), geom.WithLineWidth(2))).
 		Layer(geom.Point(geom.WithSize(2), geom.WithColor("#E74C3C"))).
 		ScaleY("log10").
-		Labs(ggplot.Title("Scale: Log10 Y-Axis"), ggplot.Subtitle("Exponential growth on logarithmic axis")).
+		Labels(ggplot.Title("Scale: Log10 Y-Axis"), ggplot.Subtitle("Exponential growth on logarithmic axis")).
 		Theme("minimal")
 	save(p, dir, "02_scale_log10", 800, 500)
 }
@@ -91,7 +91,7 @@ func sqrtScale(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#27AE60"), geom.WithLineWidth(2))).
 		ScaleY("sqrt").
-		Labs(ggplot.Title("Scale: Sqrt Y-Axis"), ggplot.Subtitle("Quadratic data linearized via sqrt transform")).
+		Labels(ggplot.Title("Scale: Sqrt Y-Axis"), ggplot.Subtitle("Quadratic data linearized via sqrt transform")).
 		Theme("bw")
 	save(p, dir, "03_scale_sqrt", 800, 500)
 }
@@ -111,7 +111,7 @@ func reverseScale(dir string) {
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Line(geom.WithColor("#F39C12"), geom.WithLineWidth(2))).
 		ScaleY("reverse").
-		Labs(ggplot.Title("Scale: Reverse Y-Axis"), ggplot.Subtitle("Y axis inverted — high values at bottom")).
+		Labels(ggplot.Title("Scale: Reverse Y-Axis"), ggplot.Subtitle("Y axis inverted — high values at bottom")).
 		Theme("dark")
 	save(p, dir, "04_scale_reverse", 800, 500)
 }
@@ -125,7 +125,7 @@ func discreteScale(dir string) {
 	)
 	p := ggplot.New(ds, aes.X("language"), aes.Y("stars")).
 		Layer(geom.Col(geom.WithFill("#9B59B6"), geom.WithAlpha(0.85))).
-		Labs(ggplot.Title("Scale: Discrete X-Axis"), ggplot.Subtitle("Categorical programming languages")).
+		Labels(ggplot.Title("Scale: Discrete X-Axis"), ggplot.Subtitle("Categorical programming languages")).
 		Theme("classic")
 	save(p, dir, "05_scale_discrete", 800, 500)
 }

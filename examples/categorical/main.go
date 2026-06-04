@@ -39,11 +39,11 @@ func categoricalBars(dir string) {
 
 	p := ggplot.New(ds, aes.X("city"), aes.Y("population")).
 		Layer(geom.Col(geom.WithFill("#3498DB"))).
-		Labs(
+		Labels(
 			ggplot.Title("European City Populations"),
 			ggplot.Subtitle("In millions"),
-			ggplot.XLab("City"),
-			ggplot.YLab("Population (M)"),
+			ggplot.XLabel("City"),
+			ggplot.YLabel("Population (M)"),
 		)
 
 	out := filepath.Join(dir, "categorical_bars.png")
@@ -108,11 +108,11 @@ func boxplot(dir string) {
 			geom.WithColor("#2C3E50"),
 			geom.WithWidth(0.6),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Treatment Comparison"),
 			ggplot.Subtitle("Box-and-whisker plot"),
-			ggplot.XLab("Group"),
-			ggplot.YLab("Score"),
+			ggplot.XLabel("Group"),
+			ggplot.YLabel("Score"),
 		)
 
 	out := filepath.Join(dir, "boxplot.png")

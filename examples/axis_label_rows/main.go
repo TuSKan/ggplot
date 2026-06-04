@@ -45,16 +45,16 @@ func main() {
 	// 1. Auto-dodge (default, n=0) — detects overlap and staggers to 2 rows.
 	p1 := ggplot.New(ds, aes.X("category"), aes.Y("value")).
 		Layer(geom.Col(geom.WithFill("#3498DB"))).
-		Labs(
+		Labels(
 			ggplot.Title("Auto-Dodge (default)"),
-			ggplot.XLab("Category"),
-			ggplot.YLab("Value"),
+			ggplot.XLabel("Category"),
+			ggplot.YLabel("Value"),
 		)
 
 	// 2. Explicit 3-row stagger — derived before any Save to avoid
 	// Build() mutating the shared dataset reference.
 	p2 := p1.AxisLabelRows(3).
-		Labs(ggplot.Title("AxisLabelRows(3) — 3-row stagger"))
+		Labels(ggplot.Title("AxisLabelRows(3) — 3-row stagger"))
 
 	if err := file.Save(context.Background(), p1, filepath.Join(dir, "axis_label_rows_auto.png"), 800, 500); err != nil {
 		log.Fatalln(err)

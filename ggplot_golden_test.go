@@ -137,10 +137,10 @@ func TestGolden_ScatterPlot(t *testing.T) { //nolint:paralleltest // Sequential 
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(4), geom.WithColor("#E74C3C"))).
-		Labs(
+		Labels(
 			ggplot.Title("Scatter Plot Golden"),
-			ggplot.XLab("X Values"),
-			ggplot.YLab("Y Values"),
+			ggplot.XLabel("X Values"),
+			ggplot.YLabel("Y Values"),
 		)
 
 	got := renderPNG(t, p, 400, 300)
@@ -160,10 +160,10 @@ func TestGolden_BarChart(t *testing.T) { //nolint:paralleltest // Sequential for
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("count")).
 		Layer(geom.Bar(geom.WithFill("#3498DB"), geom.WithWidth(0.7))).
-		Labs(
+		Labels(
 			ggplot.Title("Bar Chart Golden"),
-			ggplot.XLab("Category"),
-			ggplot.YLab("Count"),
+			ggplot.XLabel("Category"),
+			ggplot.YLabel("Count"),
 		)
 
 	got := renderPNG(t, p, 400, 300)
@@ -184,10 +184,10 @@ func TestGolden_MultiLayer(t *testing.T) { //nolint:paralleltest // Sequential f
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithColor("#E74C3C"), geom.WithSize(5))).
 		Layer(geom.Line(geom.WithColor("#2980B9"), geom.WithLineWidth(2))).
-		Labs(
+		Labels(
 			ggplot.Title("Multi-Layer Golden"),
-			ggplot.XLab("X"),
-			ggplot.YLab("Y"),
+			ggplot.XLabel("X"),
+			ggplot.YLabel("Y"),
 		)
 
 	got := renderPNG(t, p, 400, 300)
@@ -208,7 +208,7 @@ func TestGolden_GroupedColor(t *testing.T) { //nolint:paralleltest // Sequential
 
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y"), aes.Color("group")).
 		Layer(geom.Point(geom.WithSize(6))).
-		Labs(ggplot.Title("Grouped Scatter Golden"))
+		Labels(ggplot.Title("Grouped Scatter Golden"))
 
 	got := renderPNG(t, p, 500, 400)
 	assertGolden(t, "grouped_color", got)
@@ -231,7 +231,7 @@ func TestGolden_Histogram(t *testing.T) { //nolint:paralleltest // Sequential fo
 
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Histogram(geom.WithBins(10), geom.WithFill("#9B59B6"))).
-		Labs(ggplot.Title("Histogram Golden"))
+		Labels(ggplot.Title("Histogram Golden"))
 
 	got := renderPNG(t, p, 400, 300)
 	assertGolden(t, "histogram", got)
@@ -251,11 +251,11 @@ func TestGolden_LabelsAndTheme(t *testing.T) { //nolint:paralleltest // Sequenti
 	p := ggplot.New(ds, aes.X("x"), aes.Y("y")).
 		Layer(geom.Point(geom.WithSize(6), geom.WithColor("#E67E22"))).
 		Layer(geom.Line(geom.WithColor("#2C3E50"), geom.WithLineWidth(2))).
-		Labs(
+		Labels(
 			ggplot.Title("Full Labels Golden"),
 			ggplot.Subtitle("Testing all label positions"),
-			ggplot.XLab("X Axis Label"),
-			ggplot.YLab("Y Axis Label"),
+			ggplot.XLabel("X Axis Label"),
+			ggplot.YLabel("Y Axis Label"),
 			ggplot.Caption("Source: test data"),
 		).
 		Theme("minimal").

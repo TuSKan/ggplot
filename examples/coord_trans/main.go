@@ -50,11 +50,11 @@ func main() {
 	p := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Histogram(geom.WithColor("#2196F3"), geom.WithAlpha(0.7))).
 		CoordTrans(coord.TransIdentity, coord.TransSqrt).
-		Labs(
+		Labels(
 			ggplot.Title("Histogram with sqrt(y) Transform"),
 			ggplot.Subtitle("Stats computed in linear space, y-axis sqrt-transformed for display"),
-			ggplot.XLab("Value"),
-			ggplot.YLab("Count (sqrt scale)"),
+			ggplot.XLabel("Value"),
+			ggplot.YLabel("Count (sqrt scale)"),
 		).
 		Theme("minimal")
 
@@ -69,11 +69,11 @@ func main() {
 	p2 := ggplot.New(ds, aes.X("x")).
 		Layer(geom.Histogram(geom.WithColor("#E74C3C"), geom.WithAlpha(0.7))).
 		CoordTrans(coord.TransLog10, coord.TransIdentity).
-		Labs(
+		Labels(
 			ggplot.Title("Histogram with log10(x) Transform"),
 			ggplot.Subtitle("Bins in linear space, x-axis log10-transformed"),
-			ggplot.XLab("Value (log10 scale)"),
-			ggplot.YLab("Count"),
+			ggplot.XLabel("Value (log10 scale)"),
+			ggplot.YLabel("Count"),
 		).
 		Theme("minimal")
 

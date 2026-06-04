@@ -65,11 +65,11 @@ func main() {
 		aes.Color("z"),
 	).
 		Layer(geom.Line(geom.WithLineWidth(1.2))).
-		Labs(
+		Labels(
 			ggplot.Title("Butterfly Curve"),
 			ggplot.Subtitle("Parametric curve with continuous color by radius"),
-			ggplot.XLab("x"),
-			ggplot.YLab("y"),
+			ggplot.XLabel("x"),
+			ggplot.YLabel("y"),
 		).
 		Theme("dark")
 

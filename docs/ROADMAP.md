@@ -88,7 +88,8 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 
 - **v0.0.9 (2026-05-28).** Ships every ✅ item below through Phase 12: advanced faceting (free scales, grid margins, labellers, strip placement), secondary axes (`SecAxis`/`DupAxis`), theme overrides (`ThemeOverride`/`WithOverrides`), the Phase 8 geometry batch (Violin, Dotplot, Raster, Curve, Crossbar, Linerange, Pointrange, JitterPoint), coordinate systems (CartesianZoom, Fixed, Flip, Polar), and engine-native coordinate transforms. Breaking: `FacetWrap`/`FacetGrid` variadic options, `SecondaryY` → `SecondAxis`, `coord.TransFunc` reduced to a name-only spec.
 - **v0.0.10 (2026-06-02).** Data-space interactive pan/zoom (`DataSpaceController`, `Measurable`, `Zoomable`, `PanelInfo`). Output layer Phases 1–5 (`RasterCanvas` rename, `output` core, `output/file`, `output/image`, `output/session`, `output/window`). SVG metadata channels (`Title`, `Href`, `AriaLabel`). Discrete scale band padding API.
-- **v0.0.11 (2026-06-03) — current release.** Output layer Phase 6: `output/web` browser WASM surface (`web.Mount`). Three render modes: CPU raster (Canvas2D `putImageData`), SVG (`innerHTML` with metadata), GPU (WebGPU via `gogpu`). DOM event integration, mode selector toolbar, embedded dev server. All six OUTPUT-SPEC phases are complete.
+- **v0.0.11 (2026-06-03).** Output layer Phase 6: `output/web` browser WASM surface (`web.Mount`). Three render modes: CPU raster (Canvas2D `putImageData`), SVG (`innerHTML` with metadata), GPU (WebGPU via `gogpu`). DOM event integration, mode selector toolbar, embedded dev server. All six OUTPUT-SPEC phases are complete.
+- **v0.0.12 (2026-06-04) — current release.** Phase 12 completion: plot margins with physical units (`theme.Pt`/`Cm`/`Inches`/`Lines`), continuous size and alpha legends, legend theme elements (`legend.background`/`legend.key`/`legend.title`), block-level alignment (`Plot.Align()` + `theme.BlockAlignment`), API rename (`Labs→Labels`, `XLab→XLabel`). Bug fix: `clone()` now preserves `PlotMargin` and `Alignment` fields.
 
 ---
 
@@ -135,7 +136,7 @@ This is the contract. Every phase, geom, and refactor is judged against whether 
 
 **Aesthetics:** ✅ X, Y, Color, Group, Fill, Label, Size, Alpha
 
-**Builder shortcuts:** ✅ `LegendPosition()`, `ScaleX("log10")`, `ScaleY("sqrt")`
+**Builder shortcuts:** ✅ `LegendPosition()`, `ScaleX("log10")`, `ScaleY("sqrt")`, `Align(BlockAlignment{...})`
 
 > ✅ **Resolved:** `geom.Bar` now defaults to `position.Stack`. Position adjustments (stack, dodge, fill) are wired into the build pipeline as of Phase 4.3.
 
@@ -400,11 +401,11 @@ The public extension API — implemented via Go interfaces + registration, not g
 
 - ✅ **Granular `theme()` overrides** — `Plot.ThemeOverride(theme.AxisTitleXOverride(ElementText{Bold: true}))` per-plot element overrides
 - ✅ **User-composable themes** — `theme.WithOverrides(base, ...Override)` returning a composed `Theme` with shallow copy
-- 🔲 **Plot margin** with unit support — `cm`, `inches`, `lines`, `pt`
-- 🔲 **Legend layout** — `legend.box`, `legend.key`, `legend.background`, `legend.margin`
+- ✅ **Plot margin** with unit support — `theme.Pt`, `theme.Cm`, `theme.Inches`, `theme.Lines` units; `PlotMargin` struct; `Plot.PlotMargin()` builder; consumed by `Built.Draw` margin computation; falls back to `Spacing.Margin*` defaults when nil
+- ✅ **Legend layout** — `legend.background`, `legend.key` theme elements rendered in `drawLegendVertical`/`drawLegendHorizontal`; `legend.title` used for title text styling; `LegendBackgroundOverride`, `LegendKeyOverride`, `LegendTitleOverride`, `LegendTextOverride` convenience constructors
 - ✅ **Strip styling** — `strip.text.x`, `strip.text.y`, `strip.background.x`, `strip.background.y` inheritance paths added
-- 🔲 **Theme inheritance proofs** — golden tests that `axis.title.x` correctly inherits from `axis.title` from `text` from root
-- 🔲 **Continuous legends** — graduated-size and continuous-alpha legend rendering (deferred from Phase 7)
+- ✅ **Theme inheritance proofs** — comprehensive table-driven golden tests covering all text/line/rect inheritance chains, blank suppression at mid-chain and leaf, and override composition
+- ✅ **Continuous legends** — graduated-size circle legends (`SizeLegendSpec`) and continuous-alpha gradient strips (`AlphaLegendSpec`); populated during `buildPanel` from `SizeScale`/`AlphaScale`; rendered via `drawSizeLegend`/`drawAlphaLegend` (vertical + horizontal variants); margin computation accounts for legend width
 
 ---
 

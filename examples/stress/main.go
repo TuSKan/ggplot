@@ -82,9 +82,9 @@ func runScatter(ctx context.Context) { //nolint:funlen // Stress test.
 			geom.WithSize(2),    //nolint:mnd // Visible dots.
 			geom.WithAlpha(0.4), //nolint:mnd // Semi-transparent.
 		), aes.Y("y"), aes.Color("group")).
-		Labs(
+		Labels(
 			ggplot.Title("Scatter Stress — 50K points × 4 groups"),
-			ggplot.XLab("X"), ggplot.YLab("Y"),
+			ggplot.XLabel("X"), ggplot.YLabel("Y"),
 		)
 
 	if err := window.Show(ctx, plot,
@@ -148,9 +148,9 @@ func runLine(ctx context.Context) { //nolint:funlen // Stress test.
 		), aes.Y(names[li]))
 	}
 
-	plot = plot.Labs(
+	plot = plot.Labels(
 		ggplot.Title(fmt.Sprintf("Line Stress — %d series × %dK points each", nLines, nPts/1000)),
-		ggplot.XLab("Tick"), ggplot.YLab("Price"),
+		ggplot.XLabel("Tick"), ggplot.YLabel("Price"),
 	)
 
 	if err := window.Show(ctx, plot,
@@ -209,9 +209,9 @@ func runComposite(ctx context.Context) { //nolint:funlen // Stress test.
 			geom.WithColor("#2A9D8F"),
 			geom.WithLineWidth(1),
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Composite Stress — 100K: scatter + line + rug + hline"),
-			ggplot.XLab("X"), ggplot.YLab("Y"),
+			ggplot.XLabel("X"), ggplot.YLabel("Y"),
 		)
 
 	if err := window.Show(ctx, plot,
@@ -259,9 +259,9 @@ func runDense(ctx context.Context) { //nolint:funlen // Stress test.
 			geom.WithAlpha(0.3), //nolint:mnd // Semi-transparent for density.
 			geom.WithColor("#E63946"),
 		), aes.Y("y")).
-		Labs(
+		Labels(
 			ggplot.Title("Dense Scatter — 500K points (pixel decimation test)"),
-			ggplot.XLab("X"), ggplot.YLab("Y"),
+			ggplot.XLabel("X"), ggplot.YLabel("Y"),
 		)
 
 	if err := window.Show(ctx, plot,
@@ -311,9 +311,9 @@ func runMillion(ctx context.Context) { //nolint:funlen // Stress test.
 			func(v float64) float64 { return v * 10 },  //nolint:mnd
 			"Scaled",
 		)).
-		Labs(
+		Labels(
 			ggplot.Title("Million Points — 1M spiral (pixel decimation stress)"),
-			ggplot.XLab("X"), ggplot.YLab("Y"),
+			ggplot.XLabel("X"), ggplot.YLabel("Y"),
 		)
 
 	if err := window.Show(ctx, plot,
