@@ -498,10 +498,11 @@ See all themes with `theme.AllNames()`.
 
 ## Dependencies
 
-| Package | Role |
-|---|---|
-| [`gogpu/gg`](https://github.com/gogpu/gg) | 2D vector rendering with anti-aliased lines, fills, and text |
-| [`apache/arrow-go`](https://github.com/apache/arrow-go) | Columnar data (zero-copy for IPC/Parquet reads) |
+| Package | Target Version | Role |
+|---|---|---|
+| [`gogpu/gg`](https://github.com/gogpu/gg) | `v0.50.1` | 2D vector rendering with anti-aliased lines, fills, and text |
+| [`apache/arrow-go`](https://github.com/apache/arrow-go) | `v18.6.0` | Columnar data (zero-copy for IPC/Parquet reads) |
+| [`gogpu/gogpu`](https://github.com/gogpu/gogpu) | `v0.43.3` | Desktop window and GPU device integration |
 
 ## Contributing
 

@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- Upgraded dependencies:
+  - `github.com/gogpu/gg` (from v0.48.8 pre-release to **v0.50.1**)
+  - `github.com/gogpu/wgpu` (from v0.29.1 to **v0.30.8**)
+  - `github.com/gogpu/gogpu` (from v0.41.0 to **v0.43.3**)
+  - `github.com/gogpu/gpucontext` (from v0.19.0 to **v0.21.0**)
+  - `github.com/gogpu/gputypes` (from v0.5.0 to **v0.5.1**)
+  - `github.com/gogpu/naga` (from v0.17.13 to **v0.17.15**)
+  - `github.com/go-webgpu/goffi` (from v0.5.2 to **v0.5.5**)
+  - `github.com/go-webgpu/webgpu` (from v0.5.2 to **v0.5.5**)
+- Removed the local `replace` directives mapping these packages to sibling local directories.
+- Aligned `canvas/raster.go` text shaping setup with `gogpu/gg` v0.50.1: since `OwnShaper` is now the default global shaper, removed the explicit `text.SetShaper(text.NewGoTextShaper())` call (which was renamed to `NewOwnShaper`).
+
 ## [0.0.12] — 2026-06-04
 
 ### Theme System Granularity (Phase 12 — Completion)

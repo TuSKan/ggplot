@@ -539,6 +539,7 @@ These are not phases; they thread through every phase.
 - Allocs/op tracked separately from ns/op
 
 ### Stability and versioning
+- Dependency alignment: All rendering dependencies (`gogpu/gg`, `gogpu/wgpu`, `gogpu/gogpu`) are pinned to stable upstream tags (e.g., gg v0.50.1+) to ensure rendering correctness and remove temporary local replacements.
 - Public packages (`ggplot`, `aes`, `geom`, `stat`, `scale`, `coord`, `facet`, `theme`, `guide`, `position`, `dataset`, `dataset/memory`, `dataset/arrow`, `dataset/bigquery`) have stability guarantees from v0.5 onward
 - `internal/*` is unpublished and may break at any time
 - 2-minor-release deprecation cycle minimum

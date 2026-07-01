@@ -7,16 +7,16 @@ require (
 	github.com/ajroetker/go-highway v0.0.13-0.20260528204430-c3b5b59834b1
 	github.com/apache/arrow-go/v18 v18.6.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
-	github.com/gogpu/gg v0.48.8-0.20260601074101-1f79a5e9468f
-	github.com/gogpu/gogpu v0.41.0
-	github.com/gogpu/gpucontext v0.19.0
-	github.com/gogpu/gputypes v0.5.0
-	github.com/gogpu/wgpu v0.29.1
+	github.com/gogpu/gg v0.50.1
+	github.com/gogpu/gogpu v0.43.3
+	github.com/gogpu/gpucontext v0.21.0
+	github.com/gogpu/gputypes v0.5.1
+	github.com/gogpu/wgpu v0.30.8
 	github.com/parquet-go/parquet-go v0.30.1
-	github.com/rickb777/date/v2 v2.3.11
-	golang.org/x/image v0.41.0
-	golang.org/x/sync v0.20.0
-	google.golang.org/api v0.280.0
+	github.com/rickb777/date/v2 v2.3.12
+	golang.org/x/image v0.43.0
+	golang.org/x/sync v0.21.0
+	google.golang.org/api v0.287.0
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -33,15 +33,14 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-text/typesetting v0.3.4 // indirect
-	github.com/go-webgpu/goffi v0.5.2 // indirect
+	github.com/go-webgpu/goffi v0.5.5 // indirect
 	github.com/go-webgpu/webgpu v0.5.2 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
-	github.com/gogpu/naga v0.17.13 // indirect
+	github.com/gogpu/naga v0.17.15 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.17 // indirect
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
 	github.com/govalues/decimal v0.1.36 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
@@ -60,25 +59,19 @@ require (
 	go.opentelemetry.io/otel v1.43.0 // indirect
 	go.opentelemetry.io/otel/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
-	golang.org/x/crypto v0.52.0 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
-	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/mod v0.36.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/telemetry v0.0.0-20260409153401-be6f6cb8b1fa // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260508192327-42602be52be6 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.44.0 // indirect
+	golang.org/x/tools v0.45.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260511170946-3700d4141b60 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d // indirect
 	google.golang.org/grpc v1.81.1 // indirect
 )
-
-replace github.com/gogpu/gg => ../gogpu-gg
-
-replace github.com/go-webgpu/webgpu => ../go-webgpu
-
-replace github.com/gogpu/wgpu => ../gogpu-wgpu

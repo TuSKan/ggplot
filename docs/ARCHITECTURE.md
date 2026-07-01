@@ -448,13 +448,12 @@ surfaces, migration phasing — is in
 
 ## Dependencies
 
-| Dependency | Role |
-|---|---|
-| `gogpu/gg` | 2D vector rendering (anti-aliased lines, fills, text) |
-| `apache/arrow-go` | Zero-copy columnar data (optional, for `dataset/arrow`) |
-| `golang.org/x/sync` | `errgroup` for panel-parallel build and draw |
-| `golang.org/x/image` | Font rendering support |
-| `go-text/typesetting` | Text shaping (indirect, via gg) |
-| `gg/integration/ggcanvas` | Zero-copy gg → GPU-surface presentation (optional, `output/window`) |
-| `gogpu/gogpu`, `gogpu/gpucontext` | Desktop window + GPU device provider (optional, `output/window`) |
-| `gogpu/wgpu` | WebGPU — browser backend for `output/web` (optional, `js/wasm`) |
+| Dependency | Target Version | Role |
+|---|---|---|
+| `gogpu/gg` | `v0.50.1` | 2D vector rendering (anti-aliased lines, fills, text) |
+| `apache/arrow-go` | `v18.6.0` | Zero-copy columnar data (optional, for `dataset/arrow`) |
+| `golang.org/x/sync` | `v0.21.0` | `errgroup` for panel-parallel build and draw |
+| `golang.org/x/image` | `v0.43.0` | Font rendering support |
+| `gogpu/gogpu` | `v0.43.3` | Desktop window + GPU device provider (optional, `output/window`) |
+| `gogpu/gpucontext` | `v0.21.0` | Shared GPU context management |
+| `gogpu/wgpu` | `v0.30.8` | WebGPU — browser and window rendering backends |

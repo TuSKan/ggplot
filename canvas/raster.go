@@ -45,8 +45,7 @@ func initFonts() {
 			embeddedSource = src
 		}
 
-		// 3. Enable HarfBuzz-level shaping for OpenType feature support (tnum, liga, etc.).
-		text.SetShaper(text.NewGoTextShaper())
+		// 3. OwnShaper (GSUB/GPOS) is now the default in gogpu/gg; no explicit SetShaper call needed.
 	})
 }
 
