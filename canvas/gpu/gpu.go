@@ -1,3 +1,5 @@
+//go:build !js
+
 // Package gpu opts in GPU acceleration.
 package gpu
 

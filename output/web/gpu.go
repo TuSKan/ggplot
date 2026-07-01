@@ -12,7 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gg"
-	_ "github.com/gogpu/gg/gpu" // register GPU accelerator for browser
+
 	"github.com/gogpu/gg/integration/ggcanvas"
 	"github.com/gogpu/gpucontext"
 	"github.com/gogpu/gputypes"
@@ -77,10 +77,10 @@ type gpuDeviceProvider struct {
 	format  wgpu.TextureFormat
 }
 
-func (p *gpuDeviceProvider) Device() gpucontext.Device             { return p.device }
-func (p *gpuDeviceProvider) Queue() gpucontext.Queue               { return p.device.Queue() }
+func (p *gpuDeviceProvider) Device() gpucontext.Device             { return wgpu.DeviceToHandle(p.device) }
+func (p *gpuDeviceProvider) Queue() gpucontext.Queue               { return wgpu.QueueToHandle(p.device.Queue()) }
 func (p *gpuDeviceProvider) SurfaceFormat() gputypes.TextureFormat { return p.format }
-func (p *gpuDeviceProvider) Adapter() gpucontext.Adapter           { return p.adapter }
+func (p *gpuDeviceProvider) Adapter() gpucontext.Adapter           { return wgpu.AdapterToHandle(p.adapter) }
 func (p *gpuDeviceProvider) AdapterInfo() gpucontext.AdapterInfo {
 	info := p.adapter.Info()
 	var atype gpucontext.AdapterType
